@@ -18,4 +18,7 @@ nginx.conf linguist-language=Nginx
 *.conf linguist-language=Nginx
 *.json linguist-language=JSON
 *.md linguist-language=Markdown
+frontend/uploads/** linguist-vendored
+*.csproj linguist-language=MSBuild
+*.dockerignore linguist-language=IgnoreList
 *.sh linguist-language=Shell
