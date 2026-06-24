@@ -37,13 +37,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const branch = context.ref.replace('refs/heads/', '');
             const { data: existing } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'bug'
             });
-            const title = `CI Failure: backend on ${{ github.ref_name }}`;
+            const title = `CI Failure: backend on ${branch}`;
             if (!existing.some(i => i.title === title)) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -51,10 +52,10 @@ jobs:
                 title,
                 body: `## CI Failure — Backend (.NET)
 
-**Branch:** ${{ github.ref_name }}
-**Commit:** ${{ github.sha }}
-**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-**Triggered by:** ${{ github.triggering_actor }}
+**Branch:** ${branch}
+**Commit:** ${context.sha}
+**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+**Triggered by:** ${context.actor}
 
 The backend build failed. Check the run logs for details.`,
                 labels: ['bug', 'ci']
@@ -92,13 +93,14 @@ The backend build failed. Check the run logs for details.`,
         uses: actions/github-script@v7
         with:
           script: |
+            const branch = context.ref.replace('refs/heads/', '');
             const { data: existing } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'bug'
             });
-            const title = `CI Failure: frontend on ${{ github.ref_name }}`;
+            const title = `CI Failure: frontend on ${branch}`;
             if (!existing.some(i => i.title === title)) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -106,10 +108,10 @@ The backend build failed. Check the run logs for details.`,
                 title,
                 body: `## CI Failure — Frontend (React + Vite)
 
-**Branch:** ${{ github.ref_name }}
-**Commit:** ${{ github.sha }}
-**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-**Triggered by:** ${{ github.triggering_actor }}
+**Branch:** ${branch}
+**Commit:** ${context.sha}
+**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+**Triggered by:** ${context.actor}
 
 The frontend build or tests failed. Check the run logs for details.`,
                 labels: ['bug', 'ci']
@@ -144,13 +146,14 @@ The frontend build or tests failed. Check the run logs for details.`,
         uses: actions/github-script@v7
         with:
           script: |
+            const branch = context.ref.replace('refs/heads/', '');
             const { data: existing } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'bug'
             });
-            const title = `CI Failure: docker on ${{ github.ref_name }}`;
+            const title = `CI Failure: docker on ${branch}`;
             if (!existing.some(i => i.title === title)) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -158,10 +161,10 @@ The frontend build or tests failed. Check the run logs for details.`,
                 title,
                 body: `## CI Failure — Docker Images
 
-**Branch:** ${{ github.ref_name }}
-**Commit:** ${{ github.sha }}
-**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-**Triggered by:** ${{ github.triggering_actor }}
+**Branch:** ${branch}
+**Commit:** ${context.sha}
+**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+**Triggered by:** ${context.actor}
 
 One or more Docker builds failed. Check the run logs for details.`,
                 labels: ['bug', 'ci']
