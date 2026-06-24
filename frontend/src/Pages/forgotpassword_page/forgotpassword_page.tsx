@@ -1,0 +1,206 @@
+﻿import React, { useState } from 'react';
+import './forgotpassword_page.css';
+import { Link } from 'react-router-dom';
+import { Package, Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+
+/* ── Reusable Feature Item ── */
+function FeatureItem({ title, description }: { title: string; description: string }) {
+    return (
+        <div className="feature-item">
+            <strong>{title}</strong>
+            <span>{description}</span>
+        </div>
+    );
+}
+
+export default function ForgotPassword() {
+    const [email, setEmail] = useState('');
+    const [step, setStep] = useState<'email' | 'sent'>('email');
+    const [status, setStatus] = useState<{ type: 'info' | 'error' | 'success'; message: string } | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    /* ── Email validation ── */
+    const isValidEmail = (value: string) =>
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+    const handleSendResetLink = async () => {
+        if (!email) {
+            setStatus({ type: 'error', message: 'Please enter your email.' });
+            return;
+        }
+        if (!isValidEmail(email)) {
+            setStatus({ type: 'error', message: 'Enter a valid email address.' });
+            return;
+        }
+
+        setLoading(true);
+        setStatus({ type: 'info', message: 'Sending reset link...' });
+
+        try {
+            const res = await fetch('/api/authentication/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error((err as any).message || 'Failed to send reset link. Please try again.');
+            }
+
+            setStep('sent');
+            setStatus(null);
+        } catch (err: any) {
+            setStatus({ type: 'error', message: err.message ?? 'Something went wrong. Please try again.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResend = () => {
+        setStep('email');
+        setStatus(null);
+    };
+
+    return (
+        <div className="forgot-page">
+
+            {/* LEFT PANEL */}
+            <aside className="login-left">
+                <div className="login-left-content">
+
+                    <div className="login-brand">
+                        <div className="brand-icon">
+                            <Package size={20} />
+                        </div>
+                        <div>
+                            <h1 className="brand-name">Speedex</h1>
+                            <p className="brand-sub">COURIER & FORWARDER, INC.</p>
+                        </div>
+                    </div>
+
+                    <div className="login-headline">
+                        <h2>
+                            Fast deliveries,<br />
+                            <span className="headline-accent">smarter logistics.</span>
+                        </h2>
+                        <p className="headline-body">
+                            Manage shipments, monitor deliveries, and access your dashboard.
+                        </p>
+                    </div>
+
+                    <div className="feature-list">
+                        <FeatureItem
+                            title="Real-Time Delivery Tracking"
+                            description="Live shipment visibility and updates"
+                        />
+                        <FeatureItem
+                            title="Operational Task Management"
+                            description="Personalized and organized task workflow experience"
+                        />
+                        <FeatureItem
+                            title="Courier Management"
+                            description="Secured and efficient management of courier operations"
+                        />
+                    </div>
+
+                </div>
+            </aside>
+
+            {/* RIGHT PANEL */}
+            <div className="forgot-right">
+                <div className="forgot-card">
+
+                    {/* ── STEP: Email entry ── */}
+                    {step === 'email' && (
+                        <>
+                            <div className="forgot-header">
+                                <div className="forgot-icon-wrap">
+                                    <Mail size={22} />
+                                </div>
+                                <h2 className="forgot-title">Forgot Password</h2>
+                                <p className="forgot-subtitle">
+                                    Enter your registered email address and we'll send you a link to reset your password.
+                                </p>
+                            </div>
+
+                            {status && (
+                                <div className={`status-bar ${status.type}`}>
+                                    {status.type === 'error' && <AlertCircle size={14} />}
+                                    {status.message}
+                                </div>
+                            )}
+
+                            <form
+                                className="forgot-form"
+                                onSubmit={(e) => { e.preventDefault(); handleSendResetLink(); }}
+                            >
+                                <div className="field-group">
+                                    <label className="field-label">Email Address</label>
+                                    <input
+                                        className={`forgot-input${status?.type === 'error' ? ' input-error' : ''}`}
+                                        type="email"
+                                        placeholder="e.g. employee@speedex.com"
+                                        value={email}
+                                        onChange={(e) => { setEmail(e.target.value); setStatus(null); }}
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className={`submit-btn${loading ? ' loading' : ''}`}
+                                    disabled={loading}
+                                >
+                                    {loading
+                                        ? <><Loader2 size={15} className="spin" /> Sending…</>
+                                        : 'Send Reset Link'
+                                    }
+                                </button>
+                            </form>
+
+                            <div className="right-footer">
+                                Remembered your password?{' '}
+                                <Link className="login-link" to="/">Login here</Link>
+                            </div>
+                        </>
+                    )}
+
+                    {/* ── STEP: Email sent confirmation ── */}
+                    {step === 'sent' && (
+                        <>
+                            <div className="forgot-header">
+                                <div className="forgot-icon-wrap success">
+                                    <CheckCircle size={22} />
+                                </div>
+                                <h2 className="forgot-title">Check Your Email</h2>
+                                <p className="forgot-subtitle">
+                                    We've sent a password reset link to:
+                                </p>
+                                <p className="sent-email">{email}</p>
+                                <p className="forgot-subtitle" style={{ marginTop: 8 }}>
+                                    Click the link in the email to reset your password.
+                                    The link will expire in a short time for your security.
+                                </p>
+                            </div>
+
+                            <div className="sent-notice">
+                                <AlertCircle size={13} />
+                                <span>Didn't receive it? Check your spam folder or request a new link.</span>
+                            </div>
+
+                            <button className="submit-btn outline" onClick={handleResend}>
+                                Resend Reset Link
+                            </button>
+
+                            <div className="right-footer">
+                                <Link className="login-link" to="/">← Back to Login</Link>
+                            </div>
+                        </>
+                    )}
+
+                </div>
+            </div>
+        </div>
+    );
+}

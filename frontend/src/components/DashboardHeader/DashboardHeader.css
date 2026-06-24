@@ -1,0 +1,148 @@
+/* ─── DashboardHeader Styling ───────────────────────────────────────────── */
+
+.dashboard-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dashboard-header-right-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    text-align: right;
+    user-select: none;
+}
+
+.dashboard-header-company {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary, var(--primary-dark));
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.dashboard-header-date {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-secondary, var(--sidebar-text));
+    line-height: 1.2;
+}
+
+.dashboard-header-profile-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #000000;
+    color: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+.dashboard-header-profile-btn:hover {
+    background: var(--primary, #00A99D);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0, 169, 157, 0.25);
+}
+
+.profile-btn-initials {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.header-custom-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-right: auto;
+    margin-left: 20px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+    .header-custom-actions {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 10px;
+        order: 3;
+    }
+}
+
+@media (max-width: 640px) {
+    .dashboard-header-right-meta {
+        display: none; /* Hide date on very small screens to fit bell and profile button */
+    }
+}
+
+/* Dropdown Menu Styles */
+.dashboard-header-profile-container {
+    position: relative;
+}
+
+.profile-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    background: var(--bg-card, var(--bg-card));
+    border: 1px solid var(--border, var(--border));
+    border-radius: 12px;
+    box-shadow: 0px 10px 25px rgba(112, 144, 176, 0.15);
+    z-index: 100;
+    width: 160px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    animation: slideDown 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--text-primary, var(--primary-dark));
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+}
+
+.dropdown-item:hover {
+    background: var(--bg-main, var(--bg-main));
+    color: var(--primary, #00a99d);
+}
+
+.dropdown-item.logout-item {
+    color: var(--status-failed, #e31a1a);
+}
+
+.dropdown-item.logout-item:hover {
+    background: var(--status-failed-bg, rgba(227, 26, 26, 0.08));
+    color: var(--status-failed, #e31a1a);
+}

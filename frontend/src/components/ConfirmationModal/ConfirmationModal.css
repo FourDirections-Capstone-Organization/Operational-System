@@ -1,0 +1,312 @@
+/* ConfirmationModal.css — Premium light-mode design */
+
+/* ── Overlay ─────────────────────────────────────────────── */
+.cm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9990;
+    background: rgba(15, 23, 42, 0.50);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    animation: cm-fade-in 0.18s ease;
+}
+
+/* ── Card ────────────────────────────────────────────────── */
+.cm-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.05),
+        0 20px 60px -10px rgba(15, 23, 42, 0.20);
+    padding: 0;
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    animation: cm-slide-up 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Colored top accent bar per variant ─────────────────── */
+.cm-variant-danger  { border-top: 4px solid var(--status-failed); }
+.cm-variant-warning { border-top: 4px solid var(--status-pending); }
+.cm-variant-info    { border-top: 4px solid var(--primary); }
+.cm-variant-success { border-top: 4px solid var(--status-active); }
+.cm-variant-neutral { border-top: 4px solid var(--text-tertiary); }
+
+/* ── Header ──────────────────────────────────────────────── */
+.cm-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 28px 28px 20px;
+}
+
+.cm-icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 22px;
+}
+
+.cm-header-text {
+    flex: 1;
+    min-width: 0;
+    padding-top: 2px;
+}
+
+.cm-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+.cm-desc {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.65;
+}
+
+.cm-desc input[type="text"],
+.cm-desc input[type="password"] {
+    height: 42px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    padding: 0 40px 0 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.18s ease;
+}
+
+.cm-desc input[type="text"]:focus,
+.cm-desc input[type="password"]:focus {
+    border-color: var(--primary);
+}
+
+/* ── Notice callout ──────────────────────────────────────── */
+.cm-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    padding: 12px 16px;
+    margin: 0 28px 20px;
+    font-size: 13px;
+    line-height: 1.55;
+    font-weight: 500;
+}
+
+.cm-notice-icon {
+    font-size: 15px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* ── Divider before actions ──────────────────────────────── */
+.cm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--bg-main);
+    background: var(--bg-main);
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.cm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 20px;
+    font-size: 13.5px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    outline: none;
+}
+
+.cm-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cm-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+/* Cancel — always the same neutral ghost style */
+.cm-btn-cancel {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1.5px solid var(--border);
+}
+
+.cm-btn-cancel:hover:not(:disabled) {
+    background: var(--bg-input);
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+}
+
+/* Confirm base */
+.cm-btn-confirm {
+    border: none;
+}
+
+/* ── Confirm button variants — solid filled, high-contrast ── */
+.cm-btn-danger {
+    background: var(--status-failed);
+    color: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.30);
+}
+.cm-btn-danger:hover:not(:disabled) {
+    background: var(--status-failed);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.40);
+}
+
+.cm-btn-warning {
+    background: var(--status-pending);
+    color: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.30);
+}
+.cm-btn-warning:hover:not(:disabled) {
+    background: var(--status-pending);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.40);
+}
+
+.cm-btn-info {
+    background: var(--primary);
+    color: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.30);
+}
+.cm-btn-info:hover:not(:disabled) {
+    background: var(--primary);
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.40);
+}
+
+.cm-btn-success {
+    background: var(--status-active);
+    color: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.30);
+}
+.cm-btn-success:hover:not(:disabled) {
+    background: var(--status-active);
+    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.40);
+}
+
+.cm-btn-neutral {
+    background: var(--primary);
+    color: var(--bg-card);
+    box-shadow: 0 2px 8px rgba(67, 24, 255, 0.25);
+}
+.cm-btn-neutral:hover:not(:disabled) {
+    background: var(--primary-dark-hover);
+    box-shadow: 0 4px 14px rgba(67, 24, 255, 0.35);
+}
+
+/* ── Icon circles ────────────────────────────────────────── */
+.cm-icon-danger {
+    background: var(--status-failed-bg);
+    color: var(--status-failed);
+}
+
+.cm-icon-warning {
+    background: var(--status-pending-bg);
+    color: var(--status-pending);
+}
+
+.cm-icon-info {
+    background: rgba(79,70,229,0.08);
+    color: var(--primary);
+}
+
+.cm-icon-success {
+    background: var(--status-active-bg);
+    color: var(--status-active);
+}
+
+.cm-icon-neutral {
+    background: rgba(79,70,229,0.08);
+    color: var(--primary);
+}
+
+/* ── Notice callouts ─────────────────────────────────────── */
+.cm-notice-danger {
+    background: var(--status-failed-bg);
+    border-color: rgba(220,38,38,0.2);
+    color: var(--status-failed);
+}
+.cm-notice-danger .cm-notice-icon { color: var(--status-failed); }
+
+.cm-notice-warning {
+    background: var(--status-pending-bg);
+    border-color: #fde68a;
+    color: var(--status-pending);
+}
+.cm-notice-warning .cm-notice-icon { color: var(--status-pending); }
+
+.cm-notice-info {
+    background: rgba(79,70,229,0.08);
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+.cm-notice-info .cm-notice-icon { color: var(--primary); }
+
+.cm-notice-success {
+    background: var(--status-active-bg);
+    border-color: #bbf7d0;
+    color: var(--status-active);
+}
+.cm-notice-success .cm-notice-icon { color: var(--status-active); }
+
+.cm-notice-neutral {
+    background: rgba(79,70,229,0.05);
+    border-color: #ddd6fe;
+    color: #3730a3;
+}
+.cm-notice-neutral .cm-notice-icon { color: var(--primary); }
+
+/* ── Spinner ─────────────────────────────────────────────── */
+@keyframes cm-spin {
+    to { transform: rotate(360deg); }
+}
+
+.cm-spin {
+    display: inline-block;
+    animation: cm-spin 0.7s linear infinite;
+}
+
+/* ── Animations ──────────────────────────────────────────── */
+@keyframes cm-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes cm-slide-up {
+    from { opacity: 0; transform: scale(0.95) translateY(14px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── Reduced motion ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    .cm-overlay, .cm-card { animation: none; }
+    .cm-spin { animation: none; }
+}

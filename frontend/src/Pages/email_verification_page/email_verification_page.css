@@ -1,0 +1,371 @@
+/* --- Email Verification Page --- */
+
+.ev-page {
+    min-height: 100vh;
+    background: var(--bg-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: inherit;
+}
+
+/* --- Wrapper --- */
+.ev-wrapper {
+    width: 100%;
+    max-width: 460px;
+    animation: fadeIn 0.4s ease-out;
+}
+
+/* --- Brand --- */
+.ev-brand {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.ev-brand-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--sidebar-bg);
+    padding: 10px 20px;
+    border-radius: var(--radius-full);
+}
+
+    .ev-brand-logo span {
+        color: var(--text-white);
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+/* --- Card --- */
+.ev-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+
+/* --- Card Header --- */
+.ev-card-header {
+    background: linear-gradient(135deg, #0B1437 0%, var(--primary-dark) 100%);
+    padding: 36px 32px 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.ev-header-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.ev-header-orb--tr {
+    top: -40px;
+    right: -40px;
+    width: 140px;
+    height: 140px;
+    background: rgba(0, 169, 157, 0.08);
+}
+
+.ev-header-orb--bl {
+    bottom: -30px;
+    left: -30px;
+    width: 100px;
+    height: 100px;
+    background: rgba(0, 169, 157, 0.06);
+}
+
+/* --- Icon Ring --- */
+.ev-icon-ring {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    border-width: 2px;
+    border-style: solid;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.ev-icon-ring--verifying {
+    background: rgba(0, 169, 157, 0.15);
+    border-color: rgba(0, 169, 157, 0.3);
+}
+
+.ev-icon-ring--success {
+    background: rgba(1, 181, 116, 0.15);
+    border-color: rgba(1, 181, 116, 0.3);
+}
+
+.ev-icon-ring--error {
+    background: rgba(227, 26, 26, 0.12);
+    border-color: rgba(227, 26, 26, 0.3);
+}
+
+/* --- Header Text --- */
+.ev-header-title {
+    color: var(--text-white);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.2px;
+}
+
+.ev-header-sub {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+/* --- Card Body --- */
+.ev-card-body {
+    padding: 28px 32px 32px;
+}
+
+/* --- States --- */
+.ev-state--success,
+.ev-state--error {
+    animation: scaleIn 0.3s ease-out;
+}
+
+/* --- Loading Row --- */
+.ev-loading-row {
+    background: var(--bg-main);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ev-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+    flex-shrink: 0;
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+.ev-loading-text {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+}
+
+/* --- Alert Banners --- */
+.ev-alert {
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.ev-alert--success {
+    background: var(--status-active-bg);
+    border: 1px solid rgba(1, 181, 116, 0.2);
+}
+
+.ev-alert--error {
+    background: var(--status-failed-bg);
+    border: 1px solid rgba(227, 26, 26, 0.2);
+}
+
+.ev-alert-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.ev-alert-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.ev-alert--success .ev-alert-title {
+    color: var(--status-active);
+}
+
+.ev-alert--error .ev-alert-title {
+    color: var(--status-failed);
+}
+
+.ev-alert-desc {
+    font-size: 0.82rem;
+    color: var(--text-tertiary);
+}
+
+/* --- Buttons --- */
+.ev-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px 20px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.88rem;
+    letter-spacing: 0.3px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.ev-btn--primary {
+    background: var(--primary);
+    color: var(--text-white);
+}
+
+    .ev-btn--primary:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 169, 157, 0.3);
+    }
+
+.ev-btn--dark {
+    background: var(--primary-dark);
+    color: var(--text-white);
+}
+
+    .ev-btn--dark:hover {
+        background: var(--primary-dark-hover);
+        transform: translateY(-1px);
+    }
+
+.ev-btn--outline {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1.5px solid var(--border);
+}
+
+    .ev-btn--outline:hover {
+        background: var(--bg-main);
+        border-color: var(--border-hover);
+    }
+
+.ev-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* --- Footer --- */
+.ev-footer {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+    .ev-footer span {
+        font-size: 0.78rem;
+        color: var(--text-tertiary);
+    }
+
+/* --- Support Link --- */
+.ev-support {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.ev-support-link {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+    .ev-support-link:hover {
+        color: var(--primary-hover);
+    }
+
+/* --- Animations --- */
+.ev-icon-spin {
+    animation: spin 1.2s linear infinite;
+}
+
+.ev-check-draw {
+    animation: checkDraw 0.5s ease-out 0.1s forwards;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes checkDraw {
+    from {
+        stroke-dashoffset: 40;
+    }
+
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* --- Responsive --- */
+@media (max-width: 480px) {
+    .ev-card-header {
+        padding: 28px 24px 24px;
+    }
+
+    .ev-card-body {
+        padding: 22px 24px 28px;
+    }
+
+    .ev-header-title {
+        font-size: 1.15rem;
+    }
+}

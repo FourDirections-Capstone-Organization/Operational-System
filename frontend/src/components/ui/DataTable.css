@@ -1,0 +1,549 @@
+/* ─── DataTable Component Styles (moved from TableCard.css) ─── */
+
+.table-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: visible;
+}
+
+.table-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+/* ── Tabs Header ── */
+.table-card-tabs {
+    display: flex;
+    gap: 24px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.table-card-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.table-card-tab-btn:hover { color: var(--text-primary); }
+.table-card-tab-btn.active { color: var(--primary); }
+
+.table-card-tab-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--primary);
+    border-radius: 99px 99px 0 0;
+    transform: scaleX(0);
+    transition: transform 0.2s ease;
+}
+
+.table-card-tab-btn.active::after { transform: scaleX(1); }
+
+.table-card-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-main);
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.table-card-tab-badge.active {
+    background: rgba(0, 169, 157, 0.08);
+    color: var(--primary);
+}
+
+/* ── Header ── */
+.table-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px 4px;
+}
+
+.table-card-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.table-card-header-action {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* ── Filter / Search Bar ── */
+.table-card-results-info {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.table-card-filter-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding-bottom: 14px;
+}
+
+.table-card-search-input-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+    max-width: 360px;
+}
+
+.table-card-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+.table-card-search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 36px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--bg-card);
+    font-size: 0.82rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+
+.table-card-search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 169, 157, 0.1);
+}
+
+/* ── Select Dropdowns in filter bar ── */
+.table-card-filter-bar select {
+    height: 38px;
+    padding: 0 32px 0 14px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.table-card-filter-bar select:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-main);
+}
+
+.table-card-filter-bar select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 169, 157, 0.1);
+}
+
+/* ── Table Wrapper ── */
+.table-card-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    flex: 1;
+    width: 100%;
+}
+
+.table-card-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table-card-data-table thead tr {
+    background: var(--sidebar-bg);
+}
+
+.table-card-data-table th {
+    padding: 8px 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.06em;
+    border: none;
+    text-transform: uppercase;
+}
+
+.table-card-data-table th:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.table-card-data-table th:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.table-card-data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.table-card-data-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.table-card-data-table tbody tr:hover {
+    background: var(--bg-main);
+}
+
+.table-card-data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-card-data-table tbody tr:nth-child(even) {
+    background: var(--bg-input);
+}
+
+/* ── Empty State ── */
+.table-card-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    font-weight: 500;
+    gap: 8px;
+    text-align: center;
+}
+
+.table-card-empty-state p { margin: 0; }
+
+/* ── Pagination ── */
+.table-card-pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.table-card-pagination-info {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.table-card-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.table-card-page-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--bg-card);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.22s ease;
+    font-family: inherit;
+}
+
+.table-card-page-btn:hover:not(:disabled) {
+    background: rgba(0, 169, 157, 0.08);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.table-card-page-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    box-shadow: 0 2px 7px rgba(0, 169, 157, 0.26);
+}
+
+.table-card-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.table-card-page-btn-nav { color: var(--text-secondary); }
+
+.table-card-page-ellipsis {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Cell helpers ── */
+.cell-name { font-weight: 600; color: var(--text-primary); }
+.cell-id { color: var(--text-secondary); font-size: 0.78rem; }
+.cell-muted { color: var(--text-secondary); }
+.cell-actions { display: flex; gap: 6px; }
+
+.action-icon-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.action-icon-btn:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.action-icon-btn.danger:hover {
+    background: var(--status-failed-bg);
+    color: var(--status-failed);
+}
+
+/* ── Actions Dropdown ── */
+.actions-dropdown-container { position: relative; display: inline-block; }
+
+.actions-dropdown-trigger {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.actions-dropdown-trigger:hover {
+    background: rgba(15, 21, 53, 0.05);
+    color: var(--text-primary);
+}
+
+.actions-dropdown-trigger.active {
+    background: rgba(15, 21, 53, 0.08);
+    color: var(--primary);
+}
+
+.actions-dropdown-menu {
+    position: fixed;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(26, 35, 50, 0.18);
+    padding: 6px;
+    min-width: 160px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transform-origin: top right;
+    animation: dropdownFadeIn 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropdownFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.actions-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+}
+
+.actions-dropdown-item:hover { background: rgba(15, 21, 53, 0.04); }
+.actions-dropdown-item.danger { color: var(--status-failed); }
+.actions-dropdown-item.danger:hover { background: var(--status-failed-bg); }
+.actions-dropdown-item.success { color: var(--status-active); }
+.actions-dropdown-item.success:hover { background: var(--status-active-bg); }
+
+/* ── Role badge (kept for backward compat) ── */
+.role-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.role-badge.super-admin { background: var(--primary); }
+.role-badge.admin { background: var(--primary-dark); }
+.role-badge.op-team { background: #FF7B42; }
+.role-badge.default { background: var(--text-tertiary); }
+
+/* ── Status badge (kept for backward compat) ── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-badge.sm { padding: 3px 8px; font-size: 11px; }
+.status-badge .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.status-badge.active { background: var(--status-active-bg); color: var(--status-active); }
+.status-badge.active .status-dot { background: var(--status-active); }
+.status-badge.pending { background: var(--status-pending-bg); color: var(--status-pending); }
+.status-badge.pending .status-dot { background: var(--status-pending); }
+.status-badge.locked { background: var(--status-failed-bg); color: var(--status-failed); }
+.status-badge.locked .status-dot { background: var(--status-failed); }
+
+/* ── Employee cell with avatar ── */
+.emp-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.emp-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+/* ── Sub Tab Navigation ── */
+.rm2-subtab-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: var(--shadow-sm);
+    width: fit-content;
+    margin-bottom: 20px;
+}
+
+.rm2-subtab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+
+.rm2-subtab-btn:not(.rm2-subtab-btn--active):hover {
+    color: var(--text-primary);
+    background: var(--bg-main);
+}
+
+.rm2-subtab-btn--active,
+.rm2-subtab-btn--active:hover {
+    background: var(--primary) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 12px rgba(0, 169, 157, 0.25);
+}
+
+.rm2-subtab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--status-failed);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
+}

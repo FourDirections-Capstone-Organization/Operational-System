@@ -1,0 +1,394 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+.locked-page,
+.locked-page * {
+    font-family: 'Montserrat', sans-serif !important;
+}
+
+/* ══════════════════════════════
+   LOCKED PAGE (ALIGNED WITH LOGIN)
+══════════════════════════════ */
+.locked-page {
+    display: flex;
+    min-height: 100vh;
+    font-family: 'Montserrat', sans-serif;
+    overflow: hidden;
+}
+
+/* ─────────────────────────────────────────
+   LEFT PANEL
+───────────────────────────────────────── */
+.locked-left {
+    width: 480px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sidebar-bg);
+}
+
+    .locked-left::before,
+    .locked-left::after {
+        content: '';
+        position: absolute;
+        border-radius: 50%;
+        pointer-events: none;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .locked-left::before {
+        width: 300px;
+        height: 300px;
+        top: -80px;
+        right: -100px;
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .locked-left::after {
+        width: 200px;
+        height: 200px;
+        bottom: -60px;
+        right: -40px;
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+.locked-left-content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.locked-left h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: white;
+    line-height: 1.3;
+}
+
+.locked-left p {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.6;
+    color: var(--sidebar-text);
+}
+
+/* ─────────────────────────────────────────
+   RIGHT PANEL
+───────────────────────────────────────── */
+.locked-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    background: var(--bg-main);
+}
+
+/* ─────────────────────────────────────────
+   CARD
+───────────────────────────────────────── */
+.locked-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: var(--shadow-lg);
+    border-top: 4px solid var(--status-failed);
+}
+
+/* ─────────────────────────────────────────
+   HEADER
+───────────────────────────────────────── */
+.locked-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.locked-icon-wrapper {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--status-failed-bg);
+    color: var(--status-failed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.locked-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+}
+
+.locked-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    max-width: 320px;
+}
+
+/* ─────────────────────────────────────────
+   INFO BOX
+───────────────────────────────────────── */
+.locked-info-box {
+    display: flex;
+    gap: 10px;
+    text-align: left;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    width: 100%;
+    background: var(--bg-main);
+}
+
+.locked-info-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--text-secondary);
+}
+
+.locked-info-box strong {
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+.locked-info-box p {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* ─────────────────────────────────────────
+   USER CARD
+───────────────────────────────────────── */
+.locked-user-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-main);
+}
+
+.locked-user-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--accent, var(--primary));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.locked-user-info {
+    flex: 1;
+    text-align: left;
+}
+
+    .locked-user-info strong {
+        font-size: 0.82rem;
+        font-weight: 600;
+        display: block;
+        color: var(--text-primary);
+    }
+
+    .locked-user-info span {
+        font-size: 0.74rem;
+        color: var(--text-secondary);
+    }
+
+.locked-user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--status-failed-bg);
+    color: var(--status-failed);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* ─────────────────────────────────────────
+   STEPS
+───────────────────────────────────────── */
+.locked-steps {
+    width: 100%;
+    text-align: left;
+}
+
+    .locked-steps strong {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--text-primary);
+        display: block;
+        margin-bottom: 10px;
+    }
+
+.locked-step {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.locked-step-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 169, 157, 0.12);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.locked-step p {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    padding-top: 2px;
+}
+
+/* ─────────────────────────────────────────
+   BUTTON
+───────────────────────────────────────── */
+.locked-contact-btn {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    background: var(--sidebar-bg);
+    color: #fff;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.1s ease;
+    box-shadow: 0 4px 14px rgba(0, 139, 154, 0.2);
+}
+
+    .locked-contact-btn:hover {
+        opacity: 0.9;
+    }
+
+    .locked-contact-btn:active {
+        transform: scale(0.99);
+    }
+
+/* ─────────────────────────────────────────
+   BACK LINK
+───────────────────────────────────────── */
+.locked-back-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+    .locked-back-link:hover {
+        background: var(--bg-main);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+/* ─────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────── */
+.locked-footer {
+    text-align: center;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+    .locked-footer a {
+        color: var(--primary);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .locked-footer a:hover {
+            text-decoration: underline;
+        }
+
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+@media (max-width: 900px) {
+    .locked-left {
+        display: none;
+    }
+
+    .locked-right {
+        flex: 1;
+        padding: 32px 20px;
+    }
+
+    .locked-card {
+        max-width: 360px;
+        padding: 32px 24px;
+    }
+}
+
+/* SHORT SCREEN OPTIMIZATION */
+@media (max-height: 800px) {
+    .locked-card {
+        padding: 28px 32px;
+        gap: 12px;
+    }
+
+    .locked-text,
+    .locked-step p,
+    .locked-info-box p {
+        font-size: 0.74rem;
+    }
+}

@@ -1,0 +1,1037 @@
+﻿/* ═══════════════════════════════════════════
+   RECRUITMENT TAB — RecruitmentTab.css
+   Matches SystemAdmin_Dashboard design tokens
+═══════════════════════════════════════════ */
+
+@keyframes rec-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes rec-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ─────────────────────────────────────────
+   LAYOUT
+───────────────────────────────────────── */
+
+.rec-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: rec-fade-in 0.22s ease;
+}
+
+/* ─────────────────────────────────────────
+   STAT CARDS ROW
+───────────────────────────────────────── */
+
+.rec-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.rec-stat-card {
+    flex: 1 1 160px;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 14px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+    .rec-stat-card:hover {
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.09);
+        transform: translateY(-1px);
+    }
+
+.rec-stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rec-stat-icon--purple {
+    background: rgba(67, 24, 255, 0.10);
+    color: #4318ff;
+}
+
+.rec-stat-icon--amber {
+    background: rgba(251, 191, 36, 0.14);
+    color: #b45309;
+}
+
+.rec-stat-icon--blue {
+    background: rgba(67, 24, 255, 0.10);
+    color: #1d4ed8;
+}
+
+.rec-stat-icon--green {
+    background: rgba(5, 205, 153, 0.12);
+    color: #065f46;
+}
+
+.rec-stat-icon--red {
+    background: rgba(238, 93, 80, 0.10);
+    color: #b91c1c;
+}
+
+.rec-stat-value {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+    letter-spacing: -0.5px;
+}
+
+.rec-stat-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-top: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+/* ─────────────────────────────────────────
+   TABLE CARD
+───────────────────────────────────────── */
+
+.rec-table-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+/* ─── Toolbar ─── */
+
+.rec-toolbar {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.rec-search-wrap {
+    position: relative;
+    flex: 1 1 220px;
+    min-width: 180px;
+}
+
+.rec-search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.rec-search-input {
+    width: 100%;
+    padding-left: 32px;
+    height: 36px;
+    border-radius: 9px;
+    border: 1px solid var(--border, #e2e8f0);
+    font-size: 13px;
+    background: var(--bg-main, #f8fafc);
+    color: var(--text-primary);
+    box-sizing: border-box;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+    .rec-search-input:focus {
+        border-color: #4318ff;
+        box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.10);
+    }
+
+.rec-filter-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.rec-filter-icon {
+    position: absolute;
+    left: 10px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.rec-select {
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 9px;
+    border: 1px solid var(--border, #e2e8f0);
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-main, #f8fafc);
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+    .rec-select:focus {
+        border-color: #4318ff;
+    }
+
+.rec-select--with-icon {
+    padding-left: 28px;
+}
+
+.rec-result-count {
+    margin-left: auto;
+    font-size: 12px;
+    color: #94a3b8;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+/* ─── Table ─── */
+
+.rec-table-scroll {
+    overflow-x: auto;
+}
+
+.rec-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    .rec-table thead tr {
+        background: #fafbff;
+    }
+
+    .rec-table th {
+        text-align: left;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        white-space: nowrap;
+        text-transform: uppercase;
+    }
+
+    .rec-table td {
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--border, #f1f5f9);
+        color: var(--text-primary);
+        font-size: 13px;
+        font-weight: 500;
+        vertical-align: middle;
+    }
+
+    .rec-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+/* Clickable row */
+.rec-row {
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+    .rec-row:hover {
+        background: #f8fafc;
+    }
+
+/* ─── Empty / Loading states ─── */
+
+.rec-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 56px 20px;
+    gap: 10px;
+    color: #94a3b8;
+}
+
+    .rec-empty-state svg {
+        opacity: 0.35;
+    }
+
+    .rec-empty-state span {
+        font-size: 13px;
+    }
+
+.rec-spinner {
+    animation: rec-spin 0.7s linear infinite;
+}
+
+/* ─── Ref ID chip ─── */
+
+.rec-ref-chip {
+    font-size: 11px;
+    font-weight: 700;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: monospace;
+    letter-spacing: 0.02em;
+}
+
+/* ─── Applicant cell ─── */
+
+.rec-applicant-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rec-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #4318ff, #868cff);
+    color: white;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rec-avatar--lg {
+    width: 52px;
+    height: 52px;
+    font-size: 20px;
+    box-shadow: 0 4px 14px rgba(67, 24, 255, 0.22);
+}
+
+.rec-applicant-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.rec-applicant-email {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 1px;
+}
+
+/* ─── Action buttons (inline in table) ─── */
+
+.rec-actions-cell {
+    display: flex;
+    gap: 6px;
+}
+
+.rec-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: var(--bg-main, #f8fafc);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-secondary, #64748b);
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+    .rec-action-btn:hover {
+        border-color: #4318ff;
+        color: #4318ff;
+        background: rgba(67, 24, 255, 0.05);
+    }
+
+.rec-action-btn--primary {
+    background: rgba(67, 24, 255, 0.07);
+    border-color: rgba(67, 24, 255, 0.25);
+    color: #4318ff;
+}
+
+    .rec-action-btn--primary:hover {
+        background: rgba(67, 24, 255, 0.14);
+        border-color: #4318ff;
+    }
+
+/* ─────────────────────────────────────────
+   PAGINATION
+───────────────────────────────────────── */
+
+.rec-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border, #f1f5f9);
+    gap: 4px;
+}
+
+.rec-page-btn {
+    min-width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: transparent;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+    .rec-page-btn:hover:not(:disabled) {
+        border-color: #4318ff;
+        color: #4318ff;
+        background: rgba(67, 24, 255, 0.05);
+    }
+
+    .rec-page-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+.rec-page-btn--active {
+    background: #4318ff;
+    border-color: #4318ff;
+    color: white;
+}
+
+    .rec-page-btn--active:hover {
+        background: #3510d9;
+    }
+
+.rec-page-ellipsis {
+    width: 32px;
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* ─────────────────────────────────────────
+   MODAL OVERLAY
+───────────────────────────────────────── */
+
+.rec-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    animation: rec-fade-in 0.18s ease;
+}
+
+/* ─── Shared modal shell ─── */
+
+.rec-modal {
+    background: var(--bg-card, #fff);
+    border-radius: 18px;
+    width: 100%;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+    animation: rec-fade-in 0.2s ease;
+}
+
+.rec-modal--sm {
+    max-width: 500px;
+}
+
+.rec-modal--md {
+    max-width: 560px;
+}
+
+.rec-modal--scrollable {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* ─── Modal header ─── */
+
+.rec-modal-header {
+    padding: 22px 28px 18px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+/* sticky variant for scrollable modals */
+.rec-modal-header--sticky {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card, #fff);
+    z-index: 2;
+}
+
+.rec-modal-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.rec-modal-subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.rec-modal-ref {
+    display: inline-block;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+}
+
+.rec-close-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f5f9;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+    .rec-close-btn:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+
+/* ─── Modal body ─── */
+
+.rec-modal-body {
+    padding: 22px 28px;
+}
+
+/* ─── Applicant info strip (used in Update modal) ─── */
+
+.rec-applicant-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid var(--border, #e2e8f0);
+    margin-bottom: 20px;
+}
+
+.rec-applicant-strip-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rec-applicant-strip-pos {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 1px;
+}
+
+/* ─── Field label ─── */
+
+.rec-field-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+    .rec-field-label span {
+        color: #ef4444;
+    }
+
+.rec-field-optional {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #94a3b8;
+}
+
+/* ─── Status radio options ─── */
+
+.rec-status-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.rec-status-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 11px;
+    cursor: pointer;
+    border: 1.5px solid var(--border, #e2e8f0);
+    background: var(--bg-main, #f8fafc);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+    .rec-status-option input[type="radio"] {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+    }
+
+.rec-status-option-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+}
+
+.rec-status-option-text {
+    flex: 1;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: color 0.15s, font-weight 0.15s;
+}
+
+/* No transitions available notice */
+.rec-no-transitions {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    background: rgba(238, 93, 80, 0.06);
+    border: 1px solid rgba(238, 93, 80, 0.20);
+    color: #b91c1c;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+/* ─── Remarks textarea ─── */
+
+.rec-textarea-wrap {
+    margin-bottom: 18px;
+}
+
+.rec-textarea {
+    width: 100%;
+    resize: vertical;
+    border-radius: 10px;
+    border: 1px solid var(--border, #e2e8f0);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--bg-main, #f8fafc);
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    line-height: 1.5;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+    .rec-textarea:focus {
+        border-color: #4318ff;
+        box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.10);
+    }
+
+.rec-char-count {
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: right;
+    margin-top: 3px;
+}
+
+/* ─── Inline error in modal ─── */
+
+.rec-modal-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #b91c1c;
+    font-weight: 500;
+    background: rgba(238, 93, 80, 0.06);
+    border: 1px solid rgba(238, 93, 80, 0.20);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+}
+
+/* ─── Modal footer actions ─── */
+
+.rec-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.rec-btn {
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: opacity 0.15s, background 0.15s, transform 0.1s;
+    border: none;
+}
+
+    .rec-btn:active {
+        transform: scale(0.98);
+    }
+
+.rec-btn--cancel {
+    border: 1px solid var(--border, #e2e8f0);
+    background: #f8fafc;
+    color: var(--text-secondary, #64748b);
+}
+
+    .rec-btn--cancel:hover {
+        background: #f1f5f9;
+    }
+
+.rec-btn--primary {
+    background: #4318ff;
+    color: white;
+    padding: 0 24px;
+}
+
+    .rec-btn--primary:hover:not(:disabled) {
+        background: #3510d9;
+    }
+
+.rec-btn--dynamic {
+    color: white;
+    padding: 0 24px;
+}
+
+.rec-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────
+   DETAIL MODAL SPECIFIC
+───────────────────────────────────────── */
+
+/* Applicant hero row */
+.rec-detail-hero {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.rec-detail-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.rec-detail-position {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* Detail grid */
+.rec-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.rec-detail-cell {
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.rec-detail-cell-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 3px;
+}
+
+.rec-detail-cell-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Remarks strip */
+.rec-remarks-strip {
+    border-left: 3px solid #4318ff;
+    border-radius: 0 10px 10px 0;
+    background: rgba(67, 24, 255, 0.04);
+    padding: 12px 16px;
+    margin-bottom: 24px;
+}
+
+.rec-remarks-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.rec-remarks-text {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Timeline section label */
+.rec-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 12px;
+}
+
+/* ─────────────────────────────────────────
+   PROGRESS TIMELINE
+───────────────────────────────────────── */
+
+.rec-timeline {
+    padding: 20px 0 8px;
+}
+
+/* Step row */
+.rec-timeline-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.rec-timeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.rec-timeline-step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #e2e8f0;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    transition: all 0.2s ease;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.rec-timeline-step-dot--done {
+    border-color: transparent;
+}
+
+.rec-timeline-step-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #94a3b8;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+.rec-timeline-step-label--active {
+    font-weight: 700;
+}
+
+.rec-timeline-connector {
+    flex: 1;
+    height: 2px;
+    margin: -14px 8px 0;
+    background: #e2e8f0;
+    border-radius: 2px;
+    transition: background 0.3s ease;
+}
+
+.rec-timeline-connector--done {
+    background: linear-gradient(to right, #05cd99, #4318ff);
+}
+
+/* Rejected pill */
+.rec-rejected-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(238, 93, 80, 0.07);
+    border: 1px solid rgba(238, 93, 80, 0.20);
+    border-radius: 10px;
+    padding: 12px 16px;
+}
+
+.rec-rejected-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #b91c1c;
+}
+
+/* Status history entries */
+.rec-history-list {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rec-history-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.rec-history-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    font-size: 12px;
+}
+
+.rec-history-meta {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.rec-history-remarks {
+    color: #475569;
+    margin-top: 3px;
+    font-style: italic;
+}
+
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .rec-stats-row {
+        gap: 10px;
+    }
+
+    .rec-stat-card {
+        flex: 1 1 140px;
+        padding: 14px 16px;
+    }
+
+    .rec-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rec-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .rec-result-count {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .rec-modal-body {
+        padding: 18px 18px;
+    }
+
+    .rec-modal-header {
+        padding: 18px 18px 14px;
+    }
+
+    .rec-overlay {
+        padding: 12px;
+        align-items: flex-end;
+    }
+
+    .rec-modal {
+        border-radius: 18px 18px 0 0;
+        max-height: 92vh;
+    }
+
+    .rec-stat-value {
+        font-size: 20px;
+    }
+
+    .rec-table th,
+    .rec-table td {
+        padding: 10px 12px;
+    }
+}

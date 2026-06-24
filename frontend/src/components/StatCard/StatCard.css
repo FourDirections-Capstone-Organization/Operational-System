@@ -1,0 +1,148 @@
+/* ─── STAT CARD GLOBAL COMPONENT STYLING ─────────────────── */
+.stat-card {
+    position: relative;
+    overflow: hidden;
+    padding: 18px 18px 16px;
+    border-radius: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    text-align: left;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--border-hover);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+/* subtle top glow overlay */
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: -55px;
+    right: -55px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    opacity: 0.05;
+    pointer-events: none;
+}
+
+.stat-card.accent-primary::before {
+    background: var(--primary, var(--primary));
+}
+
+.stat-card.accent-success::before {
+    background: var(--success, var(--status-active));
+}
+
+.stat-card.accent-danger::before {
+    background: var(--danger, var(--status-failed));
+}
+
+.stat-card.accent-warning::before {
+    background: var(--warning, var(--status-pending));
+}
+
+/* bottom line indicator */
+.stat-card::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    height: 3px;
+    border-radius: 999px;
+}
+
+.stat-card.accent-primary::after {
+    background: var(--primary);
+}
+
+.stat-card.accent-success::after {
+    background: var(--status-active);
+}
+
+.stat-card.accent-danger::after {
+    background: var(--status-failed);
+}
+
+.stat-card.accent-warning::after {
+    background: var(--status-pending);
+}
+
+/* layout structure */
+.stat-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.stat-label {
+    font-size: 0.63rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin: 0;
+    display: block;
+    line-height: 1.2;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text-primary);
+    letter-spacing: -0.04em;
+    margin-top: 14px;
+    margin-bottom: 0;
+}
+
+.stat-subtext {
+    margin-top: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+    display: block;
+}
+
+/* icon variations colors */
+.stat-icon.bg-primary {
+    background: rgba(91, 52, 255, 0.10);
+    color: var(--primary);
+}
+
+.stat-icon.bg-success {
+    background: rgba(19, 199, 176, 0.10);
+    color: var(--status-active);
+}
+
+.stat-icon.bg-danger {
+    background: rgba(255, 106, 95, 0.10);
+    color: var(--status-failed);
+}
+
+.stat-icon.bg-warning {
+    background: rgba(255, 181, 71, 0.10);
+    color: var(--status-pending);
+}

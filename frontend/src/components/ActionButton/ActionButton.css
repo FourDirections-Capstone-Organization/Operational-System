@@ -1,0 +1,48 @@
+.quick-action-btn-header {
+    height: 46px;
+    padding: 0 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-primary) 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    font-family: inherit;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.quick-action-btn-header:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+    box-shadow: 0 14px 28px rgba(20, 184, 166, 0.22);
+}
+
+.quick-action-btn-header:active {
+    transform: translateY(0);
+}
+
+.quick-action-btn-header:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.action-btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .quick-action-btn-header {
+        width: 100%;
+        justify-content: center;
+    }
+}
