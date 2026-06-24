@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Backend.Data;
 using Backend.Models;
+using Backend.Services;
 
 namespace Backend.Controllers;
 
@@ -9,60 +8,59 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IProductService _productService;
 
-    public ProductsController(AppDbContext db)
+    public ProductsController(IProductService productService)
     {
-        _db = db;
+        _productService = productService;
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<Product>>> GetAll()
+    public async Task<ActionResult<ApiResponseDTO<List<Product>>>> GetAll()
     {
-        return await _db.Products.OrderBy(p => p.Id).ToListAsync();
+        var result = await _productService.GetAllAsync();
+        return Ok(result);
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Product>> GetById(int id)
+    public async Task<ActionResult<ApiResponseDTO<Product>>> GetById(int id)
     {
-        var product = await _db.Products.FindAsync(id);
-        if (product is null) return NotFound();
-        return product;
+        var result = await _productService.GetByIdAsync(id);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
     }
 
     [HttpPost]
-    public async Task<ActionResult<Product>> Create(Product product)
+    public async Task<ActionResult<ApiResponseDTO<Product>>> Create(Product product)
     {
-        product.CreatedAt = DateTime.UtcNow;
-        _db.Products.Add(product);
-        await _db.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetById), new { id = product.Id }, product);
+        var result = await _productService.CreateAsync(product);
+        return CreatedAtAction(nameof(GetById), new { id = product.Id }, result);
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, Product product)
+    public async Task<ActionResult<ApiResponseDTO<Product>>> Update(int id, Product product)
     {
-        if (id != product.Id) return BadRequest();
+        var result = await _productService.UpdateAsync(id, product);
+        if (!result.IsSuccess)
+        {
+            if (result.Message == "ID mismatch")
+                return BadRequest(result);
 
-        var existing = await _db.Products.FindAsync(id);
-        if (existing is null) return NotFound();
+            return NotFound(result);
+        }
 
-        existing.Name = product.Name;
-        existing.Description = product.Description;
-        existing.Price = product.Price;
-
-        await _db.SaveChangesAsync();
-        return NoContent();
+        return Ok(result);
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<ActionResult<ApiResponseDTO<bool>>> Delete(int id)
     {
-        var product = await _db.Products.FindAsync(id);
-        if (product is null) return NotFound();
+        var result = await _productService.DeleteAsync(id);
+        if (!result.IsSuccess)
+            return NotFound(result);
 
-        _db.Products.Remove(product);
-        await _db.SaveChangesAsync();
-        return NoContent();
+        return Ok(result);
     }
 }
