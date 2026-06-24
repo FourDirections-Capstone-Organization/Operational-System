@@ -10,6 +10,7 @@ import {
     RecruitmentStatusBadge,
     type RecruitmentStatus,
 } from "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab";
+import { ToastProvider } from "../components/Toast/Toast";
 
 vi.mock("axios");
 const mockedAxios = vi.mocked(axios);
@@ -84,12 +85,13 @@ function mockDashboardApiEmpty() {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 describe("ALL_STATUSES", () => {
-    it("contains exactly four statuses", () => {
+    it("contains exactly five statuses", () => {
         expect(ALL_STATUSES).toEqual([
             "Pending Review",
             "Interview Scheduled",
             "Job Offered",
             "Rejected",
+            "Hired",
         ]);
     });
 });
@@ -109,8 +111,8 @@ describe("STATUS_TRANSITIONS", () => {
         ]);
     });
 
-    it("Job Offered allows only Rejected", () => {
-        expect(STATUS_TRANSITIONS["Job Offered"]).toEqual(["Rejected"]);
+    it("Job Offered allows Rejected and Hired", () => {
+        expect(STATUS_TRANSITIONS["Job Offered"]).toEqual(["Rejected", "Hired"]);
     });
 
     it("Rejected allows no transitions", () => {
@@ -124,9 +126,9 @@ describe("STATUS_TRANSITIONS", () => {
         }
     });
 
-    it("Rejected appears in every other status's transitions", () => {
+    it("Rejected appears in every non-terminal status's transitions", () => {
         for (const s of ALL_STATUSES) {
-            if (s !== "Rejected") {
+            if (s !== "Rejected" && s !== "Hired") {
                 expect(STATUS_TRANSITIONS[s]).toContain("Rejected");
             }
         }
@@ -215,6 +217,10 @@ describe("RecruitmentStatusBadge", () => {
 
 // ─── API Integration ──────────────────────────────────────────────────────
 
+function renderWithProviders(ui: React.ReactElement) {
+    return render(<ToastProvider>{ui}</ToastProvider>);
+}
+
 describe("RecruitmentTab API integration", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -226,7 +232,7 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
         await waitFor(() => {
             expect(screen.getByText("Juan Dela Cruz")).toBeTruthy();
@@ -242,7 +248,7 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
         await waitFor(() => {
             expect(screen.getByText("No applicants match your filters")).toBeTruthy();
@@ -255,9 +261,9 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
-        expect(screen.getByText("Loading applicants…")).toBeTruthy();
+        expect(screen.getByText("Loading…")).toBeTruthy();
     });
 
     it("shows status badges for each applicant", async () => {
@@ -266,7 +272,7 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
         await waitFor(() => {
             expect(screen.getAllByText("Pending Review").length).toBeGreaterThanOrEqual(1);
@@ -280,7 +286,7 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
         await waitFor(() => {
             expect(screen.getByText("Juan Dela Cruz")).toBeTruthy();
@@ -301,7 +307,7 @@ describe("RecruitmentTab API integration", () => {
         const { default: RecruitmentTab } = await import(
             "../Pages/SystemAdmin_Dashboard/RecruitmentTab/RecruitmentTab"
         );
-        render(<RecruitmentTab />);
+        renderWithProviders(<RecruitmentTab />);
 
         await waitFor(() => {
             expect(screen.queryByText("No applicants match your filters")).toBeTruthy();
