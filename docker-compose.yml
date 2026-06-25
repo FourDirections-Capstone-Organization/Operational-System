@@ -25,6 +25,7 @@ services:
     restart: unless-stopped
     environment:
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=backend_db;Username=postgres;Password=postgres"
+      Jwt__Key: "${JWT_KEY}"
     ports:
       - "5100:8080"
     depends_on:
