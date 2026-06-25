@@ -120,13 +120,25 @@ You cannot drop a database while you are connected to it.
 
 ### Step 3: Let the Backend Recreate It
 
-Start the backend:
+Since the database is already dropped, you just need to restart the backend so `EnsureCreated()` runs. Pick the option that matches how you run the app:
+
+#### If using Docker
+
+```powershell
+docker compose down && docker compose up --build
+```
+
+**No `-v` needed.** The database is already gone — `-v` would delete the entire Docker volume unnecessarily.
+
+#### If running natively (dotnet run)
 
 ```powershell
 dotnet run --project backend
 ```
 
-The backend will detect the database is missing and recreate it via `EnsureCreated()`. All tables will be rebuilt fresh.
+#### What happens
+
+The backend starts, detects the database is missing, and recreates it with all tables via `EnsureCreated()`. You will see no errors — just the usual startup logs.
 
 > **⚠️ This permanently deletes all data.** Only do this if you are okay losing all records.
 
