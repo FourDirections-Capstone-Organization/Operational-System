@@ -255,12 +255,57 @@ The issue is automatically closed with a ✅ comment. No action needed from you.
 
 A **CI flake** is when CI fails one time, but if you re-run it without changing any code, it passes.
 
-The code is the same both times — the failure was caused by something temporary, not a bug in your code. Common causes:
+The code is the same both times — the failure was caused by something temporary, not a bug in your code.
 
-- **Network timeout** — npm install couldn't reach a package registry
-- **Test timing** — a test ran faster or slower than expected
-- **Runner resource** — the GitHub runner was low on CPU or disk for a moment
-- **Race condition** — two tests interfered with each other
+#### What it looks like (the flow)
+
+```
+You push perfectly good code
+        │
+        ▼
+npm install  ✅
+dotnet build ✅
+        │
+        ▼
+npm test ─── ❌ FAILS
+        │
+        ▼
+Error shows:
+  "npm ERR! network timeout"
+  or "The operation timed out"
+  or "connect ECONNREFUSED"
+        │
+        ▼
+Issue created: "CI Failure: frontend on feature/x"
+        │
+        ▼
+You check the error → it's a timeout/network issue, not a code bug
+        │
+        ▼
+You click "Re-run jobs" in GitHub Actions — no code changes
+        │
+        ▼
+CI runs again — same code, same commit
+        │
+        ▼
+Everything passes this time ✅
+        │
+        ▼
+Issue auto-closes with comment: "✅ CI is passing again on feature/x"
+```
+
+#### How to tell a flake from a real bug
+
+| This error... | Is a flake if... | Is a real bug if... |
+|---|---|---|
+| `npm ERR! network timeout` | Re-running fixes it | — |
+| `Test timed out after 5000ms` | Re-running fixes it | The test logic is genuinely slow |
+| `connect ECONNREFUSED` | Re-running fixes it | The server is actually down |
+| `AssertionError: expected 5 to equal 3` | — | Always a real bug |
+| `error CS0117: 'Product' does not contain 'Price'` | — | Always a real bug |
+| `TypeError: Cannot read properties of undefined` | — | Always a real bug |
+
+**The tell:** If re-running without changing anything makes it pass, it was a flake.
 
 **What to do:** You don't need to fix anything. Just click **"Re-run jobs"** in the Actions tab. When it passes, the issue auto-closes.
 
