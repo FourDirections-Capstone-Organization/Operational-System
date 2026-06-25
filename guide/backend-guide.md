@@ -11,7 +11,8 @@
 - [2. Running the Backend](#2-running-the-backend)
   - [Option A — Native (no Docker)](#option-a--native-no-docker)
   - [Option B — Docker (recommended)](#option-b--docker-recommended)
-  - [Pulling Updates](#pulling-updates)
+   - [Pulling Updates](#pulling-updates)
+   - [Docker Compose Down vs Down -v](#docker-compose-down-vs-down--v)
 - [3. Accessing Scalar API Documentation](#3-accessing-scalar-api-documentation)
   - [Why Scalar?](#why-scalar)
   - [Backend Architecture](#backend-architecture)
@@ -175,6 +176,25 @@ docker compose up --build
 
 - **Database schema changes** — `EnsureCreated()` only creates the database if it doesn't exist. If a future update adds or changes tables, you may need to delete the volume first: `docker compose down -v && docker compose up --build`
 - **Compose file changes** — If `docker-compose.yml` itself changed (new services, ports, or environment variables), running `docker compose up` (without `--build`) is sufficient after pulling — use `--build` only when application code changed.
+
+### Docker Compose Down vs Down -v
+
+Understanding when to use `docker compose down` vs `docker compose down -v`:
+
+| Scenario | Command | What happens to data |
+|---|---|---|
+| **Pulling new code** (no schema changes) | `docker compose down` then `docker compose up --build` | Data survives ✅ |
+| **Pulling schema changes** (new tables, columns, models) | `docker compose down -v` then `docker compose up --build` | **Data is lost** — fresh database created ❌ |
+| **Just restarting** (no code changes) | `docker compose restart` | Fastest, no rebuild, no wipe ✅ |
+| **Only `docker-compose.yml` changed** | `docker compose up` (no build) | Data survives ✅ |
+
+**The general rule:** Always try `docker compose down` (no `-v`) first. Only use `-v` if:
+
+1. The developer who made the changes explicitly said "schema changed, drop your DB"
+2. You see EF Core errors about missing columns on startup
+3. You want a completely clean slate
+
+Since this project uses `EnsureCreated()` (not EF Core migrations), if a new model or table is added, the old database won't automatically get the new table. You would need `-v` to drop everything and let `EnsureCreated()` rebuild from scratch.
 
 ---
 
