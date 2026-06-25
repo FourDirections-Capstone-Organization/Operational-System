@@ -6,9 +6,11 @@ permissions:
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - '**'
   pull_request:
-    branches: [main, master]
+    branches:
+      - '**'
 
 env:
   GH_TOKEN: ${{ github.token }}
@@ -53,7 +55,7 @@ jobs:
           **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           **Triggered by:** ${GITHUB_ACTOR}
 
-          The backend build failed. Check the run logs for details."
+          The backend build or tests failed. Check the run logs for details."
           fi
 
       - name: Close stale CI failure issue

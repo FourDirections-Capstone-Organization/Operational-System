@@ -246,8 +246,8 @@ The repository uses **GitHub Actions** for continuous integration. The workflow 
 
 ### Triggers
 
-- **Push** to `main` or `master`
-- **Pull request** targeting `main` or `master`
+- **Push** to any branch
+- **Pull request** targeting any branch
 
 ### Jobs
 
@@ -264,9 +264,11 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - '**'
   pull_request:
-    branches: [main, master]
+    branches:
+      - '**'
 
 jobs:
   backend:
