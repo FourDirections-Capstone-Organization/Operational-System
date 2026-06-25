@@ -251,6 +251,19 @@ Only **one issue** is created per job per branch. The duplicate check prevents s
 
 The issue is automatically closed with a ✅ comment. No action needed from you.
 
+### What is a "CI flake"?
+
+A **CI flake** is when CI fails one time, but if you re-run it without changing any code, it passes.
+
+The code is the same both times — the failure was caused by something temporary, not a bug in your code. Common causes:
+
+- **Network timeout** — npm install couldn't reach a package registry
+- **Test timing** — a test ran faster or slower than expected
+- **Runner resource** — the GitHub runner was low on CPU or disk for a moment
+- **Race condition** — two tests interfered with each other
+
+**What to do:** You don't need to fix anything. Just click **"Re-run jobs"** in the Actions tab. When it passes, the issue auto-closes.
+
 ### What if I delete the branch without fixing CI?
 
 The cleanup workflow closes the issue automatically when the branch is deleted or the PR is closed.
