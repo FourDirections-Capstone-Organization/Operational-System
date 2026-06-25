@@ -37,3 +37,4 @@ A full-stack operational task management system built with modern web technologi
 | [Backend Guide](./guide/backend-guide.md) | Setup, Docker, API docs, and CI/CD pipeline |
 | [JWT Authentication Guide](./guide/jwt-authentication-guide.md) | Auth flows, models, tokens, and production deployment |
 | [CI Issue Lifecycle](./guide/ci-issue-lifecycle.md) | How CI failures create/close issues, fixing flows, and edge cases |
+| [pgAdmin Usage](./guide/pgadmin-usage.md) | Connecting, querying, and managing PostgreSQL via pgAdmin 4 |
