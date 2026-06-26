@@ -30,15 +30,18 @@
   - [POST /api/authentication/register](#post-apiauthenticationregister)
   - [POST /api/authentication/login](#post-apiauthenticationlogin)
   - [POST /api/authentication/refresh](#post-apiauthenticationrefresh)
-- [10. Environment Variables](#10-environment-variables)
-- [11. FAQ](#11-faq)
+- [10. Testing with Scalar](#10-testing-with-scalar)
+  - [How to authorize in Scalar](#how-to-authorize-in-scalar)
+  - [Changing or clearing the token](#changing-or-clearing-the-token)
+- [11. Environment Variables](#11-environment-variables)
+- [12. FAQ](#12-faq)
   - [Is authToken the same as the Access Token?](#is-authtoken-the-same-as-the-access-token)
   - [Why are the Access Token and Refresh Token separate?](#why-are-the-access-token-and-refresh-token-separate)
   - [What happens when the Access Token expires?](#what-happens-when-the-access-token-expires)
   - [How do I set the JWT key for local development?](#how-do-i-set-the-jwt-key-for-local-development)
   - [How do I set the JWT key for production?](#how-do-i-set-the-jwt-key-for-production)
   - [Can I manually refresh my token?](#can-i-manually-refresh-my-token)
-- [12. Production Deployment](#12-production-deployment)
+- [13. Production Deployment](#13-production-deployment)
   - [Overview](#overview)
   - [Azure Container Registry (Backend)](#azure-container-registry-backend)
   - [Azure Database for PostgreSQL](#azure-database-for-postgresql)
@@ -608,7 +611,36 @@ Exchanges a refresh token for a new pair of tokens.
 
 ---
 
-## 10. Environment Variables
+## 10. Testing with Scalar
+
+Scalar is the API documentation UI (available at http://localhost:5100/scalar/v1). It now supports an **Authorize** button for JWT.
+
+### How to authorize in Scalar
+
+**Step 1: Login to get a token**
+
+Open the `POST /api/authentication/login` endpoint, fill in credentials, and click **Try it**. Copy the `accessToken` value from the response.
+
+**Step 2: Click the Authorize button**
+
+At the top of the Scalar page, click the **Authorize** button (lock icon). A dialog appears.
+
+**Step 3: Enter your token**
+
+Paste your token into the field and click **Authorize**. Scalar will now send `Authorization: Bearer <token>` with every request.
+
+**Step 4: Test a protected endpoint**
+
+Try `GET /api/products` — it should return 200 OK with data instead of 401.
+
+### Changing or clearing the token
+
+- Click the Authorize button again to update the token
+- Click **Logout** to clear it and test unauthenticated requests
+
+---
+
+## 11. Environment Variables
 
 The JWT signing key is **never hardcoded** in source code. It is provided through environment variables in three places:
 
@@ -702,7 +734,7 @@ After setting, restart your terminal/IDE. The placeholder in the JSON files is c
 
 ---
 
-## 11. Production Deployment
+## 13. Production Deployment
 
 ### Overview
 
@@ -872,7 +904,7 @@ See [Section 10 — Environment Variables](#10-environment-variables) for the fu
 
 ### How do I set the JWT key for production?
 
-See [Section 11 — Production Deployment](#11-production-deployment) for the full guide. The short answer: inject it as a secure environment variable at the container runtime level (Azure App Service settings, Azure Container Instances env vars, or Kubernetes Secrets). Never hardcode it in any file that gets committed.
+See [Section 13 — Production Deployment](#13-production-deployment) for the full guide. The short answer: inject it as a secure environment variable at the container runtime level (Azure App Service settings, Azure Container Instances env vars, or Kubernetes Secrets). Never hardcode it in any file that gets committed.
 
 ### Can I manually refresh my token?
 
