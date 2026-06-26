@@ -51,7 +51,7 @@
 > ```powershell
 > $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $bytes = New-Object byte[] 32; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes)
 > ```
-> Put the output in a `.env` file (`JWT_KEY=<your-generated-key>`) for Docker, or set it as a system environment variable (`Jwt__Key`). The only key that requires secrecy is **production** — that one stays in CI/CD / Azure, never in a developer's hands.
+> Put the output in a `.env` file at the **project root** (`Operational-System\.env`) with `JWT_KEY=<your-generated-key>`, or set it as a system environment variable (`Jwt__Key`). Docker Compose reads `.env` automatically from the same directory as `docker-compose.yml`. The only key that requires secrecy is **production** — that one stays in CI/CD / Azure, never in a developer's hands.
 
 ## 1. Overview
 
@@ -667,11 +667,13 @@ backend:
     Jwt__Key: "${JWT_KEY}"
 ```
 
-Then create a `.env` file in the **project root** (same folder as `docker-compose.yml`):
+Then create a `.env` file at `Operational-System\.env` (project root, same folder as `docker-compose.yml`):
 
 ```
 JWT_KEY=your-real-production-key
 ```
+
+Docker Compose automatically reads `JWT_KEY` from this `.env` file — no manual `--env-file` flag needed.
 
 **Why this is better:**
 - `.env` is already in `.gitignore` (line 12) — the real key is never committed
@@ -862,7 +864,7 @@ Then choose one method to set it:
 
 | Method | How |
 |---|---|
-| **`.env` file** (for Docker) | `JWT_KEY=<your-key>` in project root `.env` |
+| **`.env` file** (for Docker) | Create `Operational-System\.env` with `JWT_KEY=<your-key>` |
 | **System env var** (for `dotnet run`) | `[System.Environment]::SetEnvironmentVariable('Jwt__Key', '<your-key>', 'User')` |
 | **`launchSettings.json`** (for VS) | Put it there **but never commit it** |
 
