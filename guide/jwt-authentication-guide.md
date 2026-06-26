@@ -49,7 +49,7 @@
 
 > **For local development:** Each developer generates their **own** JWT key. No sharing needed. Run this in PowerShell:
 > ```powershell
-> $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32); [Convert]::ToBase64String($bytes)
+> $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $bytes = New-Object byte[] 32; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes)
 > ```
 > Put the output in a `.env` file (`JWT_KEY=<your-generated-key>`) for Docker, or set it as a system environment variable (`Jwt__Key`). The only key that requires secrecy is **production** — that one stays in CI/CD / Azure, never in a developer's hands.
 
@@ -855,7 +855,7 @@ See [Section 10 — Environment Variables](#10-environment-variables) for the fu
 Generate your own random key and never share it:
 
 ```powershell
-$bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32); [Convert]::ToBase64String($bytes)
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $bytes = New-Object byte[] 32; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes)
 ```
 
 Then choose one method to set it:
