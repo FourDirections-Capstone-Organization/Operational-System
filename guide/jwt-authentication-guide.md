@@ -30,15 +30,18 @@
   - [POST /api/authentication/register](#post-apiauthenticationregister)
   - [POST /api/authentication/login](#post-apiauthenticationlogin)
   - [POST /api/authentication/refresh](#post-apiauthenticationrefresh)
-- [10. Environment Variables](#10-environment-variables)
-- [11. FAQ](#11-faq)
+- [10. Testing with Scalar](#10-testing-with-scalar)
+  - [How to authorize in Scalar](#how-to-authorize-in-scalar)
+  - [Changing or clearing the token](#changing-or-clearing-the-token)
+- [11. Environment Variables](#11-environment-variables)
+- [12. FAQ](#12-faq)
   - [Is authToken the same as the Access Token?](#is-authtoken-the-same-as-the-access-token)
   - [Why are the Access Token and Refresh Token separate?](#why-are-the-access-token-and-refresh-token-separate)
   - [What happens when the Access Token expires?](#what-happens-when-the-access-token-expires)
   - [How do I set the JWT key for local development?](#how-do-i-set-the-jwt-key-for-local-development)
   - [How do I set the JWT key for production?](#how-do-i-set-the-jwt-key-for-production)
   - [Can I manually refresh my token?](#can-i-manually-refresh-my-token)
-- [12. Production Deployment](#12-production-deployment)
+- [13. Production Deployment](#13-production-deployment)
   - [Overview](#overview)
   - [Azure Container Registry (Backend)](#azure-container-registry-backend)
   - [Azure Database for PostgreSQL](#azure-database-for-postgresql)
@@ -49,9 +52,9 @@
 
 > **For local development:** Each developer generates their **own** JWT key. No sharing needed. Run this in PowerShell:
 > ```powershell
-> $bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32); [Convert]::ToBase64String($bytes)
+> $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $bytes = New-Object byte[] 32; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes)
 > ```
-> Put the output in a `.env` file (`JWT_KEY=<your-generated-key>`) for Docker, or set it as a system environment variable (`Jwt__Key`). The only key that requires secrecy is **production** — that one stays in CI/CD / Azure, never in a developer's hands.
+> Put the output in a `.env` file at the **project root** (`Operational-System\.env`) with `JWT_KEY=<your-generated-key>`, or set it as a system environment variable (`Jwt__Key`). Docker Compose reads `.env` automatically from the same directory as `docker-compose.yml`. The only key that requires secrecy is **production** — that one stays in CI/CD / Azure, never in a developer's hands.
 
 ## 1. Overview
 
@@ -608,7 +611,36 @@ Exchanges a refresh token for a new pair of tokens.
 
 ---
 
-## 10. Environment Variables
+## 10. Testing with Scalar
+
+Scalar is the API documentation UI (available at http://localhost:5100/scalar/v1). It now supports an **Authorize** button for JWT.
+
+### How to authorize in Scalar
+
+**Step 1: Login to get a token**
+
+Open the `POST /api/authentication/login` endpoint, fill in credentials, and click **Try it**. Copy the `accessToken` value from the response.
+
+**Step 2: Click the Authorize button**
+
+At the top of the Scalar page, click the **Authorize** button (lock icon). A dialog appears.
+
+**Step 3: Enter your token**
+
+Paste your token into the field and click **Authorize**. Scalar will now send `Authorization: Bearer <token>` with every request.
+
+**Step 4: Test a protected endpoint**
+
+Try `GET /api/products` — it should return 200 OK with data instead of 401.
+
+### Changing or clearing the token
+
+- Click the Authorize button again to update the token
+- Click **Logout** to clear it and test unauthenticated requests
+
+---
+
+## 11. Environment Variables
 
 The JWT signing key is **never hardcoded** in source code. It is provided through environment variables in three places:
 
@@ -667,11 +699,13 @@ backend:
     Jwt__Key: "${JWT_KEY}"
 ```
 
-Then create a `.env` file in the **project root** (same folder as `docker-compose.yml`):
+Then create a `.env` file at `Operational-System\.env` (project root, same folder as `docker-compose.yml`):
 
 ```
 JWT_KEY=your-real-production-key
 ```
+
+Docker Compose automatically reads `JWT_KEY` from this `.env` file — no manual `--env-file` flag needed.
 
 **Why this is better:**
 - `.env` is already in `.gitignore` (line 12) — the real key is never committed
@@ -700,7 +734,7 @@ After setting, restart your terminal/IDE. The placeholder in the JSON files is c
 
 ---
 
-## 11. Production Deployment
+## 13. Production Deployment
 
 ### Overview
 
@@ -855,14 +889,14 @@ See [Section 10 — Environment Variables](#10-environment-variables) for the fu
 Generate your own random key and never share it:
 
 ```powershell
-$bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32); [Convert]::ToBase64String($bytes)
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $bytes = New-Object byte[] 32; $rng.GetBytes($bytes); [Convert]::ToBase64String($bytes)
 ```
 
 Then choose one method to set it:
 
 | Method | How |
 |---|---|
-| **`.env` file** (for Docker) | `JWT_KEY=<your-key>` in project root `.env` |
+| **`.env` file** (for Docker) | Create `Operational-System\.env` with `JWT_KEY=<your-key>` |
 | **System env var** (for `dotnet run`) | `[System.Environment]::SetEnvironmentVariable('Jwt__Key', '<your-key>', 'User')` |
 | **`launchSettings.json`** (for VS) | Put it there **but never commit it** |
 
@@ -870,7 +904,7 @@ See [Section 10 — Environment Variables](#10-environment-variables) for the fu
 
 ### How do I set the JWT key for production?
 
-See [Section 11 — Production Deployment](#11-production-deployment) for the full guide. The short answer: inject it as a secure environment variable at the container runtime level (Azure App Service settings, Azure Container Instances env vars, or Kubernetes Secrets). Never hardcode it in any file that gets committed.
+See [Section 13 — Production Deployment](#13-production-deployment) for the full guide. The short answer: inject it as a secure environment variable at the container runtime level (Azure App Service settings, Azure Container Instances env vars, or Kubernetes Secrets). Never hardcode it in any file that gets committed.
 
 ### Can I manually refresh my token?
 

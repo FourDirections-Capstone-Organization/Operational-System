@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Backend.Models;
 using Backend.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Backend.Controllers;
 
@@ -15,6 +16,7 @@ public class ProductsController : ControllerBase
         _productService = productService;
     }
 
+    [Authorize]
     [HttpGet]
     public async Task<ActionResult<ApiResponseDTO<List<Product>>>> GetAll()
     {
