@@ -45,8 +45,8 @@ jobs:
         if: failure()
         run: |
           TITLE="CI Failure: backend on ${BRANCH_NAME}"
-          if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
-            gh issue create \
+          if ! gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Backend (.NET)
@@ -64,10 +64,10 @@ jobs:
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: backend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --search "CI Failure: backend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
             if [ -n "$num" ]; then
-              gh issue close "$num"
-              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+              gh issue close --repo "$GITHUB_REPOSITORY" "$num"
+              gh issue comment --repo "$GITHUB_REPOSITORY" "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
             fi
           done
 
@@ -101,8 +101,8 @@ jobs:
         if: failure()
         run: |
           TITLE="CI Failure: frontend on ${BRANCH_NAME}"
-          if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
-            gh issue create \
+          if ! gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Frontend (React + Vite)
@@ -120,10 +120,10 @@ jobs:
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: frontend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --search "CI Failure: frontend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
             if [ -n "$num" ]; then
-              gh issue close "$num"
-              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+              gh issue close --repo "$GITHUB_REPOSITORY" "$num"
+              gh issue comment --repo "$GITHUB_REPOSITORY" "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
             fi
           done
 
@@ -154,8 +154,8 @@ jobs:
         if: failure()
         run: |
           TITLE="CI Failure: docker on ${BRANCH_NAME}"
-          if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
-            gh issue create \
+          if ! gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
+            gh issue create --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Docker Images
@@ -173,9 +173,9 @@ jobs:
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: docker on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --search "CI Failure: docker on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
             if [ -n "$num" ]; then
-              gh issue close "$num"
-              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+              gh issue close --repo "$GITHUB_REPOSITORY" "$num"
+              gh issue comment --repo "$GITHUB_REPOSITORY" "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
             fi
           done

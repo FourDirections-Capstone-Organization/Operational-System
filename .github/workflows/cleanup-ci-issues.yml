@@ -28,9 +28,9 @@ jobs:
         run: |
           for prefix in "backend" "frontend" "docker"; do
             TITLE="CI Failure: ${prefix} on ${BRANCH}"
-            NUM=$(gh issue list --state open --label bug --json number --jq '.[].number' --search "$TITLE")
+            NUM=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label bug --json number --jq '.[].number' --search "$TITLE")
             if [ -n "$NUM" ]; then
-              gh issue close "$NUM"
-              gh issue comment "$NUM" --body "🔒 Branch \`${BRANCH}\` was deleted or its PR was closed. This issue is no longer relevant."
+              gh issue close --repo "$GITHUB_REPOSITORY" "$NUM"
+              gh issue comment --repo "$GITHUB_REPOSITORY" "$NUM" --body "🔒 Branch \`${BRANCH}\` was deleted or its PR was closed. This issue is no longer relevant."
             fi
           done
