@@ -38,3 +38,4 @@ A full-stack operational task management system built with modern web technologi
 | [JWT Authentication Guide](./guide/jwt-authentication-guide.md) | Auth flows, models, tokens, and production deployment |
 | [CI Issue Lifecycle](./guide/ci-issue-lifecycle.md) | How CI failures create/close issues, fixing flows, and edge cases |
 | [pgAdmin Usage](./guide/pgadmin-usage.md) | Connecting, querying, and managing PostgreSQL via pgAdmin 4 |
+| [Centralized Auth & Integration](./guide/centralized-auth-integration.md) | Shared JWT auth, service accounts, and cross-system API integration |
