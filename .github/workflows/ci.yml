@@ -6,12 +6,15 @@ permissions:
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - '**'
   pull_request:
-    branches: [main, master]
+    branches:
+      - '**'
 
 env:
   GH_TOKEN: ${{ github.token }}
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
   backend:
@@ -41,27 +44,31 @@ jobs:
       - name: Create Issue on Failure
         if: failure()
         run: |
-          TITLE="CI Failure: backend on ${GITHUB_REF_NAME}"
+          TITLE="CI Failure: backend on ${BRANCH_NAME}"
           if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
             gh issue create \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Backend (.NET)
 
-          **Branch:** ${GITHUB_REF_NAME}
+          **Event:** ${{ github.event_name }}
+          **Branch:** ${BRANCH_NAME}
           **Commit:** ${GITHUB_SHA}
           **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           **Triggered by:** ${GITHUB_ACTOR}
+          **PR:** ${{ github.event.pull_request.html_url || 'N/A' }}
 
-          The backend build failed. Check the run logs for details."
+          The backend build or tests failed. Check the run logs for details."
           fi
 
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: backend on ${GITHUB_REF_NAME}" --json number --jq '.[].number' | while read -r num; do
-            gh issue close "$num"
-            gh issue comment "$num" --body "✅ CI is passing again on ${GITHUB_REF_NAME}"
+          gh issue list --state open --label bug --search "CI Failure: backend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+            if [ -n "$num" ]; then
+              gh issue close "$num"
+              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+            fi
           done
 
   frontend:
@@ -93,17 +100,19 @@ jobs:
       - name: Create Issue on Failure
         if: failure()
         run: |
-          TITLE="CI Failure: frontend on ${GITHUB_REF_NAME}"
+          TITLE="CI Failure: frontend on ${BRANCH_NAME}"
           if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
             gh issue create \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Frontend (React + Vite)
 
-          **Branch:** ${GITHUB_REF_NAME}
+          **Event:** ${{ github.event_name }}
+          **Branch:** ${BRANCH_NAME}
           **Commit:** ${GITHUB_SHA}
           **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           **Triggered by:** ${GITHUB_ACTOR}
+          **PR:** ${{ github.event.pull_request.html_url || 'N/A' }}
 
           The frontend build or tests failed. Check the run logs for details."
           fi
@@ -111,9 +120,11 @@ jobs:
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: frontend on ${GITHUB_REF_NAME}" --json number --jq '.[].number' | while read -r num; do
-            gh issue close "$num"
-            gh issue comment "$num" --body "✅ CI is passing again on ${GITHUB_REF_NAME}"
+          gh issue list --state open --label bug --search "CI Failure: frontend on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+            if [ -n "$num" ]; then
+              gh issue close "$num"
+              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+            fi
           done
 
   docker:
@@ -142,17 +153,19 @@ jobs:
       - name: Create Issue on Failure
         if: failure()
         run: |
-          TITLE="CI Failure: docker on ${GITHUB_REF_NAME}"
+          TITLE="CI Failure: docker on ${BRANCH_NAME}"
           if ! gh issue list --state open --label bug --json title --jq '.[].title' | grep -Fx "$TITLE"; then
             gh issue create \
               --title "$TITLE" \
               --label "bug,ci" \
               --body "## CI Failure — Docker Images
 
-          **Branch:** ${GITHUB_REF_NAME}
+          **Event:** ${{ github.event_name }}
+          **Branch:** ${BRANCH_NAME}
           **Commit:** ${GITHUB_SHA}
           **Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           **Triggered by:** ${GITHUB_ACTOR}
+          **PR:** ${{ github.event.pull_request.html_url || 'N/A' }}
 
           One or more Docker builds failed. Check the run logs for details."
           fi
@@ -160,7 +173,9 @@ jobs:
       - name: Close stale CI failure issue
         if: success()
         run: |
-          gh issue list --state open --label bug --search "CI Failure: docker on ${GITHUB_REF_NAME}" --json number --jq '.[].number' | while read -r num; do
-            gh issue close "$num"
-            gh issue comment "$num" --body "✅ CI is passing again on ${GITHUB_REF_NAME}"
+          gh issue list --state open --label bug --search "CI Failure: docker on ${BRANCH_NAME}" --json number --jq '.[].number' | while read -r num; do
+            if [ -n "$num" ]; then
+              gh issue close "$num"
+              gh issue comment "$num" --body "✅ CI is passing again on ${BRANCH_NAME}"
+            fi
           done

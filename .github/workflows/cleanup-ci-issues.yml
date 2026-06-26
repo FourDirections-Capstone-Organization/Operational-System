@@ -1,0 +1,36 @@
+name: Cleanup CI Issues
+
+on:
+  delete:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  cleanup:
+    name: Close stale CI failure issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine branch name
+        run: |
+          if [ "${{ github.event_name }}" = "delete" ]; then
+            echo "BRANCH=${{ github.event.ref }}" >> $GITHUB_ENV
+          else
+            echo "BRANCH=${{ github.head_ref }}" >> $GITHUB_ENV
+          fi
+
+      - name: Close CI failure issues for the branch
+        run: |
+          for prefix in "backend" "frontend" "docker"; do
+            TITLE="CI Failure: ${prefix} on ${BRANCH}"
+            NUM=$(gh issue list --state open --label bug --json number --jq '.[].number' --search "$TITLE")
+            if [ -n "$NUM" ]; then
+              gh issue close "$NUM"
+              gh issue comment "$NUM" --body "🔒 Branch \`${BRANCH}\` was deleted or its PR was closed. This issue is no longer relevant."
+            fi
+          done

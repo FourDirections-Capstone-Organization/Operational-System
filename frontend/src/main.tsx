@@ -13,6 +13,74 @@ axios.interceptors.request.use((config) => {
     return config;
 });
 
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (value: any) => void;
+    reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach(({ resolve, reject }) => {
+        if (error) reject(error);
+        else resolve(token);
+    });
+    failedQueue = [];
+};
+
+axios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status !== 401 || originalRequest._retry) {
+            return Promise.reject(error);
+        }
+
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+            localStorage.clear();
+            window.location.href = '/';
+            return Promise.reject(error);
+        }
+
+        if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+                failedQueue.push({ resolve, reject });
+            }).then((token) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+                return axios(originalRequest);
+            });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+            const { data } = await axios.post('/api/authentication/refresh', {
+                refreshToken,
+            });
+
+            const newAccessToken = data.accessToken;
+            const newRefreshToken = data.refreshToken;
+
+            localStorage.setItem('authToken', newAccessToken);
+            localStorage.setItem('refreshToken', newRefreshToken);
+
+            processQueue(null, newAccessToken);
+
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            return axios(originalRequest);
+        } catch (refreshError) {
+            processQueue(refreshError, null);
+            localStorage.clear();
+            window.location.href = '/';
+            return Promise.reject(refreshError);
+        } finally {
+            isRefreshing = false;
+        }
+    }
+);
+
 import LoginPage from './Pages/login_page/login'
 import SystemAdmin_Dashboard from './Pages/SystemAdmin_Dashboard/SystemAdmin_Dashboard'
 import ForgotPasswordPage from './Pages/forgotpassword_page/forgotpassword_page'
