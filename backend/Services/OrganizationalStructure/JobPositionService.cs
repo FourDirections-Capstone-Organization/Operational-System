@@ -177,4 +177,30 @@ public class JobPositionService : IJobPositionService
 
         return ApiResponseDTO<JobPositionResponseDTO>.Success(response, "Job position updated successfully");
     }
+
+    public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id)
+    {
+        var position = await _db.JobPositions
+            .Include(jp => jp.Users)
+            .FirstOrDefaultAsync(jp => jp.Id == id);
+        
+        if (position is null)
+            return ApiResponseDTO<bool>.Failure("Job position not found");
+        
+        if (!position.IsActive)
+            return ApiResponseDTO<bool>.Failure("Job position is already inactive");
+        
+        // Check if the position has active users
+        var hasActiveUsers = position.Users.Any(u => u.IsActive && !u.IsDeactivated);
+        if(hasActiveUsers)
+            return ApiResponseDTO<bool>.Failure("Cannot delete job position with active users. Transfer users first.");
+
+        // Soft delete
+        position.IsActive = false;
+        position.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<bool>.Success(true, "Job position deactivated successfully");
+    }
 }
