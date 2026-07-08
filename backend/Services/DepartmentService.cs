@@ -92,4 +92,41 @@ public class DepartmentService : IDepartmentService
 
         return ApiResponseDTO<DepartmentResponseDTO>.Success(response, "Department created successfully");
     }
+
+    public async Task<ApiResponseDTO<DepartmentResponseDTO>> UpdateAsync(Guid id, UpdateDepartmentDTO dto)
+    {
+        var department = await _db.Departments
+            .Include(d => d.Users)
+            .Include(d => d.JobPositions)
+            .FirstOrDefaultAsync(d => d.Id == id && d.IsActive);
+        
+        if (department is null)
+            return ApiResponseDTO<DepartmentResponseDTO>.Failure("Department not found");
+        
+        // Check if the new name conflicts with existing department
+        var nameConflict = await _db.Departments
+            .AnyAsync(d => d.Id != id && d.Name.ToLower() == dto.Name.ToLower() && d.IsActive);
+
+        if (nameConflict)
+            return ApiResponseDTO<DepartmentResponseDTO>.Failure("Department with this name already exists.");
+        
+        department.Name = dto.Name;
+        department.Description = dto.Description;
+        department.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var response = new DepartmentResponseDTO
+        {
+            Id = department.Id,
+            Name = department.Name,
+            Description = department.Description,
+            IsActive = department.IsActive,
+            CreatedAt = department.CreatedAt,
+            UserCount = department.Users.Count(u => u.IsActive && !u.IsDeactivated),
+            PositionCount = department.JobPositions.Count(jp => jp.IsActive)
+        };
+
+        return ApiResponseDTO<DepartmentResponseDTO>.Success(response, "Department updated successfully");
+    }
 }
