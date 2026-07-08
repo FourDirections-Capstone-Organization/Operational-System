@@ -11,6 +11,58 @@ This document outlines the step-by-step implementation plan for **Module 1: User
 
 ---
 
+## API Response Standard
+
+All API endpoints return responses wrapped in `ApiResponseDTO<T>` to ensure consistency:
+
+```csharp
+public class ApiResponseDTO<T>
+{
+    public bool IsSuccess { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public T? Data { get; set; }
+}
+```
+
+**Usage Examples:**
+
+```csharp
+// Single object
+ApiResponseDTO<User> response = ApiResponseDTO<User>.Success(user, "User created");
+
+// List of objects
+ApiResponseDTO<List<User>> response = ApiResponseDTO<List<User>>.Success(users);
+
+// No data (for errors or operations without return data)
+ApiResponseDTO<object> response = ApiResponseDTO<object>.Failure("Error message");
+
+// Boolean result
+ApiResponseDTO<bool> response = ApiResponseDTO<bool>.Success(true, "Operation completed");
+```
+
+**Controller Pattern:**
+```csharp
+[HttpGet("{id:guid}")]
+public async Task<IActionResult> GetById(Guid id)
+{
+    var result = await _service.GetByIdAsync(id);
+    if (!result.IsSuccess)
+        return NotFound(result);  // Returns ApiResponseDTO with IsSuccess = false
+    
+    return Ok(result);  // Returns ApiResponseDTO with IsSuccess = true
+}
+```
+
+**HTTP Status Codes:**
+- `200 OK` - Success with data
+- `201 Created` - Resource created successfully
+- `400 Bad Request` - Validation error or business logic failure
+- `401 Unauthorized` - Authentication failed or session expired
+- `403 Forbidden` - User lacks permission
+- `404 Not Found` - Resource not found
+
+---
+
 ## Module Structure
 
 Module 1 is divided into **4 sub-modules** with **16 Functional Requirements (FRs)**:
