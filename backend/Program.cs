@@ -9,6 +9,7 @@ using Scalar.AspNetCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Modules.Authentication;
+using Backend.Modules.OrganizationalStructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +33,9 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Register services
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<IJobPositionService, JobPositionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<PasswordHasher<Account>>();
 
@@ -68,6 +72,10 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+
+    // Seed default departments
+    var departmentService = scope.ServiceProvider.GetRequiredService<IDepartmentService>();
+    await departmentService.SeedDefaultDepartmentsAsync();
 }
 
 if (app.Environment.IsDevelopment())
