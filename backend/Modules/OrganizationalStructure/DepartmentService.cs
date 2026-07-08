@@ -29,6 +29,7 @@ public class DepartmentService : IDepartmentService
                 IsActive = d.IsActive,
                 CreatedAt = d.CreatedAt,
                 UserCount = d.Users.Count(u => u.IsActive && !u.IsDeactivated),
+                PositionCount = d.JobPositions.Count(jp => jp.IsActive)
             })
             .ToListAsync();
 
