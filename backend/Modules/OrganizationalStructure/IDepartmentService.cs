@@ -1,7 +1,7 @@
 ﻿using Backend.Models;
 using Backend.Models.DTOs;
 
-namespace Backend.Services.OrganizationalStructure;
+namespace Backend.Modules.OrganizationalStructure;
 
 public interface IDepartmentService
 {

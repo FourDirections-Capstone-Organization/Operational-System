@@ -3,7 +3,7 @@ using Backend.Models;
 using Backend.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 
-namespace Backend.Services.OrganizationalStructure;
+namespace Backend.Modules.OrganizationalStructure;
 
 public class JobPositionService : IJobPositionService
 {
