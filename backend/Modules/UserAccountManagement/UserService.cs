@@ -2,6 +2,7 @@
 using Backend.Models;
 using Backend.Modules.Email;
 using Backend.Models.DTOs;
+using Backend.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 
@@ -96,6 +97,44 @@ public class UserService : IUserService
 
         var response = MapToResponseDTO(user);
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User registered successfully. Welcome email sent.");
+    }
+
+    public async Task<ApiResponseDTO<List<UserResponseDTO>>> GetAllAsync(string? search = null, string? role = null, Guid? departmentId = null)
+    {
+        var query = _db.Users
+            .Include(u => u.Department)
+            .Include(u => u.JobPosition)
+            .AsQueryable();
+
+        // Apply filters
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(u =>
+                u.FirstName.ToLower().Contains(searchLower) ||
+                u.LastName.ToLower().Contains(searchLower) ||
+                u.Email.ToLower().Contains(searchLower) ||
+                u.EmployeeNumber.ToLower().Contains(searchLower));
+        }
+
+        if (!string.IsNullOrWhiteSpace(role) && Enum.TryParse<UserRole>(role, true, out var roleEnum))
+        {
+            query = query.Where(u => u.Role == roleEnum);
+        }
+
+        if (departmentId.HasValue)
+        {
+            query = query.Where(u => u.DepartmentId == departmentId.Value);
+        }
+
+        var users = await query
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .ToListAsync();
+
+        var response = users.Select(MapToResponseDTO).ToList();
+        
+        return ApiResponseDTO<List<UserResponseDTO>>.Success(response);
     }
 
     private string GenerateTempPassword()
