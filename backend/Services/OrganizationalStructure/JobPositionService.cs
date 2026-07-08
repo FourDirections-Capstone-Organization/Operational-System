@@ -57,4 +57,28 @@ public class JobPositionService : IJobPositionService
 
         return ApiResponseDTO<List<JobPositionResponseDTO>>.Success(positions);
     }
+
+    public async Task<ApiResponseDTO<JobPositionResponseDTO>> GetByIdAsync(Guid id)
+    {
+        var position = await _db.JobPositions
+            .Include(jp => jp.Department)
+            .Include(jp => jp.Users)
+            .FirstOrDefaultAsync(jp => jp.Id == id && jp.IsActive);
+        
+        if (position is null)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Job position not found");
+        
+        var response = new JobPositionResponseDTO
+        {
+            Id = position.Id,
+            Name = position.Name,
+            DepartmentId = position.DepartmentId,
+            DepartmentName = position.Department?.Name,
+            IsActive = position.IsActive,
+            CreatedAt = position.CreatedAt,
+            UserCount = position.Users.Count(u => u.IsActive && !u.IsDeactivated)
+        };
+
+        return ApiResponseDTO<JobPositionResponseDTO>.Success(response);
+    }
 }
