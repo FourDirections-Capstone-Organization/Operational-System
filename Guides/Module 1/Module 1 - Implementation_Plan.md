@@ -91,14 +91,16 @@ The sub-modules should be implemented in this order because each one builds on t
 - Update `Data/AppDbContext.cs`
 
 **Key Concepts:**
-- Password hashing with BCrypt
+- Password hashing with PBKDF2 (ASP.NET Core built-in PasswordHasher<T>)
+- OWASP password requirements (min 15 chars, uppercase, lowercase, number, special character)
 - SMTP email sending (MailKit library)
 - Soft delete (IsActive/IsDeactivated flags)
 - Data archival (read-only historical data)
 
 **NuGet Packages Needed:**
-- `BCrypt.Net-Next` (password hashing)
 - `MailKit` (SMTP email)
+
+*(No external password hashing package needed - ASP.NET Core's built-in `PasswordHasher<T>` implements PBKDF2)*
 
 ---
 
@@ -254,11 +256,12 @@ After Module 1, the database will have these tables:
 Add these to `Backend.csproj`:
 
 ```xml
-<PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
 <PackageReference Include="MailKit" Version="4.3.0" />
 <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
 <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.0" />
 ```
+
+*(No external password hashing package needed - ASP.NET Core's built-in `PasswordHasher<T>` implements PBKDF2 with OWASP-compliant settings)*
 
 ---
 
