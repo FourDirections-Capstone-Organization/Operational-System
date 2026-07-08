@@ -3,7 +3,7 @@ using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
 
-namespace Backend.Services;
+namespace Backend.Services.OrganizationalStructure;
 
 public class DepartmentService : IDepartmentService
 {
