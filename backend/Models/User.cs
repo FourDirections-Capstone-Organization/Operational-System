@@ -55,6 +55,14 @@ public class User
     public bool IsEmailVerified { get; set; } = false;
     public bool IsPasswordChanged { get; set; } = false;
 
+    // Email verification
+    public string? EmailVerificationToken { get; set; }
+    public DateTime? EmailVerificationTokenExpiry { get; set; }
+
+    // Password Reset
+    public string? PasswordResetToken { get; set; }
+    public DateTime? PasswordResetTokenExpiry { get; set; }
+
     // Session tracking
     public DateTime? LastActivityAt { get; set; }
 
