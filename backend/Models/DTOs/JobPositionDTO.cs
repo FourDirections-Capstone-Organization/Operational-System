@@ -2,7 +2,7 @@
 
 namespace Backend.Models.DTOs;
 
-public class JobPositionDTO
+public class CreateJobPositionDTO
 {
     [Required]
     [MaxLength(100)]
