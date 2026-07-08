@@ -133,8 +133,36 @@ public class UserService : IUserService
             .ToListAsync();
 
         var response = users.Select(MapToResponseDTO).ToList();
-        
+
         return ApiResponseDTO<List<UserResponseDTO>>.Success(response);
+    }
+
+    public async Task<ApiResponseDTO<UserResponseDTO>> GetByIdAsync(Guid id)
+    {
+        var user = await _db.Users
+            .Include(u => u.Department)
+            .Include(u => u.JobPosition)
+            .FirstOrDefaultAsync(u => u.Id == id);
+
+        if (user is null)
+            return ApiResponseDTO<UserResponseDTO>.Failure("User not found");
+
+        var response = MapToResponseDTO(user);
+        return ApiResponseDTO<UserResponseDTO>.Success(response);
+    }
+
+    public async Task<ApiResponseDTO<UserResponseDTO>> GetByEmployeeNumberAsync(string employeeNumber)
+    {
+        var user = await _db.Users
+            .Include(u => u.Department)
+            .Include(u => u.JobPosition)
+            .FirstOrDefaultAsync(u => u.EmployeeNumber == employeeNumber);
+
+        if (user is null)
+            return ApiResponseDTO<UserResponseDTO>.Failure("User not found");
+
+        var response = MapToResponseDTO(user);
+        return ApiResponseDTO<UserResponseDTO>.Success(response);
     }
 
     private string GenerateTempPassword()
