@@ -102,7 +102,7 @@ public class AppDbContext : DbContext
            // Unique Constraints
            entity.HasIndex(e => e.EmployeeNumber).IsUnique();
            entity.HasIndex(e => e.Email).IsUnique();
-           entity.HasIndex(e => e.Username).IsUnique().HasFilter("[Username] IS NOT NULL");
+           entity.HasIndex(e => e.Username).IsUnique().HasFilter("\"Username\" IS NOT NULL");
         });
     }
 }
