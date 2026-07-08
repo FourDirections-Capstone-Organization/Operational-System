@@ -227,6 +227,28 @@ public class UserService : IUserService
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User updated successfully");
     }
 
+    public async Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id)
+    {
+        var user = await _db.Users.FindAsync(id);
+
+        if (user is null)
+            return ApiResponseDTO<bool>.Failure("User not found");
+
+        if (user.IsDeactivated)
+            return ApiResponseDTO<bool>.Failure("User is already deactivated");
+
+        // Soft deactivate
+        user.IsDeactivated = true;
+        user.IsActive = false;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("User deactivated: {EmployeeNumber}", user.EmployeeNumber);
+
+        return ApiResponseDTO<bool>.Success(true, "User deactivated successfully. Historical data preserved.");
+    }
+
     private string GenerateTempPassword()
     {
         // Generate OWASP-compliant temporary password (15+ chars, upper, lower, number, special)
