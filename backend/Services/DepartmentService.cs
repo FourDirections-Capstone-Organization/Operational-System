@@ -34,4 +34,62 @@ public class DepartmentService : IDepartmentService
 
             return ApiResponseDTO<List<DepartmentResponseDTO>>.Success(departments);
     }
+
+    public async Task<ApiResponseDTO<DepartmentResponseDTO>> GetByIdAsync(Guid id)
+    {
+        var department = await _db.Departments
+            .Include(d => d.Users)
+            .Include(d => d.JobPositions)
+            .FirstOrDefaultAsync(d => d.Id == id && d.IsActive);
+
+        if (department is null)
+            return ApiResponseDTO<DepartmentResponseDTO>.Failure("Department not found");
+
+        var response = new DepartmentResponseDTO
+        {
+            Id = department.Id,
+            Name = department.Name,
+            Description = department.Description,
+            IsActive = department.IsActive,
+            CreatedAt = department.CreatedAt,
+            UserCount = department.Users.Count(u => u.IsActive && !u.IsDeactivated),
+            PositionCount = department.JobPositions.Count(jp => jp.IsActive)
+        };
+
+        return ApiResponseDTO<DepartmentResponseDTO>.Success(response);
+    }
+
+    public async Task<ApiResponseDTO<DepartmentResponseDTO>> CreateAsync(CreateDepartmentDTO dto)
+    {
+        // Check if the department with same name already exists
+        var exists = await _db.Departments
+            .AnyAsync(d => d.Name.ToLower() == dto.Name.ToLower() && d.IsActive);
+
+        if (exists)
+            return ApiResponseDTO<DepartmentResponseDTO>.Failure("Department with this name already exists");
+        
+        var department = new Department
+        {
+            Name = dto.Name,
+            Description = dto.Description,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Departments.Add(department);
+        await _db.SaveChangesAsync();
+
+        var response = new DepartmentResponseDTO
+        {
+            Id = department.Id,
+            Name = department.Name,
+            Description = department.Description,
+            IsActive = department.IsActive,
+            CreatedAt = department.CreatedAt,
+            UserCount = 0,
+            PositionCount = 0
+        };
+
+        return ApiResponseDTO<DepartmentResponseDTO>.Success(response, "Department created successfully");
+    }
 }
