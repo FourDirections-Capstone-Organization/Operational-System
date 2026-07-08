@@ -81,4 +81,50 @@ public class JobPositionService : IJobPositionService
 
         return ApiResponseDTO<JobPositionResponseDTO>.Success(response);
     }
+
+    public async Task<ApiResponseDTO<JobPositionResponseDTO>> CreateAsync(CreateJobPositionDTO dto)
+    {
+        // Check if department exists
+        var departmentExists = await _db.Departments
+            .AnyAsync(d => d.Id == dto.DepartmentId && d.IsActive);
+
+        if (!departmentExists)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Department not found or is inactive");
+
+        // Check if position with same name exists in the same department
+        var exists = await _db.JobPositions
+            .AnyAsync(jp => jp.DepartmentId != dto.DepartmentId 
+                && jp.Name.ToLower() == dto.Name.ToLower() 
+                && jp.IsActive);
+
+        if (exists)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Job position with this name already exists in this department");
+
+        var position = new JobPosition
+        {
+            Name = dto.Name,
+            DepartmentId = dto.DepartmentId,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.JobPositions.Add(position);
+        await _db.SaveChangesAsync();
+
+        // Reload with department info
+        await _db.Entry(position).Reference(p => p.Department).LoadAsync();
+
+        var response = new JobPositionResponseDTO
+        {
+            Id = position.Id,
+            Name = position.Name,
+            DepartmentId = position.DepartmentId,
+            DepartmentName = position.Department?.Name,
+            IsActive = position.IsActive,
+            CreatedAt = position.CreatedAt,
+            UserCount = 0  
+        };
+
+        return ApiResponseDTO<JobPositionResponseDTO>.Success(response, "Job position created successfully");
+    }
 }
