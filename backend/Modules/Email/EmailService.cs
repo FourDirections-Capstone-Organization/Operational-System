@@ -98,6 +98,43 @@ public class EmailService : IEmailService
         await SendEmailAsync(toEmail, subject, body);
     }
 
+    public async Task SendEmailVerificationAsync(string toEmail, string toName, string verificationToken, string verificationUrl)
+    {
+        var subject = "Verify Your Email - STARS";
+        var verificationLink = $"{verificationUrl}?token={verificationToken}";
+        var body = $@"
+            <html>
+            <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <h2 style='color: #1B254B;'>Verify Your Email Address</h2>
+                    <p>Dear {toName},</p>
+                    <p>Thank you for registering with STARS. Please verify your email address to complete your account setup.</p>
+                    
+                    <p>Click the button below to verify your email:</p>
+                    
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='{verificationLink}' style='background-color: #00A99D; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;'>Verify Email</a>
+                    </div>
+                    
+                    <p>Or copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all; color: #00A99D;'>{verificationLink}</p>
+                    
+                    <p><strong>Note:</strong> This link will expire in 24 hours.</p>
+                    
+                    <p>If you did not create an account, please ignore this email.</p>
+                    
+                    <p>Best regards,<br/>STARS System Administrator</p>
+                    
+                    <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'/>
+                    <p style='font-size: 12px; color: #999;'>This is an automated message. Please do not reply to this email.</p>
+                </div>
+            </body>
+            </html>
+        ";
+
+        await SendEmailAsync(toEmail, subject, body);
+    }
+
 
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
