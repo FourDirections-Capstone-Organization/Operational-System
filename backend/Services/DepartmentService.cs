@@ -129,4 +129,59 @@ public class DepartmentService : IDepartmentService
 
         return ApiResponseDTO<DepartmentResponseDTO>.Success(response, "Department updated successfully");
     }
+
+    public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id)
+    {
+        var department = await _db.Departments
+            .Include(d => d.Users)
+            .FirstOrDefaultAsync(d => d.Id == id);
+        
+        if (department is null)
+            return ApiResponseDTO<bool>.Failure("Department not found");
+        
+        if (!department.IsActive)   
+            return ApiResponseDTO<bool>.Failure("Department is already inactive");
+
+        // Check if the department has active users
+        var hasActiveUsers = department.Users.Any(u => u.IsActive && !u.IsDeactivated);
+        if (hasActiveUsers)
+            return ApiResponseDTO<bool>.Failure("Cannot delete department with active users. Transfer users first.");
+        
+        // Soft delete
+        department.IsActive = false;
+        department.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<bool>.Success(true, "Department deactivated successfully");
+    }
+
+    public async Task SeedDefaultDepartmentsAsync()
+    {
+        var defaultDepartments = new[]
+        {
+            new { Name = "Coordinator & Customer Service Team", Description = "Handles customer coordination and service operations" },
+            new { Name = "Dispatch Team", Description = "Manages dispatch operations and logistics" },
+            new { Name = "Forwarding Team (Vismin Airline Cargo Forwarders)", Description = "Handles vismin airline cargo forwarding operations" }
+        };
+
+        foreach (var dept in defaultDepartments)
+        {
+            var exists = await _db.Departments
+                .AnyAsync(d => d.Name.ToLower() == dept.Name.ToLower());
+
+            if (!exists)
+            {
+                _db.Departments.Add(new Department
+                {
+                   Name = dept.Name,
+                   Description = dept.Description,
+                   IsActive = true,
+                   CreatedAt = DateTime.UtcNow 
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
+    }
 }
