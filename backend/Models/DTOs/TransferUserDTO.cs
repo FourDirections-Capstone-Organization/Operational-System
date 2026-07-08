@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace Backend;
+namespace Backend.Models.DTOs;
 
 public class TransferUserDTO
 {
