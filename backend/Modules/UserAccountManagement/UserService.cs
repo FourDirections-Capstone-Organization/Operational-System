@@ -165,6 +165,68 @@ public class UserService : IUserService
         return ApiResponseDTO<UserResponseDTO>.Success(response);
     }
 
+    public async Task<ApiResponseDTO<UserResponseDTO>> UpdateAsync(Guid id, UpdateUserDTO dto, Guid? requestUserId = null)
+    {
+        var user = await _db.Users
+            .Include(u => u.Department)
+            .Include(u => u.JobPosition)
+            .FirstOrDefaultAsync(u => u.Id == id);
+
+        if (user is null)
+            return ApiResponseDTO<UserResponseDTO>.Failure("User not found");
+
+        // Check if user is deactivated
+        if (user.IsDeactivated)
+            return ApiResponseDTO<UserResponseDTO>.Failure("Cannot update a deactivated user");
+
+        // Check permissions: only Manager or the user themselves can update
+        if (!requestUserId.HasValue)
+            return ApiResponseDTO<UserResponseDTO>.Failure("Authentication required");
+        
+        if (requestUserId != id)
+        {
+            var requestUser = await _db.Users.FindAsync(requestUserId.Value);
+            if (requestUser is null || requestUser.Role != UserRole.Manager)
+                return ApiResponseDTO<UserResponseDTO>.Failure("You don't have permission to update this user");
+        }
+
+        // Check email uniqueness if changing
+        if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email.ToLower() != user.Email.ToLower())
+        {
+            var emailExists = await _db.Users
+                .AnyAsync(u => u.Id != id && u.Email.ToLower() == dto.Email.ToLower());
+
+            if (emailExists)
+                return ApiResponseDTO<UserResponseDTO>.Failure("Email already exists");
+
+            user.Email = dto.Email;
+            user.IsEmailVerified = false; // Reset verification if email changed
+        }
+
+        // Update fields
+        if (!string.IsNullOrWhiteSpace(dto.FirstName))
+            user.FirstName = dto.FirstName;
+
+        if (dto.MiddleName != null)
+            user.MiddleName = dto.MiddleName;
+
+        if (!string.IsNullOrWhiteSpace(dto.LastName))
+            user.LastName = dto.LastName;
+
+        if (dto.Suffix != null)
+            user.Suffix = dto.Suffix;
+
+        if (dto.ContactNumber != null)
+            user.ContactNumber = dto.ContactNumber;
+
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var response = MapToResponseDTO(user);
+        return ApiResponseDTO<UserResponseDTO>.Success(response, "User updated successfully");
+    }
+
     private string GenerateTempPassword()
     {
         // Generate OWASP-compliant temporary password (15+ chars, upper, lower, number, special)
