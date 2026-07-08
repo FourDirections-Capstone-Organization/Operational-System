@@ -93,7 +93,7 @@ public class JobPositionService : IJobPositionService
 
         // Check if position with same name exists in the same department
         var exists = await _db.JobPositions
-            .AnyAsync(jp => jp.DepartmentId != dto.DepartmentId 
+            .AnyAsync(jp => jp.DepartmentId == dto.DepartmentId 
                 && jp.Name.ToLower() == dto.Name.ToLower() 
                 && jp.IsActive);
 
@@ -126,5 +126,55 @@ public class JobPositionService : IJobPositionService
         };
 
         return ApiResponseDTO<JobPositionResponseDTO>.Success(response, "Job position created successfully");
+    }
+
+    public async Task<ApiResponseDTO<JobPositionResponseDTO>> UpdateAsync(Guid id, UpdateJobPositionDTO dto)
+    {
+        var position = await _db.JobPositions
+            .Include(jp => jp.Department)
+            .Include(jp => jp.Users)
+            .FirstOrDefaultAsync(jp => jp.Id == id && jp.IsActive);
+
+        if (position is null)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Job position not found");
+
+        // Check if the new department exists
+        var departmentExists = await _db.Departments
+            .AnyAsync(d => d.Id == dto.DepartmentId && d.IsActive);
+
+        if (!departmentExists)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Department not found or is inactive");
+
+        // Check if new name conflicts
+        var nameConflict = await _db.JobPositions
+            .AnyAsync(jp => jp.Id != id 
+                && jp.DepartmentId == dto.DepartmentId 
+                && jp.Name.ToLower() == dto.Name.ToLower() 
+                && jp.IsActive);
+
+        if (nameConflict)
+            return ApiResponseDTO<JobPositionResponseDTO>.Failure("Job position with this name already exists in this department");
+
+        position.Name = dto.Name;
+        position.DepartmentId = dto.DepartmentId;
+        position.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        // Reload the department info
+        await _db.Entry(position).Reference(p => p.Department).LoadAsync();
+
+        var response = new JobPositionResponseDTO
+        {
+            Id = position.Id,
+            Name = position.Name,
+            DepartmentId = position.DepartmentId,
+            DepartmentName = position.Department?.Name,
+            IsActive = position.IsActive,
+            CreatedAt = position.CreatedAt,
+            UserCount = position.Users.Count(u => u.IsActive && !u.IsDeactivated)
+        };
+
+        return ApiResponseDTO<JobPositionResponseDTO>.Success(response, "Job position updated successfully");
     }
 }
