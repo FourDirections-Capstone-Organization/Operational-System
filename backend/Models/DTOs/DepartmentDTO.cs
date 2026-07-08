@@ -2,7 +2,7 @@
 
 namespace Backend.Models.DTOs;
 
-public class DepartmentDTO
+public class CreateDepartmentDTO
 {
     [Required]
     [MaxLength(100)]
