@@ -9,7 +9,6 @@ using Scalar.AspNetCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Modules.Authentication;
-using Backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +32,6 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<PasswordHasher<Account>>();
 
