@@ -273,6 +273,36 @@ public class UserService : IUserService
 
     }
 
+    public async Task<ApiResponseDTO<string>> GenerateEmployeeNumberAsync()
+    {
+        // Get all employee numbers and find the next available
+        var allUsers = await _db.Users
+            .Select(u => u.EmployeeNumber)
+            .ToListAsync();
+
+        var usedNumbers = new HashSet<int>();
+
+        foreach (var empNum in allUsers)
+        {
+            if (int.TryParse(empNum, out var num))
+            {
+                usedNumbers.Add(num);
+            }
+        }
+
+        // Find next available number
+        var nextNumber = 1;
+        while (usedNumbers.Contains(nextNumber))
+        {
+            nextNumber++;
+        }
+
+        // Format with leading zeros (e.g., "0001")
+        var formattedNumber = nextNumber.ToString("D4");
+
+        return ApiResponseDTO<string>.Success(formattedNumber);
+    }
+
     private string GenerateTempPassword()
     {
         // Generate OWASP-compliant temporary password (15+ chars, upper, lower, number, special)
