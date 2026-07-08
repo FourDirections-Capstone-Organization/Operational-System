@@ -11,6 +11,58 @@ This document outlines the step-by-step implementation plan for **Module 1: User
 
 ---
 
+## API Response Standard
+
+All API endpoints return responses wrapped in `ApiResponseDTO<T>` to ensure consistency:
+
+```csharp
+public class ApiResponseDTO<T>
+{
+    public bool IsSuccess { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public T? Data { get; set; }
+}
+```
+
+**Usage Examples:**
+
+```csharp
+// Single object
+ApiResponseDTO<User> response = ApiResponseDTO<User>.Success(user, "User created");
+
+// List of objects
+ApiResponseDTO<List<User>> response = ApiResponseDTO<List<User>>.Success(users);
+
+// No data (for errors or operations without return data)
+ApiResponseDTO<object> response = ApiResponseDTO<object>.Failure("Error message");
+
+// Boolean result
+ApiResponseDTO<bool> response = ApiResponseDTO<bool>.Success(true, "Operation completed");
+```
+
+**Controller Pattern:**
+```csharp
+[HttpGet("{id:guid}")]
+public async Task<IActionResult> GetById(Guid id)
+{
+    var result = await _service.GetByIdAsync(id);
+    if (!result.IsSuccess)
+        return NotFound(result);  // Returns ApiResponseDTO with IsSuccess = false
+    
+    return Ok(result);  // Returns ApiResponseDTO with IsSuccess = true
+}
+```
+
+**HTTP Status Codes:**
+- `200 OK` - Success with data
+- `201 Created` - Resource created successfully
+- `400 Bad Request` - Validation error or business logic failure
+- `401 Unauthorized` - Authentication failed or session expired
+- `403 Forbidden` - User lacks permission
+- `404 Not Found` - Resource not found
+
+---
+
 ## Module Structure
 
 Module 1 is divided into **4 sub-modules** with **16 Functional Requirements (FRs)**:
@@ -91,14 +143,16 @@ The sub-modules should be implemented in this order because each one builds on t
 - Update `Data/AppDbContext.cs`
 
 **Key Concepts:**
-- Password hashing with BCrypt
+- Password hashing with PBKDF2 (ASP.NET Core built-in PasswordHasher<T>)
+- OWASP password requirements (min 15 chars, uppercase, lowercase, number, special character)
 - SMTP email sending (MailKit library)
 - Soft delete (IsActive/IsDeactivated flags)
 - Data archival (read-only historical data)
 
 **NuGet Packages Needed:**
-- `BCrypt.Net-Next` (password hashing)
 - `MailKit` (SMTP email)
+
+*(No external password hashing package needed - ASP.NET Core's built-in `PasswordHasher<T>` implements PBKDF2)*
 
 ---
 
@@ -254,11 +308,12 @@ After Module 1, the database will have these tables:
 Add these to `Backend.csproj`:
 
 ```xml
-<PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
 <PackageReference Include="MailKit" Version="4.3.0" />
 <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
 <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.0" />
 ```
+
+*(No external password hashing package needed - ASP.NET Core's built-in `PasswordHasher<T>` implements PBKDF2 with OWASP-compliant settings)*
 
 ---
 
