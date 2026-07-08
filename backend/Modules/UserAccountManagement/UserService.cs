@@ -359,4 +359,5 @@ public class UserService : IUserService
             FullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}"
                 .Replace("  ", " ").Trim()
         };
+    }
 }
