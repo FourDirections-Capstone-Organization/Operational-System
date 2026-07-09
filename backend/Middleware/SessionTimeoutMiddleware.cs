@@ -27,10 +27,10 @@ public class SessionTimeoutMiddleware
 
         // Skip for certain endpoints (login, refresh, and as such)
         var path = context.Request.Path.Value?.ToLower() ?? "";
-        if (path.Contains("/api/auth/login") ||
-            path.Contains("/api/auth/refresh") ||
-            path.Contains("/api/auth/forgot-password") ||
-            path.Contains("/api/auth/reset-password"))
+        if (path.StartsWith("/api/auth/login") ||
+            path.StartsWith("/api/auth/refresh") ||
+            path.StartsWith("/api/auth/forgot-password") ||
+            path.StartsWith("/api/auth/reset-password"))
         {
             await _next(context);
             return;
@@ -40,7 +40,8 @@ public class SessionTimeoutMiddleware
         var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
-            await _next(context);
+            context.Response.StatusCode = 401;
+            await context.Response.WriteAsJsonAsync(new { message = "Invalid token" });
             return;
         }
 
@@ -77,10 +78,15 @@ public class SessionTimeoutMiddleware
             }
         }
 
-        // Update last activity time
-        user.LastActivityAt = DateTime.UtcNow;
+        if (!user.LastActivityAt.HasValue || (DateTime.UtcNow - user.LastActivityAt.Value).TotalMinutes >= 1)
+        {
+            // Update last activity time
+            user.LastActivityAt = DateTime.UtcNow;
         
-        await db.SaveChangesAsync();
+            await db.SaveChangesAsync();
+        }
+        
+        await _next(context);
     }
 }
 
