@@ -10,6 +10,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.17" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.3" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.5" />
+    <PackageReference Include="MailKit" Version="4.3.0" />
   </ItemGroup>
 
 </Project>
