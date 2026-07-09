@@ -63,6 +63,10 @@ public class AuthService : IAuthService
         var accessToken = GenerateJwtToken(user);
         var refreshToken = GenerateRefreshToken();
 
+        // Adding Refresh Tokens
+        user.RefreshToken = refreshToken;
+        user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationInDays);
+
         // Update last activity
         user.LastActivityAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -80,7 +84,8 @@ public class AuthService : IAuthService
             Role = user.Role,
             IsPasswordChanged = user.IsPasswordChanged,
             IsEmailVerified = user.IsEmailVerified,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationInMinutes)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationInMinutes),
+            RefreshTokenExpiresAt = user.RefreshTokenExpiry!.Value
         };
 
         _logger.LogInformation("User logged in: {EmployeeNumber}", user.EmployeeNumber);
@@ -175,23 +180,28 @@ public class AuthService : IAuthService
         return ApiResponseDTO<bool>.Success(true, "Password changed successfully");
     }
 
-    public async Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(Guid userId)
+    public async Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(string refreshToken)
     {
         var user = await _db.Users
             .Include(u => u.Department)
-            .FirstOrDefaultAsync(u => u.Id == userId);
+            .FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
 
         if (user is null)
-            return ApiResponseDTO<AuthResponseDTO>.Failure("User not found");
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Invalid refresh token");
+
+        if (user.RefreshTokenExpiry < DateTime.UtcNow)
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Refresh token has expired");
 
         if (user.IsDeactivated || !user.IsActive)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Account is inactive");
 
         // Generate new tokens
         var accessToken = GenerateJwtToken(user);
-        var refreshToken = GenerateRefreshToken();
+        var newRefreshToken = GenerateRefreshToken();
 
-        // Update last activity
+        // Store new refresh token
+        user.RefreshToken = newRefreshToken;
+        user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationInDays);
         user.LastActivityAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -200,7 +210,7 @@ public class AuthService : IAuthService
         var response = new AuthResponseDTO
         {
             AccessToken = accessToken,
-            RefreshToken = refreshToken,
+            RefreshToken = newRefreshToken,
             UserId = user.Id,
             EmployeeNumber = user.EmployeeNumber,
             Email = user.Email,
@@ -208,7 +218,8 @@ public class AuthService : IAuthService
             Role = user.Role,
             IsPasswordChanged = user.IsPasswordChanged,
             IsEmailVerified = user.IsEmailVerified,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationInMinutes)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationInMinutes),
+            RefreshTokenExpiresAt = user.RefreshTokenExpiry.Value
         };
 
         return ApiResponseDTO<AuthResponseDTO>.Success(response, "Token refreshed successfully");

@@ -9,7 +9,7 @@ public interface IAuthService
     Task<ApiResponseDTO<bool>> ForgotPasswordAsync(ForgotPasswordDTO dto, string resetUrl);
     Task<ApiResponseDTO<bool>> ResetPasswordAsync(ResetPasswordDTO dto);
     Task<ApiResponseDTO<bool>> ChangePasswordAsync(Guid userId, ChangePasswordDTO dto);
-    Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(Guid userId);
+    Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(string refreshToken);
     Task<ApiResponseDTO<UserResponseDTO>> GetCurrentUserAsync(Guid userId);
     Task<ApiResponseDTO<bool>> VerifyPasswordAsync(VerifyPasswordDTO dto);
 }
