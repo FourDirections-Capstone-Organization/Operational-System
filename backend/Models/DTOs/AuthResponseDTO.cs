@@ -14,4 +14,5 @@ public class AuthResponseDTO
     public bool IsPasswordChanged { get; set; }
     public bool IsEmailVerified { get; set; }
     public DateTime ExpiresAt { get; set; }
+    public DateTime RefreshTokenExpiresAt { get; set; }
 }
