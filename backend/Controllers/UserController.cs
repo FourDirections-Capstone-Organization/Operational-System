@@ -1,8 +1,10 @@
-﻿using Backend.Models;
+﻿using System.Security.Claims;
+using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Modules.UserAccountManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+
 
 namespace Backend.Controllers;
 
@@ -61,8 +63,8 @@ public class UserController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, UpdateUserDTO dto)
     {
-        // TODO: Get request user ID from JWT token when auth is implemented in Sub-Module 1.2
-        Guid? requestUserId = null;
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid? requestUserId = Guid.TryParse(userId, out var guid) ? guid : null;
 
         var result = await _userService.UpdateAsync(id, dto, requestUserId);
         if (!result.IsSuccess)
