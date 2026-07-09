@@ -72,6 +72,26 @@ public class RoleService : IRoleService
         return ApiResponseDTO<RoleResponseDTO>.Success(roleInfo);
     }
 
+    public async Task<ApiResponseDTO<UserPermissionsDTO>> GetUserPermissions(Guid userId)
+    {
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null)
+            return ApiResponseDTO<UserPermissionsDTO>.Failure("User not found");
+
+        var permissions = new UserPermissionsDTO
+        {
+            UserId = user.Id,
+            Role = user.Role,
+            Permissions = GetPermissionsForRole(user.Role),
+            CanViewAllTasks = user.Role == UserRole.Manager,
+            CanManageUsers = user.Role == UserRole.Manager,
+            CanViewConfidentialTasks = user.Role == UserRole.Manager || user.Role == UserRole.Coordinator,
+            CanAccessAuditLogs = user.Role == UserRole.Manager
+        };
+
+        return ApiResponseDTO<UserPermissionsDTO>.Success(permissions);
+    }
+
     private List<string> GetPermissionsForRole(UserRole role)
     {
         var permissions = new List<string>();
