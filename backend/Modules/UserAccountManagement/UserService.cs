@@ -360,4 +360,40 @@ public class UserService : IUserService
                 .Replace("  ", " ").Trim()
         };
     }
+
+    public async Task SeedDefaultManagerAsync()
+    {
+        var managerEmail = "manager@stars.com";
+        var managerExists = await _db.Users.AnyAsync(u => u.Email.ToLower() == managerEmail.ToLower());
+
+        if (managerExists)
+        {
+            _logger.LogInformation("Default manager already exists");
+            return;
+        }
+
+        var passwordHasher = new PasswordHasher<User>();
+        var tempPassword = "Manager@2024!Temp";
+
+        var manager = new User
+        {
+            EmployeeNumber = "MGR001",
+            Email = managerEmail,
+            FirstName = "System",
+            LastName = "Manager",
+            Role = UserRole.Manager,
+            IsActive = true,
+            IsDeactivated = false,
+            IsEmailVerified = true,
+            IsPasswordChanged = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        manager.PasswordHash = passwordHasher.HashPassword(manager, tempPassword);
+
+        _db.Users.Add(manager);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Default manager created: {Email} with temporary password: {Password}", managerEmail, tempPassword);
+    }
 }

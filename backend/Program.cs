@@ -10,6 +10,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Backend.Modules.AuthenticationAndCredentials;
 using Backend.Middleware;
+using Backend.Modules.RoleBasedAccessControl;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -73,7 +74,12 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+// Configure Authorization Policies
+
+builder.Services.AddAuthorization(options =>
+{
+    AuthorizationPolicies.ConfigurePolicies(options);   
+});
 
 // Register services
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
@@ -82,6 +88,7 @@ builder.Services.AddScoped<ITransferService, TransferService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
 
 var app = builder.Build();
 
@@ -94,6 +101,10 @@ using (var scope = app.Services.CreateScope())
     // Seed default departments
     var departmentService = scope.ServiceProvider.GetRequiredService<IDepartmentService>();
     await departmentService.SeedDefaultDepartmentsAsync();
+
+    // Seed default manager
+    var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+    await userService.SeedDefaultManagerAsync();
 }
 
 if (app.Environment.IsDevelopment())
