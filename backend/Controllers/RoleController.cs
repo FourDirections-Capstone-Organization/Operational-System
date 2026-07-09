@@ -25,4 +25,16 @@ public class RoleController : ControllerBase
         var result = _roleService.GetAllRoles();
         return Ok(result);
     }
+
+    [HttpGet("{role}")]
+    public IActionResult GetByRole(string role)
+    {
+        if (!Enum.TryParse<UserRole>(role, true, out var roleEnum))
+            return BadRequest(new { message = "Invalid role" });
+
+        var result = _roleService.GetRoleByType(roleEnum);
+        return Ok(result);
+    }
+
+    
 }
