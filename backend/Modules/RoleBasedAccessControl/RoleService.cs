@@ -92,6 +92,31 @@ public class RoleService : IRoleService
         return ApiResponseDTO<UserPermissionsDTO>.Success(permissions);
     }
 
+    public async Task<ApiResponseDTO<bool>> UpdateUserRoleAsync(Guid userId, UpdateUserRoleDTO dto, Guid requestUserId)
+    {
+        var requester = await _db.Users.FindAsync(requestUserId);
+        if (requester is null || requester.Role != UserRole.Manager)
+            return ApiResponseDTO<bool>.Failure("Only Managers can update user roles");
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null)
+            return ApiResponseDTO<bool>.Failure("User not found");
+
+        if (userId == requestUserId)
+            return ApiResponseDTO<bool>.Failure("Cannot change your own role");
+
+        var oldRole = user.Role;
+        user.Role = dto.NewRole;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        // TODO: Record audit log entry with oldRole, newRole, and dto.Reason
+        // when Audit Log module is implemented (Module 5)
+
+        return ApiResponseDTO<bool>.Success(true, "User role updated successfully");
+    }
+
     private List<string> GetPermissionsForRole(UserRole role)
     {
         var permissions = new List<string>();
