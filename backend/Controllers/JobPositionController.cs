@@ -1,11 +1,14 @@
 ﻿using Backend.Models.DTOs;
 using Backend.Modules.OrganizationalStructure;
+using Backend.Modules.RoleBasedAccessControl;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/job-positions")]
+[Authorize]
 public class JobPositionController : ControllerBase
 {
     private readonly IJobPositionService _jobPositionService;
@@ -39,6 +42,7 @@ public class JobPositionController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Create(CreateJobPositionDTO dto)
     {
         var result = await _jobPositionService.CreateAsync(dto);
@@ -49,6 +53,7 @@ public class JobPositionController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Update(Guid id, UpdateJobPositionDTO dto)
     {
         var result = await _jobPositionService.UpdateAsync(id, dto);
@@ -64,6 +69,7 @@ public class JobPositionController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var result = await _jobPositionService.DeleteAsync(id);
