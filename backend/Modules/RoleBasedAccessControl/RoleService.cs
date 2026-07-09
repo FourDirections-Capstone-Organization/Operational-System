@@ -59,6 +59,19 @@ public class RoleService : IRoleService
         return ApiResponseDTO<List<RoleResponseDTO>>.Success(roles);
     }
 
+    public ApiResponseDTO<RoleResponseDTO> GetRoleByType(UserRole role)
+    {
+        var roleInfo = new RoleResponseDTO
+        {
+            Role = role,
+            DisplayName = GetDisplayName(role),
+            Description = GetDescription(role),
+            Permissions = GetPermissionsForRole(role)
+        };
+
+        return ApiResponseDTO<RoleResponseDTO>.Success(roleInfo);
+    }
+
     private List<string> GetPermissionsForRole(UserRole role)
     {
         var permissions = new List<string>();
@@ -110,5 +123,31 @@ public class RoleService : IRoleService
         }
 
         return permissions;
+    }
+
+    private string GetDisplayName(UserRole role)
+    {
+        return role switch
+        {
+            UserRole.Manager => "Manager",
+            UserRole.Coordinator => "Coordinator",
+            UserRole.Dispatcher => "Dispatcher",
+            UserRole.Encoder => "Encoder",
+            UserRole.Courier => "Courier/Driver",
+            _ => role.ToString()
+        };
+    }
+
+    private string GetDescription(UserRole role)
+    {
+        return role switch
+        {
+            UserRole.Manager => "Full system access including user management and audit logs",
+            UserRole.Coordinator => "Can manage tasks, view team tasks, and mark tasks as confidential",
+            UserRole.Dispatcher => "Can view and update assigned tasks",
+            UserRole.Encoder => "Can view and update assigned tasks",
+            UserRole.Courier => "Can view and update assigned delivery tasks",
+            _ => ""
+        };
     }
 }
