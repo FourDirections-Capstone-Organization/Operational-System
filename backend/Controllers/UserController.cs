@@ -1,7 +1,9 @@
 ﻿using System.Security.Claims;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.UserAccountManagement;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,6 +12,7 @@ namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class UserController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -20,6 +23,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPost("register")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Register(RegisterUserDTO dto)
     {
         var result = await _userService.RegisterAsync(dto);
@@ -82,6 +86,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/deactivate")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Deactivate(Guid id)
     {
         var result = await _userService.DeactivateAsync(id);
@@ -97,6 +102,7 @@ public class UserController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/activate")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Activate(Guid id)
     {
         var result = await _userService.ActivateAsync(id);
@@ -112,6 +118,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("next-employee-number")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> GetNextEmployeeNumber()
     {
         var result = await _userService.GenerateEmployeeNumberAsync();
