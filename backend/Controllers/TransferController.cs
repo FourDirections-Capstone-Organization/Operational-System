@@ -1,11 +1,14 @@
 ﻿using Backend.Models.DTOs;
 using Backend.Modules.OrganizationalStructure;
+using Backend.Modules.RoleBasedAccessControl;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
 [ApiController]
-[Route("api/controller")]
+[Route("api/[controller]")]
+[Authorize]
 public class TransferController : ControllerBase
 {
     private readonly ITransferService _transferService;
@@ -16,6 +19,7 @@ public class TransferController : ControllerBase
     }
 
     [HttpPost("{userId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> TransferUser(Guid userId, TransferUserDTO dto)
     {
         var result = await _transferService.TransferUserAsync(userId, dto);
