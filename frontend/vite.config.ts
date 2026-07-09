@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     root: ".",
-    base: "./",
+    base: "/",
     plugins: [react()],
     build: {
         outDir: "dist",
