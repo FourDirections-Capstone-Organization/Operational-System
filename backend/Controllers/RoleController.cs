@@ -61,5 +61,18 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    
+    [HttpPatch("user/{userId:guid}/role")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
+    public async Task<IActionResult> UpdateUserRole(Guid userId, UpdateUserRoleDTO dto)
+    {
+        var requestUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(requestUserId) || !Guid.TryParse(requestUserId, out var requestUserIdGuid))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user"));
+
+        var result = await _roleService.UpdateUserRoleAsync(userId, dto, requestUserIdGuid);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }
