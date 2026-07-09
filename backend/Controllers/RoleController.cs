@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Backend.Models.DTOs;
+using Backend.Models;
 using Backend.Models.Enums;
 using Backend.Modules.RoleBasedAccessControl;
 
@@ -45,4 +46,20 @@ public class RoleController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("my-permissions")]
+    public async Task<IActionResult> GetMyPermissions()
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userIdGuid))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user"));
+
+        var result = await _roleService.GetUserPermissions(userIdGuid);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    
 }
