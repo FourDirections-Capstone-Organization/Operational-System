@@ -1,0 +1,15 @@
+﻿using Backend.Models;
+using Backend.Models.DTOs;
+
+namespace Backend.Modules.AuthenticationAndCredentials;
+
+public interface IAuthService
+{
+    Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto);
+    Task<ApiResponseDTO<bool>> ForgotPasswordAsync(ForgotPasswordDTO dto, string resetUrl);
+    Task<ApiResponseDTO<bool>> ResetPasswordAsync(ResetPasswordDTO dto);
+    Task<ApiResponseDTO<bool>> ChangePasswordAsync(Guid userId, ChangePasswordDTO dto);
+    Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(Guid userId);
+    Task<ApiResponseDTO<UserResponseDTO>> GetCurrentUserAsync(Guid userId);
+    Task<ApiResponseDTO<bool>> VerifyPasswordAsync(VerifyPasswordDTO dto);
+}
