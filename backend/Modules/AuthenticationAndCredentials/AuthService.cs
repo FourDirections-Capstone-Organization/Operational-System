@@ -18,10 +18,11 @@ namespace Backend.Modules.AuthenticationAndCredentials;
 
 public class AuthService : IAuthService
 {
-     private readonly AppDbContext _db;
+    private readonly AppDbContext _db;
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
     private readonly ILogger<AuthService> _logger;
+    private readonly PasswordHasher<User> _passwordHasher = new();
 
     public AuthService(
         AppDbContext db,
@@ -36,17 +37,8 @@ public class AuthService : IAuthService
     }
 
     public async Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto)
-    {
-        // Find user by Employee ID, Email, or Username
-        var identifier = dto.Identifier.Trim().ToLower();
-        
-        var user = await _db.Users
-            .Include(u => u.Department)
-            .Include(u => u.JobPosition)
-            .FirstOrDefaultAsync(u =>
-                u.EmployeeNumber.ToLower() == identifier ||
-                u.Email.ToLower() == identifier ||
-                (u.Username != null && u.Username.ToLower() == identifier));
+    {     
+        var user = await FindUserByIdentifier(dto.Identifier);
 
         if (user is null)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Invalid credentials");
@@ -64,9 +56,7 @@ public class AuthService : IAuthService
             return ApiResponseDTO<AuthResponseDTO>.Failure("Please verify your email before logging in.");
 
         // Verify password using PBKDF2 (PasswordHasher)
-        var passwordHasher = new PasswordHasher<User>();
-        var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
-        if (passwordResult != PasswordVerificationResult.Success)
+        if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))
             return ApiResponseDTO<AuthResponseDTO>.Failure("Invalid credentials");
 
         // Generate tokens
@@ -77,8 +67,7 @@ public class AuthService : IAuthService
         user.LastActivityAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}"
-            .Replace("  ", " ").Trim();
+        var fullName = GetFullName(user);
 
         var response = new AuthResponseDTO
         {
@@ -115,12 +104,12 @@ public class AuthService : IAuthService
         // Generate reset token
         var resetToken = GenerateSecureToken();
         user.PasswordResetToken = resetToken;
-        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1); // 1 hour expiry
+        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(_jwtSettings.PasswordResetTokenExpirationInHours);
 
         await _db.SaveChangesAsync();
 
         // Send email
-        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        var fullName = GetFullName(user);
         await _emailService.SendPasswordResetEmailAsync(user.Email, fullName, resetToken, resetUrl);
 
         _logger.LogInformation("Password reset requested for: {Email}", user.Email);
@@ -145,9 +134,7 @@ public class AuthService : IAuthService
             return ApiResponseDTO<bool>.Failure(string.Join(" ", errors));
 
         // Hash new password using PBKDF2 (PasswordHasher)
-        var passwordHasher = new PasswordHasher<User>();
-        
-        user.PasswordHash = passwordHasher.HashPassword(user, dto.NewPassword);
+        user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
         user.PasswordResetToken = null;
         user.PasswordResetTokenExpiry = null;
         user.IsPasswordChanged = true;
@@ -168,10 +155,7 @@ public class AuthService : IAuthService
             return ApiResponseDTO<bool>.Failure("User not found");
 
         // Verify current password using PBKDF2 (PasswordHasher)
-        var passwordHasher = new PasswordHasher<User>();
-
-        var currentPasswordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
-        if (currentPasswordResult != PasswordVerificationResult.Success)
+        if (!await VerifyPasswordAndRehashIfNeeded(user, dto.CurrentPassword))
             return ApiResponseDTO<bool>.Failure("Current password is incorrect");
 
         // Validate new password meets OWASP requirements
@@ -179,8 +163,8 @@ public class AuthService : IAuthService
         if (!isValid)
             return ApiResponseDTO<bool>.Failure(string.Join(" ", errors));
 
-        // Hash new password using PBKDF2 (PasswordHasher)
-        user.PasswordHash = passwordHasher.HashPassword(user, dto.NewPassword);
+        // Hash new password
+        user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
         user.IsPasswordChanged = true;
         user.UpdatedAt = DateTime.UtcNow;
 
@@ -211,8 +195,7 @@ public class AuthService : IAuthService
         user.LastActivityAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}"
-            .Replace("  ", " ").Trim();
+        var fullName = GetFullName(user);
 
         var response = new AuthResponseDTO
         {
@@ -262,8 +245,7 @@ public class AuthService : IAuthService
             IsEmailVerified = user.IsEmailVerified,
             IsPasswordChanged = user.IsPasswordChanged,
             CreatedAt = user.CreatedAt,
-            FullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}"
-                .Replace("  ", " ").Trim()
+            FullName = GetFullName(user)
         };
 
         return ApiResponseDTO<UserResponseDTO>.Success(response);
@@ -271,17 +253,16 @@ public class AuthService : IAuthService
 
     public async Task<ApiResponseDTO<bool>> VerifyPasswordAsync(VerifyPasswordDTO dto)
     {
+        var normalizedEmployeeId = dto.EmployeeID.Trim().ToLower();
+    
         var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.EmployeeNumber == dto.EmployeeID);
+            .FirstOrDefaultAsync(u => u.EmployeeNumber.ToLower() == normalizedEmployeeId);
 
         if (user is null)
             return ApiResponseDTO<bool>.Failure("User not found");
 
         // Verify password using PBKDF2 (PasswordHasher)
-        var passwordHasher = new PasswordHasher<User>();
-        
-        var passwordResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
-        if (passwordResult != PasswordVerificationResult.Success)
+        if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))
             return ApiResponseDTO<bool>.Failure("Incorrect password");
 
         return ApiResponseDTO<bool>.Success(true, "Password verified");
@@ -298,7 +279,7 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("EmployeeNumber", user.EmployeeNumber),
-            new Claim("FullName", $"{user.FirstName} {user.LastName}".Trim())
+            new Claim("FullName", GetFullName(user))
         };
 
         var tokenDescriptor = new SecurityTokenDescriptor
@@ -323,12 +304,47 @@ public class AuthService : IAuthService
 
     private string GenerateSecureToken()
     {
-        var random = RandomNumberGenerator.Create();
         var tokenBytes = new byte[32];
-        random.GetBytes(tokenBytes);
+        RandomNumberGenerator.Fill(tokenBytes);
         return Convert.ToBase64String(tokenBytes)
             .Replace("+", "-")
             .Replace("/", "_")
             .TrimEnd('=');
+    }
+
+    private async Task<User?> FindUserByIdentifier(string identifier)
+    {
+        var normalizedIdentifier = identifier.Trim().ToLower();
+        
+        return await _db.Users
+            .Include(u => u.Department)
+            .Include(u => u.JobPosition)
+            .FirstOrDefaultAsync(u =>
+                u.EmployeeNumber.ToLower() == normalizedIdentifier ||
+                u.Email.ToLower() == normalizedIdentifier ||
+                (u.Username != null && u.Username.ToLower() == normalizedIdentifier));
+    }
+
+    private string GetFullName(User user)
+    {
+        var parts = new[] { user.FirstName, user.MiddleName, user.LastName, user.Suffix }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join(" ", parts).Trim();
+    }
+
+    private async Task<bool> VerifyPasswordAndRehashIfNeeded(User user, string password)
+    {
+        var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
+        
+        if (result == PasswordVerificationResult.Failed)
+            return false;
+        
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(user, password);
+            await _db.SaveChangesAsync();
+        }
+        
+        return true;
     }
 }
