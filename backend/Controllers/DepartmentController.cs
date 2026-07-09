@@ -1,11 +1,14 @@
 ﻿using Backend.Models.DTOs;
 using Backend.Modules.OrganizationalStructure;
+using Backend.Modules.RoleBasedAccessControl;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DepartmentController : ControllerBase
 {
     private readonly IDepartmentService _departmentService;
@@ -33,6 +36,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Create(CreateDepartmentDTO dto)
     {
         var result = await _departmentService.CreateAsync(dto);
@@ -43,6 +47,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Update(Guid id, UpdateDepartmentDTO dto)
     {
         var result = await _departmentService.UpdateAsync(id, dto);
@@ -58,6 +63,7 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var result = await _departmentService.DeleteAsync(id);
