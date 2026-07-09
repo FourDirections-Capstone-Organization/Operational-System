@@ -66,15 +66,10 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize]
     [HttpPost("refresh-token")]
-    public async Task<IActionResult> RefreshToken()
+    public async Task<IActionResult> RefreshToken(RefreshTokenDTO dto)
     {
-        var userId = GetUserIdFromClaims();
-        if (!userId.HasValue)
-            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user"));
-
-        var result = await _authService.RefreshTokenAsync(userId.Value);
+        var result = await _authService.RefreshTokenAsync(dto.RefreshToken);
         if (!result.IsSuccess)
             return Unauthorized(result);
 

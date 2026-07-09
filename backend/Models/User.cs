@@ -63,6 +63,10 @@ public class User
     public string? PasswordResetToken { get; set; }
     public DateTime? PasswordResetTokenExpiry { get; set; }
 
+    // Refresh Token
+    public string? RefreshToken { get; set; }
+    public DateTime? RefreshTokenExpiry { get; set; }
+
     // Session tracking
     public DateTime? LastActivityAt { get; set; }
 
