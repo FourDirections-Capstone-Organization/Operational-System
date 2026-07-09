@@ -36,5 +36,13 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    
+    [HttpGet("user/{userId:guid}/permissions")]
+    public async Task<IActionResult> GetUserPermissions(Guid userId)
+    {
+        var result = await _roleService.GetUserPermissions(userId);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
 }
