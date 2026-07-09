@@ -101,6 +101,10 @@ using (var scope = app.Services.CreateScope())
     // Seed default departments
     var departmentService = scope.ServiceProvider.GetRequiredService<IDepartmentService>();
     await departmentService.SeedDefaultDepartmentsAsync();
+
+    // Seed default manager
+    var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
+    await userService.SeedDefaultManagerAsync();
 }
 
 if (app.Environment.IsDevelopment())
