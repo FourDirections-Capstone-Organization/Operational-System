@@ -3,17 +3,19 @@ using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Backend.Modules.Notifications;
 
 namespace Backend.Modules.TaskManagement;
 
 public class TaskService : ITaskService
 {
     private readonly AppDbContext _db;
+    private readonly INotificationService _notificationService;
 
-    public TaskService(AppDbContext db)
+    public TaskService(AppDbContext db, INotificationService notificationService)
     {
         _db = db;
+        _notificationService = notificationService;
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId)
@@ -88,6 +90,17 @@ public class TaskService : ITaskService
         }
 
         await _db.SaveChangesAsync();
+
+        if (assignedUserIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                assignedUserIds,
+                NotificationType.TaskAssigned,
+                "New Task Assigned",
+                $"You have been assigned task '{taskTitle}' with deadline {task.Deadline:MMM dd, yyyy h:mm tt}.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
@@ -281,6 +294,18 @@ public class TaskService : ITaskService
 
         task.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        var currentAssigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (currentAssigneeIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                currentAssigneeIds,
+                NotificationType.TaskUpdated,
+                "Task Updated",
+                $"Task '{taskTitle}' has been updated. Check the latest details.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
