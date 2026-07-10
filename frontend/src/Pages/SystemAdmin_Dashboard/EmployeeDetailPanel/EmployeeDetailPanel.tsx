@@ -90,16 +90,22 @@ interface ActivityLog {
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 
 const ROLES = [
-    'System Admin',
-    'Operation Admin',
-    'Operation Team',
+    'Manager',
     'Coordinator',
-    'Delivery Driver',
     'Encoder',
 ];
 
-const toBackendRole = (role: string) => role.replace(/\s+/g, '');
-const toDisplayRole = (role: string) => role.replace(/([a-z])([A-Z])/g, '$1 $2');
+const toBackendRole = (role: string) => role;
+const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+const toDisplayRole = (role: any) => {
+    if (typeof role === 'number') return ROLE_MAP[role] || String(role);
+    if (typeof role === 'string') {
+        const num = parseInt(role, 10);
+        if (!isNaN(num)) return ROLE_MAP[num] || role;
+        return role;
+    }
+    return String(role || '');
+};
 
 const fmtDate = (d: string | null) => {
     if (!d) return '—';
@@ -211,60 +217,39 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 }
             }
 
+            // Look up user GUID by employee number
+            const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(profile.employeeNumber)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!lookupRes.ok) throw new Error('Employee not found.');
+            const lookupData = await lookupRes.json();
+            const userId = lookupData?.data?.id ?? lookupData?.id;
+            if (!userId) throw new Error('Employee not found.');
+
             // 1. Update personal details
-            const updateRes = await fetch(
-                `/api/systemadmin/update-user?employeeNumber=${encodeURIComponent(profile.employeeNumber)}`,
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        employeeNumber: profile.employeeNumber,
-                        firstName,
-                        middleName,
-                        lastName,
-                        suffix,
-                        contactNumber: form.contactNumber,
-                        email: form.email.trim(),
-                    }),
-                }
-            );
+            const updateRes = await fetch(`/api/user/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    firstName,
+                    middleName,
+                    lastName,
+                    suffix,
+                    contactNumber: form.contactNumber,
+                    email: form.email.trim(),
+                }),
+            });
             if (!updateRes.ok) throw new Error('Failed to update employee details. Please try again.');
 
-            // 2. Update role if changed
-            if (toBackendRole(form.role) !== profile.role) {
-                const roleRes = await fetch('/api/systemadmin/assign-role', {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        employeeNumber: profile.employeeNumber,
-                        roleName: toBackendRole(form.role),
-                    }),
-                });
-                if (!roleRes.ok) throw new Error('Failed to update employee role. Please try again.');
-            }
-
-            // 3. Update status in database if changed
+            // 2. Update status in database if changed
             if (form.accountStatus !== profile.accountStatus) {
-                const statusEndpoint =
-                    form.accountStatus === 'Active'
-                        ? '/api/systemadmin/activate-user'
-                        : '/api/systemadmin/deactivate-user';
-
-                const statusRes = await fetch(statusEndpoint, {
+                const isActive = form.accountStatus === 'Active';
+                const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
                     method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        employeeNumber: profile.employeeNumber,
-                    }),
+                    headers: { Authorization: `Bearer ${token}` },
                 });
                 if (!statusRes.ok) throw new Error('Failed to update account status. Please try again.');
             }
@@ -364,7 +349,7 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                         try {
                             const token = localStorage.getItem('authToken');
                             const adminId = localStorage.getItem('employeeId') ?? '';
-                            const res = await fetch('/api/authentication/verify-password', {
+                            const res = await fetch('/api/auth/verify-password', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                                 body: JSON.stringify({ employeeID: adminId, password: pw }),
@@ -573,7 +558,7 @@ export default function EmployeeDetailPanel({
                 try {
                     const token = localStorage.getItem('authToken');
                     const adminId = localStorage.getItem('employeeId') ?? '';
-                    const verifyRes = await fetch('/api/authentication/verify-password', {
+                    const verifyRes = await fetch('/api/auth/verify-password', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ employeeID: adminId, password: pw }),
@@ -581,12 +566,18 @@ export default function EmployeeDetailPanel({
                     const verifyData = await verifyRes.json().catch(() => ({}));
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password.'); }
                     setConfirmModal(CONFIRM_CLOSED);
+                    const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(profile.employeeNumber)}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    const lookupData = lookupRes.ok ? await lookupRes.json() : null;
+                    const userId = lookupData?.data?.id ?? lookupData?.id;
+                    if (!userId) throw new Error('Employee not found.');
+
                     if (action.type === 'archive') {
                         setDeleting(true);
                         try {
-                            const delRes = await fetch('/api/systemadmin/delete-user', {
-                                method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                body: JSON.stringify({ employeeNumber: profile.employeeNumber }),
+                            const delRes = await fetch(`/api/user/${userId}/deactivate`, {
+                                method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
                             });
                             if (!delRes.ok) throw new Error();
                             success(`Successfully archived ${profile.employeeName}.`);
@@ -594,9 +585,11 @@ export default function EmployeeDetailPanel({
                         } catch { error('Failed to Archive Employee.'); } finally { setDeleting(false); }
                     } else {
                         const next = action.nextStatus!;
-                        const endpoint = next === 'Active' ? '/api/systemadmin/activate-user' : '/api/systemadmin/deactivate-user';
+                        const isActive = next === 'Active';
                         try {
-                            const statusRes = await fetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ employeeNumber: profile.employeeNumber }) });
+                            const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
+                                method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
+                            });
                             if (!statusRes.ok) throw new Error();
                             const updatedProfile = { ...profile, accountStatus: next };
                             setProfile(updatedProfile);

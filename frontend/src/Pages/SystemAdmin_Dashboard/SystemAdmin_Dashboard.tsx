@@ -25,8 +25,6 @@ import {
     Eye,
     EyeOff,
     Clock,
-    CalendarRange,
-    CalendarDays,
     Filter,
     Copy,
     ShieldAlert,
@@ -62,7 +60,6 @@ import ActionButton from '../../components/ActionButton/ActionButton';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import SubTabNav from '../../components/ui/SubTabNav';
 import EmployeeDocumentsTab from './EmployeeDocumentsTab/EmployeeDocumentsTab';
-import RecruitmentTab from './RecruitmentTab/RecruitmentTab';
 import { ReportsTab } from '../OpAdmin_Dashboard/OpAdmin_Dashboard';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -70,14 +67,12 @@ import { ReportsTab } from '../OpAdmin_Dashboard/OpAdmin_Dashboard';
 type NavTab =
     | 'dashboard'
     | 'employees'
-    | 'recruitment'
     | 'delivery'
     | 'finance'
     | 'settings'
     | 'roles'
     | 'reports'
     | 'activity_logs'
-    | 'emergency_override'
     | 'government_records'
     | 'profile';
 
@@ -85,6 +80,11 @@ type NavTab =
 
 interface EmployeeRegisterDTO {
     employeeNumber: string;
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    suffix: string;
+    contactNumber: string;
     email: string;
     departmentId: string;
     jobPositionId: string;
@@ -94,6 +94,8 @@ interface EmployeeRegisterDTO {
 
 interface FieldError {
     employeeNumber?: string;
+    firstName?: string;
+    lastName?: string;
     email?: string;
     departmentId?: string;
     jobPositionId?: string;
@@ -105,6 +107,11 @@ type FormState = EmployeeRegisterDTO;
 
 const EMPTY_FORM: FormState = {
     employeeNumber: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    suffix: '',
+    contactNumber: '',
     email: '',
     departmentId: '',
     jobPositionId: '',
@@ -143,39 +150,6 @@ interface RecentEmployee {
         contentType: string;
         fileSize: number;
     }>;
-}
-
-type LeaveType = 'vacation' | 'sick' | 'emergency' | 'personal' | 'maternity' | 'other';
-type LeaveStatus = 'pending' | 'approved' | 'declined';
-
-interface LeaveRequest {
-    id: number;
-    employeeNumber: string;
-    employeeName: string;
-    role: string;
-    leaveType: LeaveType;
-    startDate: string;
-    endDate: string;
-    reason: string;
-    status: LeaveStatus;
-    submittedAt: string;
-    reviewedBy?: string;
-    reviewNote?: string;
-}
-
-type OverrideStatus = 'Pending' | 'Approved' | 'Rejected';
-
-interface EmergencyOverride {
-    emergencyOverrideId: string;
-    requestedById: string;
-    employeeName: string;
-    employeeNumber: string;
-    leaveId: string;
-    status: OverrideStatus;
-    reason: string;
-    requestedAt: string;
-    approvedAt?: string;
-    overrideUntil?: string;
 }
 
 interface EmploymentContract {
@@ -220,12 +194,7 @@ const CONFIRM_CLOSED: ConfirmModalState = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
-const SYSTEM_ROLES = [
-    'System Admin',
-    'Operation Admin',
-    'Coordinator',
-    'Encoder',
-];
+const SYSTEM_ROLES = ['Manager', 'Coordinator', 'Encoder'];
 
 const DEPARTMENTS = [
     'Operations',
@@ -257,8 +226,6 @@ const NAV_GROUPS = [
         items: [
             { tab: 'dashboard' as NavTab, icon: LayoutDashboard, label: 'Dashboard' },
             { tab: 'employees' as NavTab, icon: Users, label: 'Manage Employee' },
-            { tab: 'emergency_override' as NavTab, icon: FileText, label: 'Emergency Override' },
-            { tab: 'recruitment' as NavTab, icon: ClipboardList, label: 'Recruitment' },
         ],
     },
     {
@@ -347,11 +314,21 @@ function validate(form: FormState): FieldError {
 }
 
 const toBackendRole = (role: string) => {
-    if (role === 'Systems Admin' || role === 'System Admin') return 'SystemAdmin';
-    if (role === 'Operations Admin' || role === 'Operation Admin') return 'OperationAdmin';
-    return role.replace(/\s+/g, '');
+    if (role === 'Manager' || role === 'Supervisor') return 'Manager';
+    if (role === 'Coordinator') return 'Coordinator';
+    if (role === 'Encoder') return 'Encoder';
+    return role;
 };
-const toDisplayRole = (role: string) => role.replace(/([a-z])([A-Z])/g, '$1 $2');
+const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+const toDisplayRole = (role: any) => {
+    if (typeof role === 'number') return ROLE_MAP[role] || String(role);
+    if (typeof role === 'string') {
+        const num = parseInt(role, 10);
+        if (!isNaN(num)) return ROLE_MAP[num] || role;
+        return role;
+    }
+    return String(role || '');
+};
 
 const fmtDate = (d: string): string => {
     if (!d) return '—';
@@ -370,21 +347,6 @@ const formatBytes = (bytes: number) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 };
 
-const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-    vacation: 'Vacation',
-    sick: 'Sick Leave',
-    emergency: 'Emergency',
-    personal: 'Personal',
-    maternity: 'Maternity/Paternity',
-    other: 'Other',
-};
-
-const LEAVE_STATUS_META: Record<LeaveStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-    pending: { label: 'Pending', cls: 'badge-amber', icon: <Clock size={12} /> },
-    approved: { label: 'Approved', cls: 'badge-green', icon: <CheckCircle2 size={12} /> },
-    declined: { label: 'Declined', cls: 'badge-red', icon: <X size={12} /> },
-};
-
 const getInitials = (name: string): string => {
     if (!name) return 'SA';
     const cleanName = name.trim();
@@ -398,7 +360,7 @@ const getInitials = (name: string): string => {
 const getStatusBadgeClass = (status?: string): string => {
     const s = (status ?? 'Active').toLowerCase();
     if (s === 'pending verification') return 'pending-badge';
-    if (s === 'on leave' || s === 'emergency overriden' || s === 'locked') return 'locked';
+    if (s === 'on leave' || s === 'locked') return 'locked';
     return s;
 };
 
@@ -439,7 +401,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
     const [empNumError, setEmpNumError] = useState('');
     const [departments, setDepartments] = useState<DepartmentResponseDTO[]>([]);
     const [jobPositions, setJobPositions] = useState<JobPositionResponseDTO[]>([]);
-    const [availableRoles, setAvailableRoles] = useState<string[]>(['Systems Admin', 'Operations Admin', 'Coordinator', 'Encoder']);
+    const [availableRoles, setAvailableRoles] = useState<string[]>(['Manager', 'Coordinator', 'Encoder']);
     const [loadingOrg, setLoadingOrg] = useState(true);
     const { success } = useToast();
 
@@ -451,9 +413,9 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 const headers = { 'Authorization': `Bearer ${token}` };
 
                 const [dRes, pRes, rRes] = await Promise.all([
-                    fetch('/api/organization/departments', { headers }),
-                    fetch('/api/organization/job-positions', { headers }),
-                    fetch('/api/roles', { headers })
+                    fetch('/api/department', { headers }),
+                    fetch('/api/job-positions', { headers }),
+                    fetch('/api/role', { headers })
                 ]);
 
                 if (dRes.ok && pRes.ok && rRes.ok) {
@@ -497,7 +459,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
             setEmpNumError('');
             try {
                 const token = localStorage.getItem('authToken');
-                const res = await fetch('/api/systemadmin/recent-employees?PageNumber=1&PageSize=1000', {
+                const res = await fetch('/api/user?PageNumber=1&PageSize=1000', {
                     headers: { 'Authorization': `Bearer ${token}` },
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -576,13 +538,17 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
             const token = localStorage.getItem('authToken');
             const formData = new FormData();
             formData.append('EmployeeNumber', form.employeeNumber);
+            formData.append('FirstName', form.firstName.trim());
+            formData.append('MiddleName', form.middleName.trim());
+            formData.append('LastName', form.lastName.trim());
+            formData.append('Suffix', form.suffix.trim());
+            formData.append('ContactNumber', form.contactNumber);
             formData.append('Role', toBackendRole(form.role));
             formData.append('Email', form.email.trim());
             formData.append('DepartmentId', form.departmentId);
             formData.append('JobPositionId', form.jobPositionId);
-            formData.append('EmploymentStatus', form.employmentStatus);
 
-            const res = await fetch('/api/authorization/systemadmin/register', {
+            const res = await fetch('/api/user/register', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData,
@@ -946,45 +912,37 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
             setApiError('');
             try {
                 const token = localStorage.getItem('authToken');
-                const updateRes = await fetch(
-                    `/api/systemadmin/update-user?employeeNumber=${encodeURIComponent(employee.employeeNumber)}`,
-                    {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({
-                            employeeNumber: employee.employeeNumber,
-                            firstName: form.firstName.trim(),
-                            middleName: form.middleName.trim(),
-                            lastName: form.lastName.trim(),
-                            suffix: form.suffix.trim(),
-                            contactNumber: form.contactNumber,
-                            email: form.email.trim(),
-                        }),
-                    }
-                );
+
+                // Look up user GUID by employee number
+                const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(employee.employeeNumber)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                if (!lookupRes.ok) throw new Error('Employee not found.');
+                const lookupData = await lookupRes.json();
+                const userId = lookupData?.data?.id ?? lookupData?.id;
+                if (!userId) throw new Error('Employee not found.');
+
+                const updateRes = await fetch(`/api/user/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        firstName: form.firstName.trim(),
+                        middleName: form.middleName.trim(),
+                        lastName: form.lastName.trim(),
+                        suffix: form.suffix.trim(),
+                        contactNumber: form.contactNumber,
+                        email: form.email.trim(),
+                    }),
+                });
                 if (!updateRes.ok) {
                     const err = await updateRes.json().catch(() => ({}));
                     throw new Error(err.message || 'Failed to update employee details. Please try again.');
                 }
-                if (toBackendRole(form.role) !== employee.role) {
-                    const roleRes = await fetch('/api/systemadmin/assign-role', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeNumber: employee.employeeNumber, roleName: toBackendRole(form.role) }),
-                    });
-                    if (!roleRes.ok) {
-                        const err = await roleRes.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to update employee role. Please try again.');
-                    }
-                }
                 if (form.accountStatus !== employee.accountStatus) {
-                    const statusEndpoint = form.accountStatus === 'Active'
-                        ? '/api/systemadmin/activate-user'
-                        : '/api/systemadmin/deactivate-user';
-                    const statusRes = await fetch(statusEndpoint, {
+                    const isActive = form.accountStatus === 'Active';
+                    const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
                         method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeNumber: employee.employeeNumber }),
+                        headers: { 'Authorization': `Bearer ${token}` },
                     });
                     if (!statusRes.ok) {
                         const err = await statusRes.json().catch(() => ({}));
@@ -1083,7 +1041,7 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 try {
                     const token = localStorage.getItem('authToken');
                     const adminId = localStorage.getItem('employeeId') ?? '';
-                    const res = await fetch('/api/authentication/verify-password', {
+                    const res = await fetch('/api/auth/verify-password', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeID: adminId, password: pw }),
@@ -1119,10 +1077,16 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 setApiError('');
                 try {
                     const token = localStorage.getItem('authToken');
-                    const res = await fetch('/api/systemadmin/delete-user', {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeNumber: employee.employeeNumber }),
+                    const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(employee.employeeNumber)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` },
+                    });
+                    if (!lookupRes.ok) throw new Error('Employee not found.');
+                    const lookupData = await lookupRes.json();
+                    const userId = lookupData?.data?.id ?? lookupData?.id;
+                    if (!userId) throw new Error('Employee not found.');
+                    const res = await fetch(`/api/user/${userId}/deactivate`, {
+                        method: 'PATCH',
+                        headers: { 'Authorization': `Bearer ${token}` },
                     });
                     if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
@@ -1201,7 +1165,6 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                                         <option value="Active">Active</option>
                                         <option value="Deactivated">Deactivated</option>
                                         {employee.accountStatus === 'On Leave' && <option value="On Leave">On Leave</option>}
-                                        {employee.accountStatus === 'Emergency Overriden' && <option value="Emergency Overriden">Emergency Overriden</option>}
                                     </select>
                                 </div>
                             </div>
@@ -1273,105 +1236,7 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
     );
 }
 
-// ─── Leave Action Modal ───────────────────────────────────────────────────────
 
-interface LeaveActionModalProps {
-    request: LeaveRequest;
-    action: 'approve' | 'decline';
-    onClose: () => void;
-    onConfirm: (id: number, action: 'approve' | 'decline', note: string) => void;
-}
-
-function LeaveActionModal({ request, action, onClose, onConfirm }: LeaveActionModalProps) {
-    const [note, setNote] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const isApprove = action === 'approve';
-    const days = calcDays(request.startDate, request.endDate);
-
-    const handleConfirm = async () => {
-        setSubmitting(true);
-        try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`/api/leaverequest/${request.id}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ approval_Status: isApprove ? 'Approved' : 'Declined', leaveRequestNote: note.trim() }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || `Failed to ${action} leave request.`);
-            }
-            onConfirm(request.id, action, note.trim());
-            onClose();
-        } catch (err: any) {
-            alert(err.message ?? 'Something went wrong.');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480, minWidth: 'auto', padding: '28px 30px', borderRadius: 16 }}>
-                <div className="modal-header" style={{ marginBottom: 20 }}>
-                    <div>
-                        <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                            {isApprove ? 'Approve Leave Request' : 'Decline Leave Request'}
-                        </h3>
-                        <p className="modal-subtitle" style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-                            {isApprove ? 'Confirm approval for this leave request.' : 'Provide a reason for declining this request.'}
-                        </p>
-                    </div>
-                    <button className="icon-btn" onClick={onClose} style={{ borderRadius: '50%', width: 32, height: 32 }}>
-                        <X size={15} />
-                    </button>
-                </div>
-
-                <div style={{ background: 'var(--bg-input)', borderRadius: 14, padding: '20px', marginBottom: 20, border: '1px solid #eef2f6' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                        <div className="emp-avatar" style={{ flexShrink: 0, width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #4318ff, #868cff)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, boxShadow: '0 4px 12px rgba(67, 24, 255, 0.15)' }}>{request.employeeName.charAt(0).toUpperCase()}</div>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{request.employeeName}</div>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--status-new-bg)', padding: '2px 8px', borderRadius: 6, marginTop: 3, display: 'inline-block' }}>{toDisplayRole(request.role)}</span>
-                        </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        {[
-                            { icon: <CalendarRange size={14} />, bg: 'var(--status-new-bg)', color: 'var(--primary)', label: 'TYPE', value: LEAVE_TYPE_LABELS[request.leaveType] },
-                            { icon: <Clock size={14} />, bg: 'rgba(255, 181, 71, 0.1)', color: '#ffb547', label: 'DURATION', value: `${days} ${days === 1 ? 'day' : 'days'}` },
-                            { icon: <CalendarDays size={14} />, bg: 'rgba(5, 205, 153, 0.08)', color: 'var(--status-active)', label: 'FROM', value: fmtDate(request.startDate) },
-                            { icon: <CalendarDays size={14} />, bg: 'rgba(5, 205, 153, 0.08)', color: 'var(--status-active)', label: 'TO', value: fmtDate(request.endDate) },
-                        ].map(({ icon, bg, color, label, value }) => (
-                            <div key={label} style={{ background: 'white', border: '1px solid #eef2f6', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ background: bg, color, padding: 6, borderRadius: 8, display: 'flex' }}>{icon}</div>
-                                <div><span style={{ color: 'var(--text-secondary)', fontSize: 10, display: 'block', fontWeight: 600 }}>{label}</span><strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>{value}</strong></div>
-                            </div>
-                        ))}
-                    </div>
-                    <div style={{ marginTop: 14, background: 'rgba(255, 181, 71, 0.04)', borderLeft: '3px solid #ffb547', borderRadius: '0 8px 8px 0', padding: '12px 14px' }}>
-                        <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 4 }}>REASON FOR REQUEST</span>
-                        <p style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 500, margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{request.reason}</p>
-                    </div>
-                </div>
-
-                <div className="field" style={{ marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                        {isApprove ? 'Note (Optional)' : 'Reason for declining *'}
-                    </label>
-                    <textarea rows={3} maxLength={300} placeholder={isApprove ? 'Add a message for the employee (optional)…' : 'Explain why this request is being declined…'} value={note} onChange={e => setNote(e.target.value)} style={{ width: '100%', resize: 'vertical', borderRadius: 10, border: '1px solid #e0e5f2', padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', background: 'var(--bg-primary, #fff)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.01)', boxSizing: 'border-box' }} />
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right', marginTop: 3 }}>{note.length} / 300</div>
-                </div>
-
-                <div className="modal-actions" style={{ marginTop: 16 }}>
-                    <button className="btn" onClick={onClose} disabled={submitting} style={{ background: '#f4f7fe', border: 'none', color: 'var(--text-secondary)', fontWeight: 600, padding: '10px 20px', borderRadius: 10 }}>Cancel</button>
-                    <button className={`btn ${isApprove ? 'btn-primary' : 'btn-danger'}`} onClick={handleConfirm} disabled={submitting || (!isApprove && !note.trim())} style={{ fontWeight: 600, padding: '10px 24px', borderRadius: 10, border: 'none', background: isApprove ? 'var(--status-active)' : 'var(--status-failed)', color: 'white', boxShadow: isApprove ? '0 4px 14px rgba(5, 205, 153, 0.25)' : '0 4px 14px rgba(238, 93, 80, 0.25)' }}>
-                        {submitting ? <><Loader2 size={14} className="spin" /> Processing…</> : isApprove ? <><CheckCircle2 size={14} /> Approve Request</> : <><X size={14} /> Decline Request</>}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 // ─── Dashboard Tab ────────────────────────────────────────────────────────────
 
@@ -1637,7 +1502,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
 
 // ─── Manage Employees Tab ─────────────────────────────────────────────────────
 
-type EmployeeSubTab = 'employees' | 'leave' | 'documents' | 'archived';
+type EmployeeSubTab = 'employees' | 'documents' | 'archived';
 
 interface ManageEmployeesTabProps {
     employees: RecentEmployee[];
@@ -1647,13 +1512,6 @@ interface ManageEmployeesTabProps {
     empPage: number;
     empTotalPages: number;
     onEmpPageChange: (page: number, filters: { search: string; role: string; status: string }) => void;
-    leaveRequests: LeaveRequest[];
-    leaveLoading: boolean;
-    leavePage: number;
-    leaveTotalPages: number;
-    leavePendingCount: number;
-    onLeavePageChange: (page: number, filters: LeaveFilters) => void;
-    onLeaveConfirm: (id: number, action: 'approve' | 'decline', note: string) => void;
     onEditEmployee: (emp: RecentEmployee) => void;
     onArchiveEmployee: (emp: RecentEmployee) => void;
     onViewEmployee: (emp: RecentEmployee) => void;
@@ -1666,17 +1524,9 @@ interface ManageEmployeesTabProps {
     rolesList?: string[];
 }
 
-export interface LeaveFilters {
-    status: 'all' | LeaveStatus;
-    role: string;
-    search: string;
-}
-
 function ManageEmployeesTab({
     employees, loading, onSelectEmployee, onAddEmployee,
     empPage, empTotalPages, onEmpPageChange,
-    leaveRequests, leaveLoading, leavePage, leaveTotalPages, leavePendingCount,
-    onLeavePageChange, onLeaveConfirm,
     onEditEmployee, onArchiveEmployee, onViewEmployee, onOpenDigital201,
     rolesList = SYSTEM_ROLES,
 }: ManageEmployeesTabProps) {
@@ -1684,19 +1534,10 @@ function ManageEmployeesTab({
     const [search, setSearch] = useState('');
     const [filterRole, setFilterRole] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
-    const [leaveFilterStatus, setLeaveFilterStatus] = useState<'all' | LeaveStatus>('pending');
-    const [leaveFilterRole, setLeaveFilterRole] = useState('');
-    const [leaveSearch, setLeaveSearch] = useState('');
-    const [actionModal, setActionModal] = useState<{ request: LeaveRequest; action: 'approve' | 'decline' } | null>(null);
-    const [detailModal, setDetailModal] = useState<LeaveRequest | null>(null);
 
     useEffect(() => {
         onEmpPageChange(1, { search, role: filterRole, status: filterStatus });
     }, [search, filterRole, filterStatus]);
-
-    useEffect(() => {
-        onLeavePageChange(1, { status: leaveFilterStatus, role: leaveFilterRole, search: leaveSearch });
-    }, [leaveFilterStatus, leaveFilterRole, leaveSearch]);
 
     // ── Shared table card wrapper ──────────────────────────────────────────────
     return (
@@ -1705,7 +1546,6 @@ function ManageEmployeesTab({
             <SubTabNav
                 tabs={[
                     { key: 'employees', label: 'All Employees', icon: <Users size={14} /> },
-                    { key: 'leave', label: 'Leave Requests', icon: <CalendarDays size={14} />, badge: leavePendingCount },
                     { key: 'documents', label: 'Employee Documents', icon: <FileText size={14} /> },
                 ]}
                 activeTab={subTab}
@@ -1766,133 +1606,11 @@ function ManageEmployeesTab({
                 </DataTable>
             )}
 
-            {/* ── Leave Requests ── */}
-            {subTab === 'leave' && (
-                <DataTable
-                    searchQuery={leaveSearch}
-                    onSearchChange={setLeaveSearch}
-                    searchPlaceholder="Search leave requests…"
-                    filterElements={
-                        <>
-                            <Select value={leaveFilterStatus} onChange={v => setLeaveFilterStatus(v as any)}
-                                options={[
-                                    { value: 'pending', label: 'Pending' },
-                                    { value: 'all', label: 'All Statuses' },
-                                    { value: 'approved', label: 'Approved' },
-                                    { value: 'declined', label: 'Declined' },
-                                ]} />
-                            <Select value={leaveFilterRole} onChange={setLeaveFilterRole} placeholder="All Roles"
-                                options={rolesList.map(r => ({ value: r, label: r }))} />
-                        </>
-                    }
-                    headers={['EMPLOYEE', 'LEAVE TYPE', 'DATES', 'DURATION', 'SUBMITTED', 'STATUS', 'ACTIONS']}
-                    loading={leaveLoading}
-                    emptyMessage="No leave requests match your filters"
-                    currentPage={leavePage}
-                    totalPages={leaveTotalPages}
-                    onPageChange={p => onLeavePageChange(p, { status: leaveFilterStatus, role: leaveFilterRole, search: leaveSearch })}
-                    totalRecords={leaveRequests.length}
-                >
-                    {leaveRequests.map(r => {
-                        const days = calcDays(r.startDate, r.endDate);
-                        const meta = LEAVE_STATUS_META[r.status];
-                        return (
-                            <tr key={r.id} onClick={() => setDetailModal(r)} style={{ cursor: 'pointer' }}>
-                                <td>
-                                    <div className="emp-name-cell">
-                                        <div className="emp-avatar">{r.employeeName.charAt(0).toUpperCase()}</div>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: 13 }}>{r.employeeName}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{r.employeeNumber}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td style={{ fontSize: 13 }}>{LEAVE_TYPE_LABELS[r.leaveType]}</td>
-                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(r.startDate)}<br />{fmtDate(r.endDate)}</td>
-                                <td style={{ fontSize: 13, fontWeight: 600 }}>{days} {days === 1 ? 'day' : 'days'}</td>
-                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtDate(r.submittedAt)}</td>
-                                <td><StatusBadge status={r.status === 'approved' ? 'Approved' : r.status === 'declined' ? 'Rejected' : 'Pending'} /></td>
-                                <td onClick={e => e.stopPropagation()}>
-                                    {r.status === 'pending' ? (
-                                        <ActionsDropdown actions={[
-                                            { label: 'Approve', icon: <CheckCircle2 size={12} />, onClick: () => setActionModal({ request: r, action: 'approve' }), variant: 'success' },
-                                            { label: 'Decline', icon: <X size={12} />, onClick: () => setActionModal({ request: r, action: 'decline' }), variant: 'danger' },
-                                            { label: 'View Details', icon: <Eye size={12} />, onClick: () => setDetailModal(r) },
-                                        ]} />
-                                    ) : (
-                                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                                            {r.status === 'approved' ? `By ${r.reviewedBy ?? 'Admin'}` : 'Declined'}
-                                        </span>
-                                    )}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </DataTable>
-            )}
-
             {/* ── Employee Documents ── */}
             {subTab === 'documents' && (
                 <EmployeeDocumentsTab
                     employees={employees}
                     onOpenDigital201={onOpenDigital201}
-                />
-            )}
-            {/* ── Leave detail modal ── */}
-            <FormModal isOpen={!!detailModal} onClose={() => setDetailModal(null)} title="Leave Request Detail" subtitle="Full details for this request" size="sm">
-                {detailModal && (
-                    <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                            <div className="emp-avatar" style={{ flexShrink: 0, width: 44, height: 44 }}>{detailModal.employeeName.charAt(0).toUpperCase()}</div>
-                            <div>
-                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{detailModal.employeeName}</h4>
-                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{detailModal.employeeNumber} · <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{toDisplayRole(detailModal.role)}</span></div>
-                            </div>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                            {[
-                                { label: 'Leave Type', value: LEAVE_TYPE_LABELS[detailModal.leaveType], icon: <CalendarRange size={14} />, bg: 'var(--status-new-bg)', color: 'var(--primary)' },
-                                { label: 'Duration', value: `${calcDays(detailModal.startDate, detailModal.endDate)} days`, icon: <Clock size={14} />, bg: 'var(--status-pending-bg)', color: 'var(--status-pending)' },
-                                { label: 'Start Date', value: fmtDate(detailModal.startDate), icon: <CalendarDays size={14} />, bg: 'var(--status-active-bg)', color: 'var(--status-active)' },
-                                { label: 'End Date', value: fmtDate(detailModal.endDate), icon: <CalendarDays size={14} />, bg: 'var(--status-active-bg)', color: 'var(--status-active)' },
-                                { label: 'Submitted', value: fmtDate(detailModal.submittedAt), icon: <CalendarDays size={14} />, bg: 'var(--status-new-bg)', color: 'var(--primary)' },
-                                { label: 'Status', value: LEAVE_STATUS_META[detailModal.status].label, icon: LEAVE_STATUS_META[detailModal.status].icon, bg: detailModal.status === 'approved' ? 'var(--status-active-bg)' : detailModal.status === 'declined' ? 'var(--status-failed-bg)' : 'var(--status-pending-bg)', color: detailModal.status === 'approved' ? 'var(--status-active)' : detailModal.status === 'declined' ? 'var(--status-failed)' : 'var(--status-pending)' },
-                            ].map(({ label, value, icon, bg, color }) => (
-                                <div key={label} style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ background: bg, color, padding: 6, borderRadius: 8, display: 'flex' }}>{icon}</div>
-                                    <div><span style={{ color: 'var(--text-secondary)', fontSize: 10, display: 'block', fontWeight: 600, textTransform: 'uppercase' }}>{label}</span><strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>{value}</strong></div>
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{ background: 'var(--status-pending-bg)', borderLeft: '3px solid var(--status-pending)', borderRadius: '0 8px 8px 0', padding: '12px 14px', marginBottom: 16 }}>
-                            <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 4 }}>REASON FOR REQUEST</span>
-                            <p style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 500, margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{detailModal.reason}</p>
-                        </div>
-                        {detailModal.reviewNote && (
-                            <div style={{ background: detailModal.status === 'approved' ? 'var(--status-active-bg)' : 'var(--status-failed-bg)', borderLeft: `3px solid ${detailModal.status === 'approved' ? 'var(--status-active)' : 'var(--status-failed)'}`, borderRadius: '0 8px 8px 0', padding: '12px 14px', fontSize: 13, color: 'var(--text-primary)', marginBottom: 16 }}>
-                                <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 4 }}>REVIEW NOTE</span>
-                                <p style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 500, margin: 0, lineHeight: 1.4 }}>{detailModal.reviewNote}</p>
-                            </div>
-                        )}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                            {detailModal.status === 'pending' ? (
-                                <>
-                                    <button className="btn btn-danger" onClick={() => { setDetailModal(null); setActionModal({ request: detailModal, action: 'decline' }); }}><X size={13} /> Decline</button>
-                                    <button className="btn btn-primary" onClick={() => { setDetailModal(null); setActionModal({ request: detailModal, action: 'approve' }); }}><CheckCircle2 size={13} /> Approve</button>
-                                </>
-                            ) : (
-                                <button className="btn btn-outline" onClick={() => setDetailModal(null)}>Close</button>
-                            )}
-                        </div>
-                    </>
-                )}
-            </FormModal>
-            {actionModal && (
-                <LeaveActionModal
-                    request={actionModal.request}
-                    action={actionModal.action}
-                    onClose={() => setActionModal(null)}
-                    onConfirm={(id, action, note) => { onLeaveConfirm(id, action, note); setActionModal(null); }}
                 />
             )}
         </div>
@@ -1935,7 +1653,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
     useEffect(() => {
         const token = localStorage.getItem('authToken');
         if (!token) return;
-        fetch('/api/profile/view-profile', {
+        fetch('/api/auth/me', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
             .then(res => res.ok ? res.json() : null)
@@ -2072,7 +1790,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                 setGateError('');
                 try {
                     const token = localStorage.getItem('authToken');
-                    const res = await fetch('/api/authentication/verify-password', {
+                    const res = await fetch('/api/auth/verify-password', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeID: employeeId, password: pw }),
@@ -2150,7 +1868,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                 setPwSaving(true);
                 try {
                     const token = localStorage.getItem('authToken');
-                    const res = await fetch('/api/profile/change-password', {
+                    const res = await fetch('/api/auth/change-password', {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
@@ -2187,7 +1905,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
         profileForm.middleName || storedMiddleName,
         profileForm.lastName || storedLastName,
         profileForm.suffix || storedSuffix
-    ) || legacyName || 'System Admin';
+    ) || legacyName || 'Manager';
     const displayContact = profileForm.contactNumber || employeeContact;
 
     const avatarInitial = displayName.charAt(0).toUpperCase() || '?';
@@ -2201,7 +1919,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                         <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: 32, fontWeight: 800, color: '#fff' }}>{avatarInitial}</div>
                         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>{displayName}</h2>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
-                            <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' }}>SYSTEM ADMIN</span>
+                            <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' }}>MANAGER</span>
                             <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '3px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>#{employeeId}</span>
                         </div>
                     </div>
@@ -2323,204 +2041,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
     );
 }
 
-// ─── Emergency Overrides Tab ──────────────────────────────────────────────────
 
-interface EmergencyOverridesTabProps {
-    overrides: EmergencyOverride[];
-    loading: boolean;
-    overridePage: number;
-    overrideTotalPages: number;
-    onPageChange: (page: number, filters: OverrideFilters) => void;
-    onOverrideUpdated: (id: string, status: OverrideStatus, overrideUntil?: string) => void;
-    overrideCounts: { pending: number; approved: number; rejected: number };
-}
-
-export interface OverrideFilters {
-    status: 'All' | OverrideStatus;
-    search: string;
-}
-
-function EmergencyOverridesTab({ overrides, loading, overridePage, overrideTotalPages, onPageChange, onOverrideUpdated, overrideCounts }: EmergencyOverridesTabProps) {
-    const [filterStatus, setFilterStatus] = useState<'All' | OverrideStatus>('Pending');
-    const [search, setSearch] = useState('');
-    const [actionModal, setActionModal] = useState<{ override: EmergencyOverride; action: 'Approved' | 'Rejected' } | null>(null);
-    const [overrideUntil, setOverrideUntil] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
-
-    useEffect(() => {
-        onPageChange(1, { status: filterStatus, search });
-    }, [filterStatus, search]);
-
-    const { pending: pendingCount, approved: approvedCount, rejected: rejectedCount } = overrideCounts;
-
-    // ── Open approve/reject via ConfirmationModal ─────────────────────────────
-    const openAction = (override: EmergencyOverride, action: 'Approved' | 'Rejected') => {
-        setOverrideUntil('');
-        const isApprove = action === 'Approved';
-
-        setConfirmModal({
-            isOpen: true,
-            variant: isApprove ? 'success' : 'danger',
-            title: isApprove ? 'Approve emergency override?' : 'Reject override request?',
-            description: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                        Employee: <strong style={{ color: 'var(--color-text-primary)' }}>{override.employeeName}</strong>
-                        {' '}({override.employeeNumber})
-                    </p>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                        Reason: <em>{override.reason}</em>
-                    </p>
-                    {isApprove && (
-                        <div className="field" style={{ margin: 0 }}>
-                            <label style={{ fontSize: 12, fontWeight: 600 }}>Override access until <span style={{ color: 'var(--color-text-danger)' }}>*</span></label>
-                            <input
-                                id="override-until-input"
-                                type="datetime-local"
-                                min={new Date().toISOString().slice(0, 16)}
-                                onChange={e => setOverrideUntil(e.target.value)}
-                                style={{ marginTop: 4 }}
-                            />
-                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, display: 'block' }}>
-                                Access will automatically expire at this time.
-                            </span>
-                        </div>
-                    )}
-                </div>
-            ),
-            notice: isApprove
-                ? "Approving will temporarily restore the employee's system access until the set expiry."
-                : "Rejecting will deny this override request. The employee will remain on leave.",
-            confirmLabel: isApprove ? 'Approve access' : 'Reject request',
-            onConfirm: async () => {
-                const until = (document.getElementById('override-until-input') as HTMLInputElement)?.value ?? overrideUntil;
-                if (isApprove && !until) {
-                    // Can't close modal here, but we can just return — user must set the date
-                    return;
-                }
-                setSubmitting(true);
-                try {
-                    const token = localStorage.getItem('authToken');
-                    const endpoint = isApprove
-                        ? '/api/emergency_override_controls/approve'
-                        : '/api/emergency_override_controls/decline';
-                    const body = isApprove
-                        ? { emergencyOverrideId: override.emergencyOverrideId, status: action, overrideUntil: new Date(until).toISOString() }
-                        : { emergencyOverrideId: override.emergencyOverrideId };
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify(body),
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Action failed.');
-                    }
-                    onOverrideUpdated(override.emergencyOverrideId, action, until || undefined);
-                    setConfirmModal(CONFIRM_CLOSED);
-                } catch (err: any) {
-                    // Re-open with error — simplest: just alert for now
-                    alert(err.message ?? 'Something went wrong.');
-                    setConfirmModal(CONFIRM_CLOSED);
-                } finally {
-                    setSubmitting(false);
-                }
-            },
-        });
-    };
-
-    const statusMeta: Record<OverrideStatus, { label: string; cls: string; icon: React.ReactNode }> = {
-        Pending: { label: 'Pending', cls: 'pending-badge', icon: <Clock size={12} /> },
-        Approved: { label: 'Approved', cls: 'active', icon: <CheckCircle2 size={12} /> },
-        Rejected: { label: 'Rejected', cls: 'deactivated', icon: <X size={12} /> },
-    };
-
-    return (
-        <div className="dashboard-content">
-            <div className="stats-row" style={{ marginBottom: 20 }}>
-                {[
-                    { icon: <Clock size={20} strokeWidth={2.3} />, variant: 'warning', label: 'PENDING', value: pendingCount, subtext: 'Awaiting review' },
-                    { icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', label: 'APPROVED', value: approvedCount, subtext: 'Access granted' },
-                    { icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger', label: 'REJECTED', value: rejectedCount, subtext: 'Access denied' },
-                    { icon: <ShieldAlert size={20} strokeWidth={2.3} />, variant: 'primary', label: 'TOTAL', value: overrides.length, subtext: 'This page' },
-                ].map(({ icon, variant, label, value, subtext }) => (
-                    <StatCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
-                ))}
-            </div>
-            <DataTable
-                title="Emergency Override Requests"
-                searchQuery={search}
-                setSearchQuery={setSearch}
-                searchPlaceholder="Search by name or ID…"
-                totalResults={overrides.length}
-                filterElements={
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)}>
-                        <option value="Pending">Pending</option>
-                        <option value="All">All Statuses</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Rejected">Rejected</option>
-                    </select>
-                }
-                headers={['EMPLOYEE', 'REASON', 'REQUESTED', 'OVERRIDE UNTIL', 'STATUS', 'ACTIONS']}
-                loading={loading}
-                emptyIcon={<ShieldAlert size={20} />}
-                emptyMessage="No override requests match your filters"
-                currentPage={overridePage}
-                totalPages={overrideTotalPages}
-                onPageChange={(page) => onPageChange(page, { status: filterStatus, search })}
-            >
-                {overrides.map(o => {
-                    const meta = statusMeta[o.status];
-                    return (
-                        <tr key={o.emergencyOverrideId}>
-                            <td><div className="emp-name-cell"><div className="emp-avatar">{o.employeeName.charAt(0).toUpperCase()}</div><div><div style={{ fontWeight: 600, fontSize: 13 }}>{o.employeeName}</div><div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{o.employeeNumber}</div></div></div></td>
-                            <td style={{ fontSize: 13, maxWidth: 200 }}><span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{o.reason}</span></td>
-                            <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{new Date(o.requestedAt).toLocaleString()}</td>
-                            <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{o.overrideUntil ? new Date(o.overrideUntil).toLocaleString() : '—'}</td>
-                            <td><span className={`status-badge ${meta.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{meta.icon}{meta.label}</span></td>
-                            <td>
-                                {o.status === 'Pending' ? (
-                                    <ActionsDropdown
-                                        actions={[
-                                            {
-                                                label: 'Approve',
-                                                icon: <CheckCircle2 size={12} />,
-                                                onClick: () => openAction(o, 'Approved'),
-                                                variant: 'success'
-                                            },
-                                            {
-                                                label: 'Reject',
-                                                icon: <X size={12} />,
-                                                onClick: () => openAction(o, 'Rejected'),
-                                                variant: 'danger'
-                                            }
-                                        ]}
-                                    />
-                                ) : (
-                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{o.status === 'Approved' ? 'Access granted' : 'Access denied'}</span>
-                                )}
-                            </td>
-                        </tr>
-                    );
-                })}
-            </DataTable>
-
-            {/* ── Override Confirmation Modal ── */}
-            <ConfirmationModal
-                isOpen={confirmModal.isOpen}
-                variant={confirmModal.variant}
-                title={confirmModal.title}
-                description={confirmModal.description}
-                notice={confirmModal.notice}
-                confirmLabel={confirmModal.confirmLabel}
-                isLoading={submitting}
-                onConfirm={confirmModal.onConfirm}
-                onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
-            />
-        </div>
-    );
-}
 
 // ─── Government Records Tab ────────────────────────────────────────────────────
 
@@ -2583,7 +2104,7 @@ const GovernmentRecordsTab: React.FC = () => {
         const fetchEmployees = async () => {
             try {
                 const token = localStorage.getItem('authToken');
-                const res = await fetch('/api/systemadmin/recent-employees?PageNumber=1&PageSize=200', {
+                const res = await fetch('/api/user?PageNumber=1&PageSize=200', {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 if (res.ok) {
@@ -2942,7 +2463,7 @@ const GovernmentRecordsTab: React.FC = () => {
                                 try {
                                     const token = localStorage.getItem('authToken');
                                     const adminId = localStorage.getItem('employeeId') ?? '';
-                                    const verifyRes = await fetch('/api/authentication/verify-password', {
+                                    const verifyRes = await fetch('/api/auth/verify-password', {
                                         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                                         body: JSON.stringify({ employeeID: adminId, password: gatePassword }),
                                     });
@@ -2980,7 +2501,7 @@ export default function Dashboard() {
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
-    const [rolesList, setRolesList] = useState<string[]>(['Systems Admin', 'Operations Admin', 'Coordinator', 'Encoder']);
+    const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Encoder']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
     const [empModalEditMode, setEmpModalEditMode] = useState(false);
@@ -2998,20 +2519,6 @@ export default function Dashboard() {
     const [empLoading, setEmpLoading] = useState(true);
     const [empPage, setEmpPage] = useState(1);
     const [empTotalPages, setEmpTotalPages] = useState(1);
-
-    // ── Leave Requests ──
-    const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-    const [leaveLoading, setLeaveLoading] = useState(true);
-    const [leavePage, setLeavePage] = useState(1);
-    const [leaveTotalPages, setLeaveTotalPages] = useState(1);
-    const [leavePendingCount, setLeavePendingCount] = useState(0);
-
-    // ── Emergency Overrides ──
-    const [overrides, setOverrides] = useState<EmergencyOverride[]>([]);
-    const [overrideLoading, setOverrideLoading] = useState(true);
-    const [overridePage, setOverridePage] = useState(1);
-    const [overrideTotalPages, setOverrideTotalPages] = useState(1);
-    const [overrideCounts, setOverrideCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
 
     // ── Activity Logs ──
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -3070,7 +2577,7 @@ export default function Dashboard() {
     const fetchBackendRoles = async () => {
         try {
             const token = localStorage.getItem('authToken');
-            const res = await fetch('/api/roles', {
+            const res = await fetch('/api/role', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -3091,7 +2598,7 @@ export default function Dashboard() {
         if (filters.search) params.append('search', filters.search);
         if (filters.role) params.append('role', toBackendRole(filters.role));
         if (filters.status) params.append('status', filters.status);
-        fetch(`/api/systemadmin/recent-employees?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`/api/user?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
             .then(result => {
                 if (!result.isSuccess) throw new Error(result.message ?? 'Failed to fetch');
@@ -3123,75 +2630,6 @@ export default function Dashboard() {
             .finally(() => setEmpLoading(false));
     };
 
-    const fetchLeaveRequests = (page: number = 1, filters: LeaveFilters = { status: 'pending', role: '', search: '' }) => {
-        const token = localStorage.getItem('authToken');
-        setLeaveLoading(true);
-        const params = new URLSearchParams({ PageNumber: String(page), PageSize: String(PAGE_SIZE) });
-        if (filters.status !== 'all') params.append('status', filters.status);
-        if (filters.role) params.append('role', toBackendRole(filters.role));
-        if (filters.search) params.append('search', filters.search);
-        fetch(`/api/leaverequest/get-all-leave-requests?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
-            .then((result: any) => {
-                const raw: any[] = Array.isArray(result) ? result : (Array.isArray(result.data) ? result.data : []);
-                const list: LeaveRequest[] = raw.map(r => {
-                    const fullName = buildDisplayName(r.firstName ?? '', r.middleName ?? '', r.lastName ?? '', r.suffix ?? '');
-                    return {
-                        id: r.leaveId,
-                        employeeNumber: r.employeeNumber ?? '',
-                        employeeName: fullName || r.employeeName || '',
-                        role: r.role ?? '',
-                        leaveType: ((r.leave_Type ?? r.leaveType ?? 'other') as string).toLowerCase() as LeaveType,
-                        startDate: (r.start_Date ?? r.startDate ?? '').split('T')[0],
-                        endDate: (r.end_Date ?? r.endDate ?? '').split('T')[0],
-                        reason: r.reason ?? '',
-                        status: ((r.approval_Status ?? r.approvalStatus ?? 'pending') as string).toLowerCase() as LeaveStatus,
-                        submittedAt: (r.submittedAt ?? r.start_Date ?? '').split('T')[0],
-                        reviewedBy: r.reviewedBy ?? undefined,
-                        reviewNote: r.leaveRequestNote ?? r.reviewNote ?? undefined,
-                    };
-                });
-                setLeaveRequests(list);
-                setLeaveTotalPages(result.totalPages ?? 1);
-                setLeavePage(page);
-                if (filters.status === 'pending' && page === 1) {
-                    setLeavePendingCount(result.totalCount ?? list.filter(r => r.status === 'pending').length);
-                }
-            })
-            .catch(() => setLeaveRequests([]))
-            .finally(() => setLeaveLoading(false));
-    };
-
-    const fetchOverrides = (page: number = 1, filters: OverrideFilters = { status: 'Pending', search: '' }) => {
-        const token = localStorage.getItem('authToken');
-        setOverrideLoading(true);
-        const params = new URLSearchParams({ PageNumber: String(page), PageSize: String(PAGE_SIZE) });
-        if (filters.status !== 'All') params.append('status', filters.status);
-        if (filters.search) params.append('search', filters.search);
-        fetch(`/api/emergency_override_controls/all-requests?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
-            .then((result: any) => {
-                const raw: any[] = Array.isArray(result) ? result : (Array.isArray(result.data) ? result.data : []);
-                setOverrides(raw.map(o => ({
-                    emergencyOverrideId: o.emergencyOverrideId,
-                    requestedById: o.requestedById,
-                    employeeName: o.employeeName ?? '—',
-                    employeeNumber: o.employeeNumber ?? '—',
-                    leaveId: o.leaveId,
-                    status: o.status,
-                    reason: o.reason,
-                    requestedAt: o.requestedAt,
-                    approvedAt: o.approvedAt,
-                    overrideUntil: o.overrideUntil,
-                })));
-                setOverrideTotalPages(result.totalPages ?? 1);
-                setOverridePage(page);
-                setOverrideCounts({ pending: result.totalPending ?? 0, approved: result.totalApproved ?? 0, rejected: result.totalRejected ?? 0 });
-            })
-            .catch(() => setOverrides([]))
-            .finally(() => setOverrideLoading(false));
-    };
-
     const fetchContracts = (page: number = 1, filters: { search: string; isArchived?: boolean } = { search: '', isArchived: false }) => {
         const token = localStorage.getItem('authToken');
         setContractsLoading(true);
@@ -3200,7 +2638,7 @@ export default function Dashboard() {
         if (filters.isArchived !== undefined) params.append('isArchived', String(filters.isArchived));
 
         fetch(`/api/systemadmin/contracts?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+            .then(res => res.ok ? res.json() : { isSuccess: false, data: { data: [] } })
             .then((result: any) => {
                 if (result.isSuccess && result.data) {
                     const raw: any[] = Array.isArray(result.data.data) ? result.data.data : [];
@@ -3223,13 +2661,11 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchEmployees(1);
-        fetchLeaveRequests(1, { status: 'pending', role: '', search: '' });
-        fetchOverrides(1, { status: 'Pending', search: '' });
         fetchContracts(1, { search: '', isArchived: false });
         const token = localStorage.getItem('authToken');
 
         // Fetch profile to sync name/contact info to localStorage
-        fetch('/api/profile/view-profile', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.ok ? res.json() : null)
             .then(result => {
                 if (!result || !result.isSuccess || !result.data) return;
@@ -3265,7 +2701,7 @@ export default function Dashboard() {
         try {
             const token = localStorage.getItem('authToken');
             if (token) {
-                await fetch('/api/authentication/logout', {
+                await fetch('/api/auth/logout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 }).catch(() => { });
@@ -3288,29 +2724,10 @@ export default function Dashboard() {
         }
     };
 
-    const handleLeaveConfirm = (id: number, action: 'approve' | 'decline', note: string) => {
-        const req = leaveRequests.find(r => r.id === id);
-        setLeaveRequests(prev => prev.map(r =>
-            r.id === id ? { ...r, status: action === 'approve' ? 'approved' : 'declined', reviewedBy: localStorage.getItem('employeeName') ?? 'Admin', reviewNote: note || undefined } : r
-        ));
-        if (req && req.employeeNumber) {
-            const nextStatus = action === 'approve' ? 'On Leave' : 'Active';
-            setEmployees(prev => prev.map(e => e.employeeNumber === req.employeeNumber ? { ...e, accountStatus: nextStatus } : e));
-            setRecentEmployees(prev => prev.map(e => e.employeeNumber === req.employeeNumber ? { ...e, accountStatus: nextStatus } : e));
-        }
-        success(`Leave request has been ${action === 'approve' ? 'approved' : 'declined'} successfully.`);
-        fetchEmployees(empPage);
-    };
-
-    const handleOverrideUpdated = (id: string, status: OverrideStatus, until?: string) => {
-        setOverrides(prev => prev.map(o => o.emergencyOverrideId === id ? { ...o, status, overrideUntil: until } : o));
-        fetchEmployees(empPage);
-    };
-
     const pageTitles: Record<NavTab, string> = {
-        dashboard: 'Dashboard', employees: 'Manage Employee', emergency_override: 'Emergency Override',
+        dashboard: 'Dashboard', employees: 'Manage Employee',
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
-        roles: 'Role Management', reports: 'Reports', activity_logs: 'Activity Logs', profile: 'My Profile', recruitment: 'Recruitment',
+        roles: 'Role Management', reports: 'Reports', activity_logs: 'Activity Logs', profile: 'My Profile',
         government_records: 'Government Records'
     };
 
@@ -3319,7 +2736,7 @@ export default function Dashboard() {
             {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
             <aside className={`sidebar${sidebarOpen ? ' sidebar--open' : ''}`}>
                 <div className="sidebar-logo"><img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="logo-image" /></div>
-                <div className="sidebar-role-section"><div className="sidebar-role-badge super-admin"><div className="role-dot-inner" />SYSTEM ADMIN</div></div>
+                 <div className="sidebar-role-section"><div className="sidebar-role-badge super-admin"><div className="role-dot-inner" />MANAGER</div></div>
                 <nav className="sidebar-nav">
                     {NAV_GROUPS.map(group => (
                         <div key={group.label} className="nav-section">
@@ -3334,8 +2751,8 @@ export default function Dashboard() {
                 </nav>
                 <div className="sidebar-footer-profile">
                     <div className="profile-card">
-                        <div className="profile-avatar">{getInitials(employeeName || 'Super Admin')}</div>
-                        <div className="profile-info"><span className="profile-name">{employeeName || 'Super Admin'}</span><span className="profile-role">SYSTEM ADMIN</span></div>
+                        <div className="profile-avatar">{getInitials(employeeName || 'Manager')}</div>
+                        <div className="profile-info"><span className="profile-name">{employeeName || 'Manager'}</span><span className="profile-role">MANAGER</span></div>
                         <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout"><LogOut size={18} /></button>
                     </div>
                 </div>
@@ -3387,11 +2804,6 @@ export default function Dashboard() {
                             onSelectEmployee={emp => { setSelectedPanelEmployee(emp); setDetailPanelInitialSection('overview'); }}
                             onAddEmployee={() => setShowAddModal(true)}
                             empPage={empPage} empTotalPages={empTotalPages} onEmpPageChange={fetchEmployees}
-                            leaveRequests={leaveRequests} leaveLoading={leaveLoading}
-                            leavePage={leavePage} leaveTotalPages={leaveTotalPages}
-                            leavePendingCount={leavePendingCount}
-                            onLeavePageChange={fetchLeaveRequests}
-                            onLeaveConfirm={handleLeaveConfirm}
                             onEditEmployee={emp => { setEmpModalEditMode(true); setSelectedEmployee(emp); }}
                             onArchiveEmployee={emp => setarchiveConfirmEmp(emp)}
                             onViewEmployee={emp => { setSelectedPanelEmployee(emp); setDetailPanelInitialSection('overview'); }}
@@ -3406,13 +2818,6 @@ export default function Dashboard() {
                     )
                 )}
 
-                {activeTab === 'recruitment' && (
-                    <RecruitmentTab
-                        onSuccess={msg => success(msg)}
-                        onError={msg => error(msg)}
-                    />
-                )}
-
                 {(activeTab === 'profile' || activeTab === 'settings') && <ProfileTab onProfileUpdate={setEmployeeName} />}
 
                 {activeTab === 'roles' && <RoleManagementTab />}
@@ -3423,16 +2828,6 @@ export default function Dashboard() {
                 {activeTab === 'finance' && <div className="dashboard-content"><div className="card"><EmptyState icon={<BarChart3 size={32} />} message="Finance module coming soon." /></div></div>}
 
                 {activeTab === 'government_records' && <GovernmentRecordsTab />}
-
-                {activeTab === 'emergency_override' && (
-                    <EmergencyOverridesTab
-                        overrides={overrides} loading={overrideLoading}
-                        overridePage={overridePage} overrideTotalPages={overrideTotalPages}
-                        onPageChange={fetchOverrides}
-                        onOverrideUpdated={handleOverrideUpdated}
-                        overrideCounts={overrideCounts}
-                    />
-                )}
 
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: 0 }}>
@@ -3555,10 +2950,16 @@ export default function Dashboard() {
                     setarchiveSubmitting(true);
                     try {
                         const token = localStorage.getItem('authToken');
-                        const res = await fetch('/api/systemadmin/delete-user', {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ employeeNumber: archiveConfirmEmp.employeeNumber }),
+                        const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(archiveConfirmEmp.employeeNumber)}`, {
+                            headers: { 'Authorization': `Bearer ${token}` },
+                        });
+                        if (!lookupRes.ok) throw new Error('Employee not found.');
+                        const lookupData = await lookupRes.json();
+                        const userId = lookupData?.data?.id ?? lookupData?.id;
+                        if (!userId) throw new Error('Employee not found.');
+                        const res = await fetch(`/api/user/${userId}/deactivate`, {
+                            method: 'PATCH',
+                            headers: { 'Authorization': `Bearer ${token}` },
                         });
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
@@ -3581,7 +2982,7 @@ export default function Dashboard() {
             <ConfirmationModal
                 isOpen={logoutConfirm}
                 variant="neutral"
-                title="Log out of OTMS?"
+                title="Log out of STARS?"
                 description="You will be signed out of your current session. Any unsaved changes will be lost."
                 confirmLabel="Log out"
                 cancelLabel="Stay"

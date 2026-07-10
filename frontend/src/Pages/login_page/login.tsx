@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, User, Lock, Eye, EyeOff, Briefcase, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Package, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/Toast/Toast';
 import './login.css';
 
@@ -8,12 +8,11 @@ import './login.css';
 type StatusType = 'success' | 'error' | 'info' | '';
 
 type UserRole =
-    | 'SuperAdmin'
-    | 'System Admin'
-    | 'Operation Admin'
-    | 'OpAdmin'
+    | 'Manager'
     | 'Coordinator'
-    | 'Encoder';
+    | 'Dispatcher'
+    | 'Encoder'
+    | 'Courier';
 
 interface LoginResponse {
     accessToken: string;
@@ -27,25 +26,21 @@ interface LoginResponse {
 /* ── Role helpers ── */
 const normalizeRole = (role: string): UserRole | '' => {
     const map: Record<string, UserRole> = {
-        superadmin: 'SuperAdmin',
-        systemadmin: 'System Admin',
-        'system admin': 'System Admin',
-        operationadmin: 'Operation Admin',
-        'operation admin': 'Operation Admin',
-        opadmin: 'OpAdmin',
+        manager: 'Manager',
         coordinator: 'Coordinator',
+        dispatcher: 'Dispatcher',
         encoder: 'Encoder',
+        courier: 'Courier',
     };
     return map[role.toLowerCase()] ?? '';
 };
 
 const dashboardRoutes: Record<UserRole, string> = {
-    SuperAdmin: '/SystemAdmin_Dashboard',
-    'System Admin': '/SystemAdmin_Dashboard',
-    'Operation Admin': '/OpAdmin_Dashboard',
-    OpAdmin: '/OpAdmin_Dashboard',
-    Coordinator: '/OpEmployee_Dashboard',
+    Manager: '/SystemAdmin_Dashboard',
+    Coordinator: '/OpAdmin_Dashboard',
+    Dispatcher: '/OpEmployee_Dashboard',
     Encoder: '/OpEmployee_Dashboard',
+    Courier: '/OpEmployee_Dashboard',
 };
 
 /* ══════════════════════════════════════════
@@ -80,12 +75,8 @@ export default function Login() {
     };
 
     const validateEmployeeId = (value: string): string => {
-        if (!value.trim()) return 'Employee ID is required.';
-        if (value.trim().length > 20) return 'Employee ID must not exceed 20 characters.';
-        const isStandard = /^[A-Za-z0-9-]{1,20}$/.test(value.trim());
-        if (!isStandard) {
-            return 'Enter a valid Employee ID (e.g. 0000 or 0001).';
-        }
+        if (!value.trim()) return 'Employee ID or Email is required.';
+        if (value.trim().length > 100) return 'Input too long.';
         return '';
     };
 
@@ -107,11 +98,11 @@ export default function Login() {
         updateStatus('Authenticating...', 'info');
 
         try {
-            const response = await fetch('/api/authentication/login', {
+            const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    employeeNumber: employeeId.trim(),
+                    identifier: employeeId.trim(),
                     password,
                 }),
             });
@@ -124,15 +115,15 @@ export default function Login() {
             }
 
             if (!response.ok) {
-                const message = data?.message?.toLowerCase() ?? '';
-                const statusMessage = data?.message || response.statusText || '';
+                const msg = data?.message ?? data?.Message ?? (response.statusText || '');
+                const msgLower = msg.toLowerCase();
 
-                if (message.includes('on leave') || message.includes('onleave')) {
+                if (msgLower.includes('on leave') || msgLower.includes('onleave')) {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
                             employeeName: data?.employeeName ?? data?.EmployeeName ?? '',
-                            reason: data?.message ?? data?.Message ?? '',
+                            reason: msg,
                             overrideToken: data?.overrideToken,
                             leaveId: data?.leaveId,
                         }
@@ -140,67 +131,72 @@ export default function Login() {
                     return;
                 }
 
-                if (message.includes('deactivated') || message.includes('locked')) {
+                if (msgLower.includes('deactivated') || msgLower.includes('locked')) {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
                             employeeName: data?.employeeName ?? data?.EmployeeName ?? '',
-                            reason: data?.message ?? data?.Message ?? '',
+                            reason: msg,
                         }
                     });
                     return;
                 }
 
-                if (message.includes('verified') || message.includes('unverified') || message.includes('verify your email') || message.includes('email not verified')) {
+                if (msgLower.includes('verified') || msgLower.includes('unverified') || msgLower.includes('verify your email') || msgLower.includes('email not verified')) {
                     updateStatus('Your account is not yet verified. Please check your email for the verification link.', 'error');
                     return;
                 }
 
-                updateStatus(statusMessage || 'Invalid Employee ID or password.', 'error');
+                updateStatus(msg || 'Invalid Employee ID or password.', 'error');
                 return;
             }
 
-            const normalizedRole = normalizeRole(data.role);
+            // Unwrap ApiResponseDTO wrapper
+            const d = data?.data ?? data;
+
+            const roleMap: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+            const roleStr = roleMap[d.role] ?? d.role?.toString?.() ?? '';
+            const normalizedRole = normalizeRole(roleStr);
+
             if (!normalizedRole) {
-                updateStatus(`Unknown role: "${data.role}". Contact your administrator.`, 'error');
+                updateStatus(`Unknown role: "${roleStr}". Contact your administrator.`, 'error');
                 return;
             }
 
-            localStorage.setItem('authToken', data.accessToken);
+            localStorage.setItem('authToken', d.accessToken);
             localStorage.setItem('userRole', normalizedRole);
-            localStorage.setItem('employeeId', employeeId.trim());
-            localStorage.setItem('isPasswordChanged', data.isPasswordChanged.toString());
-            localStorage.setItem('contactNumber', data.contactNumber ?? data.contact ?? data.phoneNumber ?? '');
-            localStorage.setItem('email', data.email ?? '');
-            localStorage.setItem('firstName', data.firstName ?? '');
-            localStorage.setItem('middleName', data.middleName ?? '');
-            localStorage.setItem('lastName', data.lastName ?? '');
-            localStorage.setItem('suffix', data.suffix ?? '');
+            localStorage.setItem('employeeId', d.employeeNumber ?? employeeId.trim());
+            localStorage.setItem('isPasswordChanged', (d.isPasswordChanged ?? false).toString());
+            localStorage.setItem('contactNumber', d.contactNumber ?? d.contact ?? d.phoneNumber ?? '');
+            localStorage.setItem('email', d.email ?? '');
+            localStorage.setItem('firstName', d.firstName ?? '');
+            localStorage.setItem('middleName', d.middleName ?? '');
+            localStorage.setItem('lastName', d.lastName ?? '');
+            localStorage.setItem('suffix', d.suffix ?? '');
 
-            const fullName = [data.firstName, data.middleName, data.lastName, data.suffix]
+            const fullName = [d.firstName, d.middleName, d.lastName, d.suffix]
                 .map(s => (s ?? '').trim())
                 .filter(Boolean)
                 .join(' ');
-            localStorage.setItem('employeeName', fullName || data.employeeName || '');
+            localStorage.setItem('employeeName', fullName || d.employeeName || '');
 
             updateStatus('Login successful. Redirecting...', 'success');
             success('Login successful! Welcome back.');
 
-            if (!data.isPasswordChanged) {
+            if (!d.isPasswordChanged) {
                 const isSeededSysAdmin = employeeId.trim() === '0000';
                 if (isSeededSysAdmin) {
-                    updateStatus('Please set your password.', 'info');
-                    setTimeout(() => navigate('/set-password'), 800);
+                    navigate('/set-password', { replace: true });
                 } else {
-                    updateStatus('Please complete your profile.', 'info');
-                    setTimeout(() => navigate('/onboarding?fresh=true'), 800);
+                    navigate('/onboarding?fresh=true', { replace: true });
                 }
                 return;
             }
 
-            setTimeout(() => {
-                navigate(dashboardRoutes[normalizedRole]);
-            }, 800);
+            const target = dashboardRoutes[normalizedRole];
+            if (target) {
+                navigate(target, { replace: true });
+            }
 
         } catch {
             updateStatus('System not available at the moment. Please try again later.', 'error');
@@ -242,35 +238,18 @@ export default function Login() {
                     {/* Features */}
                     <div className="feature-list">
                         <FeatureItem
-                            title="Real-Time Delivery Tracking"
+                            title="Real-Time Delivery Management System"
                             description="Live shipment visibility and updates"
                         />
                         <FeatureItem
-                            title="Operational Task Management"
+                            title="SPEEDEX Automated Tracking System"
                             description="Personalized and organized task workflow experience"
                         />
                         <FeatureItem
-                            title="Courier Management"
-                            description="Secured and efficient management of courier operations"
+                            title="Financial Management System"
+                            description="Track and manage financial transactions"
                         />
                     </div>
-
-                    {/* ── Careers CTA (left panel) ── */}
-                    <div className="careers-cta">
-                        <div className="careers-cta-inner">
-                            <div className="careers-cta-badge">
-                                <span className="careers-dot" />
-                                We're Hiring
-                            </div>
-                            <p className="careers-cta-text">
-                                Interested in joining Speedex? Apply for open positions online.
-                            </p>
-                            <Link to="/apply" className="careers-cta-link">
-                                View open positions →
-                            </Link>
-                        </div>
-                    </div>
-
                 </div>
             </aside>
 
@@ -394,24 +373,6 @@ export default function Login() {
                     </form>
 
                     {/* ── Applicant portal divider ── */}
-                    <div className="applicant-divider">
-                        <span className="applicant-divider-line" />
-                        <span className="applicant-divider-text">Not an employee?</span>
-                        <span className="applicant-divider-line" />
-                    </div>
-
-                    {/* ── Apply now banner ── */}
-                    <Link to="/apply" className="applicant-portal-btn">
-                        <span className="applicant-portal-icon">
-                            <Briefcase size={18} />
-                        </span>
-                        <span className="applicant-portal-content">
-                            <span className="applicant-portal-label">Apply for a position</span>
-                            <span className="applicant-portal-sub">Browse open roles at Speedex Courier</span>
-                        </span>
-                        <span className="applicant-portal-arrow">→</span>
-                    </Link>
-
                     <div className="login-terms">
                         By using this service, you understand and agree to the PUP Online Services{' '}
                         <a href="#" className="terms-link">Terms of Use</a> and{' '}

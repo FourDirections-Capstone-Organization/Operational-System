@@ -632,7 +632,7 @@ export default function Digital201FileView({
                                             try {
                                                 const token = localStorage.getItem('authToken');
                                                 const adminId = localStorage.getItem('employeeId') ?? '';
-                                                const verifyRes = await fetch('/api/authentication/verify-password', {
+                                                const verifyRes = await fetch('/api/auth/verify-password', {
                                                     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                                                     body: JSON.stringify({ employeeID: adminId, password: pw }),
                                                 });

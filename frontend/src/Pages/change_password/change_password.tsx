@@ -56,7 +56,7 @@ export default function ChangePassword() {
         try {
             const token = localStorage.getItem('authToken');
 
-            const res = await fetch('/api/profile/change-password', {
+            const res = await fetch('/api/auth/change-password', {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,11 +73,9 @@ export default function ChangePassword() {
 
             const role = localStorage.getItem('userRole') ?? '';
             const routes: Record<string, string> = {
-                'SuperAdmin': '/SystemAdmin_Dashboard',
-                'System Admin': '/SystemAdmin_Dashboard',
-                'Operation Admin': '/OpAdmin_Dashboard',
-                'OpAdmin': '/OpAdmin_Dashboard',
-                'Employee': '/OpEmployee_Dashboard',
+                Manager: '/SystemAdmin_Dashboard',
+                Coordinator: '/OpAdmin_Dashboard',
+                Encoder: '/OpEmployee_Dashboard',
             };
             navigate(routes[role] ?? '/');
 

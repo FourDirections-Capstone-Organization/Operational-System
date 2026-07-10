@@ -4,36 +4,48 @@ interface ProtectedRouteProps {
     allowedRoles?: string[];
 }
 
-function getTokenPayload(): { role?: string; exp?: number } | null {
+function getStoredRole(): string {
+    const stored = localStorage.getItem('userRole');
+    if (stored) return stored;
     try {
         const token = localStorage.getItem('authToken');
-        if (!token) return null;
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (!token) return '';
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '');
+        const payload = JSON.parse(atob(b64));
+        const claim = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+        const map: Record<string, string> = {
+            Manager: 'Manager', Coordinator: 'Coordinator',
+            Dispatcher: 'Coordinator', Encoder: 'Encoder', Courier: 'Encoder'
+        };
+        return map[claim] || claim || '';
+    } catch {
+        return '';
+    }
+}
 
+function isTokenValid(): boolean {
+    try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return false;
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '');
+        const payload = JSON.parse(atob(b64));
         if (payload.exp && payload.exp * 1000 < Date.now()) {
             localStorage.removeItem('authToken');
-            return null;
+            return false;
         }
-
-        // ✅ Read the full Microsoft claim key
-        const role =
-            payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
-
-        return { ...payload, role };
-    } catch (error) {
-
-        return null;
+        return true;
+    } catch {
+        return false;
     }
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-    const payload = getTokenPayload();
-
-    if (!payload) {
+    if (!isTokenValid()) {
         return <Navigate to="/" replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(payload.role ?? '')) {
+    const role = getStoredRole();
+    if (allowedRoles && !allowedRoles.some(r => r.toLowerCase() === role.toLowerCase())) {
         return <Navigate to="/" replace />;
     }
 

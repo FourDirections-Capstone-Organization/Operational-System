@@ -4,17 +4,16 @@ interface RoleBadgeProps {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-    ADMIN: 'var(--role-admin)',
-    'OP. TEAM': 'var(--role-ops-team)',
-    DRIVER: '#0284C7',
-    'SYSTEM ADMIN': 'var(--role-super-admin)',
-    'SUPER ADMIN': 'var(--role-super-admin)',
+    MANAGER: 'var(--role-super-admin)',
     COORDINATOR: 'var(--role-ops-team)',
+    DISPATCHER: '#0284C7',
     ENCODER: '#0284C7',
+    COURIER: '#0284C7',
 };
 
 export default function RoleBadge({ role, size = 'md' }: RoleBadgeProps) {
-    const color = ROLE_COLORS[role.toUpperCase()] ?? 'var(--text-secondary)';
+    const roleStr = String(role ?? '');
+    const color = ROLE_COLORS[roleStr.toUpperCase()] ?? 'var(--text-secondary)';
     const fontSize = size === 'sm' ? '0.62rem' : '0.72rem';
     const padding = size === 'sm' ? '2px 6px' : '3px 12px';
     return (
@@ -33,7 +32,7 @@ export default function RoleBadge({ role, size = 'md' }: RoleBadgeProps) {
                 color,
             }}
         >
-            {role}
+            {roleStr}
         </span>
     );
 }

@@ -37,7 +37,7 @@ export default function ForgotPassword() {
         setStatus({ type: 'info', message: 'Sending reset link...' });
 
         try {
-            const res = await fetch('/api/authentication/forgot-password', {
+            const res = await fetch('/api/auth/forgot-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
@@ -95,7 +95,7 @@ export default function ForgotPassword() {
                             description="Live shipment visibility and updates"
                         />
                         <FeatureItem
-                            title="Operational Task Management"
+                            title="STARS"
                             description="Personalized and organized task workflow experience"
                         />
                         <FeatureItem
