@@ -3,16 +3,19 @@ using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
+using Backend.Modules.Notifications;
 
 namespace Backend.Modules.TaskManagement;
 
 public class TaskWorkflowService : ITaskWorkflowService
 {
     private readonly AppDbContext _db;
+    private readonly INotificationService _notificationService;
 
-    public TaskWorkflowService(AppDbContext db)
+    public TaskWorkflowService(AppDbContext db, INotificationService notificationService)
     {
         _db = db;
+        _notificationService = notificationService;
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateStatusAsync(
@@ -44,6 +47,18 @@ public class TaskWorkflowService : ITaskWorkflowService
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (assigneeIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                assigneeIds,
+                NotificationType.TaskUpdated,
+                "Task Status Updated",
+                $"Task '{taskTitle}' status changed to {newStatus}.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
@@ -82,6 +97,18 @@ public class TaskWorkflowService : ITaskWorkflowService
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (assigneeIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                assigneeIds,
+                NotificationType.PushBack,
+                "Task Pushed Back",
+                $"Task '{taskTitle}' has been pushed back. Comment: {dto.Comment}.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
@@ -122,6 +149,18 @@ public class TaskWorkflowService : ITaskWorkflowService
 
             await _db.SaveChangesAsync();
 
+            var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+            if (assigneeIds.Count > 0)
+            {
+                var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+                await _notificationService.SendBulkNotificationAsync(
+                    assigneeIds,
+                    NotificationType.TaskCompleted,
+                    "Task Completed",
+                    $"Task '{taskTitle}' has been approved and completed.",
+                    task.Id);
+            }
+
             return ApiResponseDTO<TaskResponseDTO>.Success(
                 await MapToResponseDTOAsync(task),
                 "Task approved and officially closed");
@@ -138,6 +177,18 @@ public class TaskWorkflowService : ITaskWorkflowService
             task.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            var reworkAssigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+            if (reworkAssigneeIds.Count > 0)
+            {
+                var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+                await _notificationService.SendBulkNotificationAsync(
+                    reworkAssigneeIds,
+                    NotificationType.TaskUpdated,
+                    "Task Returned for Rework",
+                    $"Task '{taskTitle}' has been returned for rework. Remarks: {dto.Remarks}.",
+                    task.Id);
+            }
 
             return ApiResponseDTO<TaskResponseDTO>.Success(
                 await MapToResponseDTOAsync(task),
@@ -178,6 +229,18 @@ public class TaskWorkflowService : ITaskWorkflowService
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (assigneeIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                assigneeIds,
+                NotificationType.TaskOnHold,
+                "Task On Hold",
+                $"Task '{taskTitle}' has been placed on hold. Reason: {dto.HoldReason}.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
@@ -225,6 +288,18 @@ public class TaskWorkflowService : ITaskWorkflowService
 
         await _db.SaveChangesAsync();
 
+        var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (assigneeIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                assigneeIds,
+                NotificationType.TaskResumed,
+                "Task Resumed",
+                $"Task '{taskTitle}' has been resumed. New deadline: {dto.RevisedDeadline:MMM dd, yyyy h:mm tt}.",
+                task.Id);
+        }
+
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
             "Task resumed successfully");
@@ -271,6 +346,22 @@ public class TaskWorkflowService : ITaskWorkflowService
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        var cancelRecipientIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
+        if (task.CreatedById != Guid.Empty)
+            cancelRecipientIds.Add(task.CreatedById);
+        cancelRecipientIds = cancelRecipientIds.Distinct().ToList();
+
+        if (cancelRecipientIds.Count > 0)
+        {
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            await _notificationService.SendBulkNotificationAsync(
+                cancelRecipientIds,
+                NotificationType.TaskCancelled,
+                "Task Cancelled",
+                $"Task '{taskTitle}' has been cancelled. Reason: {dto.CancellationReason}.",
+                task.Id);
+        }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),

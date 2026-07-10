@@ -135,6 +135,58 @@ public class EmailService : IEmailService
         await SendEmailAsync(toEmail, subject, body);
     }
 
+    public async Task SendTaskNotificationEmailAsync(string toEmail, string toName, string title, string message)
+    {
+        var subject = $"STARS Notification: {title}";
+        var body = $@"
+            <html>
+            <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <h2 style='color: #1B254B;'>{title}</h2>
+                    <p>Dear {toName},</p>
+                    <p>{message}</p>
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='http://localhost:5173' style='background-color: #00A99D; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;'>View in STARS</a>
+                    </div>
+                    <p>Best regards,<br/>STARS System</p>
+                    <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'/>
+                    <p style='font-size: 12px; color: #999;'>This is an automated message. Please do not reply to this email.</p>
+                </div>
+            </body>
+            </html>
+        ";
+
+        await SendEmailAsync(toEmail, subject, body);
+    }
+
+    public async Task SendOverdueEscalationEmailAsync(string toEmail, string toName, string taskTitle, DateTime deadline)
+    {
+        var subject = $"STARS ALERT: Task Overdue - {taskTitle}";
+        var body = $@"
+            <html>
+            <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <h2 style='color: #e74c3c;'>Task Overdue Alert</h2>
+                    <p>Dear {toName},</p>
+                    <div style='background-color: #fde8e8; padding: 15px; border-radius: 5px; border-left: 4px solid #e74c3c; margin: 20px 0;'>
+                        <p style='margin: 0;'><strong>Task:</strong> {taskTitle}</p>
+                        <p style='margin: 5px 0 0;'><strong>Deadline was:</strong> {deadline:MMM dd, yyyy h:mm tt}</p>
+                    </div>
+                    <p>This task has passed its deadline and requires immediate attention.</p>
+                    <div style='text-align: center; margin: 30px 0;'>
+                        <a href='http://localhost:5173' style='background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;'>View Task</a>
+                    </div>
+                    <p>Best regards,<br/>STARS System</p>
+                    <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'/>
+                    <p style='font-size: 12px; color: #999;'>This is an automated escalation alert.</p>
+                </div>
+            </body>
+            </html>
+        ";
+
+        await SendEmailAsync(toEmail, subject, body);
+    }
+
 
     private async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {

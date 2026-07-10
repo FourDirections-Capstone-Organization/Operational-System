@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<Models.Task> Tasks => Set<Models.Task>();
     public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -120,6 +122,33 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(a => a.UploadedById)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Notification Configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Message).IsRequired().HasMaxLength(1000);
+
+            entity.HasOne(n => n.Recipient)
+                .WithMany()
+                .HasForeignKey(n => n.RecipientId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(n => n.RelatedTask)
+                .WithMany()
+                .HasForeignKey(n => n.RelatedTaskId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => new { e.RecipientId, e.IsRead });
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // NotificationSettings Configuration
+        modelBuilder.Entity<NotificationSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id);
         });
     }
 }

@@ -12,6 +12,7 @@ using Backend.Modules.AuthenticationAndCredentials;
 using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.TaskManagement;
+using Backend.Modules.Notifications;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,6 +95,9 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+builder.Services.AddHostedService<OverdueCheckService>();
 
 var app = builder.Build();
 
@@ -114,6 +118,10 @@ using (var scope = app.Services.CreateScope())
     // FOR TESTING ONLY - REMOVE FOR PRODUCTION
     // Seeds test accounts: 2x Coordinator, 2x Dispatcher, 2x Encoder, 2x Courier
     await userService.SeedTestAccountsAsync();
+
+    // Seed default notification settings
+    var notificationSettingsService = scope.ServiceProvider.GetRequiredService<INotificationSettingsService>();
+    await notificationSettingsService.SeedDefaultSettingsAsync();
 }
 
 if (app.Environment.IsDevelopment())
