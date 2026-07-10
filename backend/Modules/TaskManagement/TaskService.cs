@@ -430,7 +430,12 @@ public class TaskService : ITaskService
             ProgressNotes = task.ProgressNotes,
             ReviewRemarks = task.ReviewRemarks,
             PushBackComment = task.PushBackComment,
+            HoldReason = task.HoldReason,
+            CancellationReason = task.CancellationReason,
             IsApproved = task.IsApproved,
+            PreviousStatus = task.PreviousStatus,
+            RevisedDeadline = task.RevisedDeadline,
+            HeldAt = task.HeldAt,
             Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
             {
                 UserId = a.AssignedUserId,
