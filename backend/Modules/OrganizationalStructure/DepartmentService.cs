@@ -157,7 +157,7 @@ public class DepartmentService : IDepartmentService
         return ApiResponseDTO<bool>.Success(true, "Department deactivated successfully");
     }
 
-    public async Task SeedDefaultDepartmentsAsync()
+    public async System.Threading.Tasks.Task SeedDefaultDepartmentsAsync()
     {
         var defaultDepartments = new[]
         {
