@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<Recommendation> Recommendations => Set<Recommendation>();
+    public DbSet<TaskComment> TaskComments => Set<TaskComment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -174,6 +176,53 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<NotificationSettings>(entity =>
         {
             entity.HasKey(e => e.Id);
+        });
+
+        // Recommendation Configuration
+        modelBuilder.Entity<Recommendation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Notes).IsRequired().HasMaxLength(1000);
+
+            entity.HasOne(r => r.Task)
+                .WithMany()
+                .HasForeignKey(r => r.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.Assignee)
+                .WithMany()
+                .HasForeignKey(r => r.AssigneeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Coordinator)
+                .WithMany()
+                .HasForeignKey(r => r.CoordinatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.AssigneeId);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // TaskComment Configuration
+        modelBuilder.Entity<TaskComment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Content).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.AttachmentFilePath).HasMaxLength(500);
+            entity.Property(e => e.AttachmentFileName).HasMaxLength(255);
+
+            entity.HasOne(c => c.Task)
+                .WithMany()
+                .HasForeignKey(c => c.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.Author)
+                .WithMany()
+                .HasForeignKey(c => c.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => new { e.TaskId, e.IsDeleted });
+            entity.HasIndex(e => e.CreatedAt);
         });
     }
 }
