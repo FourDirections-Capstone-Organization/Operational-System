@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Modules.Notifications;
 using Microsoft.Extensions.Options;
 
 namespace Backend.Modules.TaskManagement;
@@ -11,15 +12,18 @@ public class TaskCommentService : ITaskCommentService
     private readonly AppDbContext _db;
     private readonly FileStorageSettings _fileSettings;
     private readonly ILogger<TaskCommentService> _logger;
+    private readonly INotificationService _notificationService;
 
     public TaskCommentService(
         AppDbContext db,
         IOptions<FileStorageSettings> fileSettings,
-        ILogger<TaskCommentService> logger)
+        ILogger<TaskCommentService> logger,
+        INotificationService notificationService)
     {
         _db = db;
         _fileSettings = fileSettings.Value;
         _logger = logger;
+        _notificationService = notificationService;
     }
 
     public async Task<ApiResponseDTO<TaskCommentResponseDTO>> CreateAsync(
@@ -75,6 +79,39 @@ public class TaskCommentService : ITaskCommentService
 
         _db.TaskComments.Add(comment);
         await _db.SaveChangesAsync();
+
+        var task = await _db.Tasks
+            .Include(t => t.Assignments)
+            .Include(t => t.CreatedBy)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+
+        if (task is not null)
+        {
+            var authorName = $"{author.FirstName} {author.LastName}".Trim();
+            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            var recipientIds = task.Assignments
+                .Select(a => a.AssignedUserId)
+                .ToList();
+
+            // Adds the task's creator to the notification list. So if the Coordinator creates the task and an assigned employee adds the comment, the Coordinator gets notified.
+            if (task.CreatedById != Guid.Empty)
+                recipientIds.Add(task.CreatedById);
+
+            recipientIds = recipientIds
+                .Where(id => id != authorId)
+                .Distinct()
+                .ToList();
+
+            if (recipientIds.Count > 0)
+            {
+                await _notificationService.SendBulkNotificationAsync(
+                    recipientIds,
+                    Models.Enums.NotificationType.TaskUpdated,
+                    "New Comment on Task",
+                    $"{authorName} commented on task '{taskTitle}'.",
+                    taskId);
+            }
+        }
 
         return ApiResponseDTO<TaskCommentResponseDTO>.Success(
             await MapToResponseDTOAsync(comment),
