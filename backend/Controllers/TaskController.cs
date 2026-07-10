@@ -1,0 +1,123 @@
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Backend.Data;
+using Backend.Models;
+using Backend.Models.DTOs;
+using Backend.Models.Enums;
+using Backend.Modules.TaskManagement;
+using Backend.Modules.RoleBasedAccessControl;
+
+namespace Backend.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class TaskController : ControllerBase
+{
+    private readonly ITaskService _taskService;
+    private readonly AppDbContext _db;
+
+    public TaskController(ITaskService taskService, AppDbContext db)
+    {
+        _taskService = taskService;
+        _db = db;
+    }
+
+    [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> Create(CreateTaskDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var creatorId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _taskService.CreateAsync(dto, creatorId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] Models.Enums.TaskStatus? status = null,
+        [FromQuery] PriorityLevel? priority = null,
+        [FromQuery] TaskClassification? classification = null,
+        [FromQuery] Guid? assignedToUserId = null,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] string? search = null)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        Guid? requestUserDepartmentId = null;
+        if (requestUserRole == UserRole.Coordinator)
+        {
+            var user = await _db.Users.FindAsync(requestUserId);
+            requestUserDepartmentId = user?.DepartmentId;
+        }
+
+        var result = await _taskService.GetAllAsync(
+            requestUserId, requestUserRole, requestUserDepartmentId,
+            status, priority, classification, assignedToUserId, departmentId, search);
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        var result = await _taskService.GetByIdAsync(id, requestUserId, requestUserRole);
+        if (!result.IsSuccess)
+        {
+            if (result.Message.Contains("Access denied"))
+                return StatusCode(403, result);
+
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> Update(Guid id, UpdateTaskDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _taskService.UpdateAsync(id, dto, requestUserId);
+        if (!result.IsSuccess)
+        {
+            if (result.Message.Contains("not found"))
+                return NotFound(result);
+
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpGet("assignable-users")]
+    public async Task<IActionResult> GetAssignableUsers()
+    {
+        var result = await _taskService.GetAssignableUsersAsync();
+        return Ok(result);
+    }
+}

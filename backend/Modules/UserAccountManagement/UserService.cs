@@ -361,7 +361,7 @@ public class UserService : IUserService
         };
     }
 
-    public async Task SeedDefaultManagerAsync()
+    public async System.Threading.Tasks.Task SeedDefaultManagerAsync()
     {
         var managerEmail = "manager@stars.com";
         var managerExists = await _db.Users.AnyAsync(u => u.Email.ToLower() == managerEmail.ToLower());

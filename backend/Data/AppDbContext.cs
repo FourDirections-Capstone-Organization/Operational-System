@@ -10,6 +10,9 @@ public class AppDbContext : DbContext
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<JobPosition> JobPositions => Set<JobPosition>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Models.Task> Tasks => Set<Models.Task>();
+    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
+    public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +64,62 @@ public class AppDbContext : DbContext
            entity.HasIndex(e => e.EmployeeNumber).IsUnique();
            entity.HasIndex(e => e.Email).IsUnique();
            entity.HasIndex(e => e.Username).IsUnique().HasFilter("\"Username\" IS NOT NULL");
+        });
+
+        // Task Configuration
+        modelBuilder.Entity<Models.Task>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(150);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(2000);
+
+            entity.HasOne(t => t.CreatedBy)
+                .WithMany()
+                .HasForeignKey(t => t.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.AssignedDepartment)
+                .WithMany()
+                .HasForeignKey(t => t.AssignedDepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // TaskAssignment Configuration
+        modelBuilder.Entity<TaskAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne(ta => ta.Task)
+                .WithMany(t => t.Assignments)
+                .HasForeignKey(ta => ta.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(ta => ta.AssignedUser)
+                .WithMany()
+                .HasForeignKey(ta => ta.AssignedUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => new { e.TaskId, e.AssignedUserId }).IsUnique();
+        });
+
+        // TaskAttachment Configuration
+        modelBuilder.Entity<TaskAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.FilePath).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.FileType).HasMaxLength(20);
+            entity.Property(e => e.Description).HasMaxLength(250);
+
+            entity.HasOne(a => a.Task)
+                .WithMany(t => t.Attachments)
+                .HasForeignKey(a => a.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.UploadedBy)
+                .WithMany()
+                .HasForeignKey(a => a.UploadedById)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
