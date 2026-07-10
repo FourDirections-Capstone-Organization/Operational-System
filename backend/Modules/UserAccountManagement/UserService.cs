@@ -396,4 +396,66 @@ public class UserService : IUserService
 
         _logger.LogInformation("Default manager created: {Email} with temporary password: {Password}", managerEmail, tempPassword);
     }
+
+    public async System.Threading.Tasks.Task SeedTestAccountsAsync()
+    {
+        // ============================================================================
+        // FOR TESTING ONLY - REMOVE FOR PRODUCTION
+        // These accounts are for development and testing purposes only.
+        // They should be removed or disabled before deploying to production.
+        // ============================================================================
+
+        var departments = await _db.Departments.ToListAsync();
+        var coordinatorDept = departments.FirstOrDefault(d => d.Name == "Coordinator & Customer Service Team");
+        var dispatchDept = departments.FirstOrDefault(d => d.Name == "Dispatch Team");
+        var forwardingDept = departments.FirstOrDefault(d => d.Name == "Forwarding Team (Vismin Airline Cargo Forwarders)");
+
+        var testAccounts = new[]
+        {
+            new { EmployeeNumber = "CRD001", Email = "coordinator1@stars.com", FirstName = "Test", LastName = "Coordinator1", Role = UserRole.Coordinator, DepartmentId = coordinatorDept?.Id },
+            new { EmployeeNumber = "CRD002", Email = "coordinator2@stars.com", FirstName = "Test", LastName = "Coordinator2", Role = UserRole.Coordinator, DepartmentId = dispatchDept?.Id },
+            new { EmployeeNumber = "DSP001", Email = "dispatcher1@stars.com", FirstName = "Test", LastName = "Dispatcher1", Role = UserRole.Dispatcher, DepartmentId = dispatchDept?.Id },
+            new { EmployeeNumber = "DSP002", Email = "dispatcher2@stars.com", FirstName = "Test", LastName = "Dispatcher2", Role = UserRole.Dispatcher, DepartmentId = dispatchDept?.Id },
+            new { EmployeeNumber = "ENC001", Email = "encoder1@stars.com", FirstName = "Test", LastName = "Encoder1", Role = UserRole.Encoder, DepartmentId = forwardingDept?.Id },
+            new { EmployeeNumber = "ENC002", Email = "encoder2@stars.com", FirstName = "Test", LastName = "Encoder2", Role = UserRole.Encoder, DepartmentId = forwardingDept?.Id },
+            new { EmployeeNumber = "CRS001", Email = "courier1@stars.com", FirstName = "Test", LastName = "Courier1", Role = UserRole.Courier, DepartmentId = dispatchDept?.Id },
+            new { EmployeeNumber = "CRS002", Email = "courier2@stars.com", FirstName = "Test", LastName = "Courier2", Role = UserRole.Courier, DepartmentId = forwardingDept?.Id }
+        };
+
+        var passwordHasher = new PasswordHasher<User>();
+        var tempPassword = "Test@2024!Pass";
+
+        foreach (var account in testAccounts)
+        {
+            var exists = await _db.Users.AnyAsync(u => u.Email.ToLower() == account.Email.ToLower());
+            if (exists)
+            {
+                _logger.LogInformation("Test account already exists: {Email}", account.Email);
+                continue;
+            }
+
+            var user = new User
+            {
+                EmployeeNumber = account.EmployeeNumber,
+                Email = account.Email,
+                FirstName = account.FirstName,
+                LastName = account.LastName,
+                Role = account.Role,
+                DepartmentId = account.DepartmentId,
+                IsActive = true,
+                IsDeactivated = false,
+                IsEmailVerified = true,
+                IsPasswordChanged = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            user.PasswordHash = passwordHasher.HashPassword(user, tempPassword);
+            _db.Users.Add(user);
+
+            _logger.LogInformation("Test account created: {Email} ({Role}) with password: {Password}", account.Email, account.Role, tempPassword);
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Test accounts seeding completed");
+    }
 }
