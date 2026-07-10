@@ -39,6 +39,8 @@ public class TaskWorkflowService : ITaskWorkflowService
             return ApiResponseDTO<TaskResponseDTO>.Failure(transitionCheck.ErrorMessage!);
 
         task.Status = newStatus;
+        if (!string.IsNullOrWhiteSpace(dto.ProgressNotes))
+            task.ProgressNotes = dto.ProgressNotes.Trim();
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -112,6 +114,9 @@ public class TaskWorkflowService : ITaskWorkflowService
         if (dto.IsApproved)
         {
             task.Status = Models.Enums.TaskStatus.Completed;
+            task.IsApproved = true;
+            if (!string.IsNullOrWhiteSpace(dto.Remarks))
+                task.ReviewRemarks = dto.Remarks.Trim();
             task.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -127,6 +132,8 @@ public class TaskWorkflowService : ITaskWorkflowService
                     "Remarks are required when returning a task for rework");
 
             task.Status = Models.Enums.TaskStatus.InProgress;
+            task.IsApproved = false;
+            task.ReviewRemarks = dto.Remarks.Trim();
             task.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -346,6 +353,9 @@ public class TaskWorkflowService : ITaskWorkflowService
                 : null,
             AssignedDepartmentId = task.AssignedDepartmentId,
             AssignedDepartmentName = task.AssignedDepartment?.Name,
+            ProgressNotes = task.ProgressNotes,
+            ReviewRemarks = task.ReviewRemarks,
+            IsApproved = task.IsApproved,
             Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
             {
                 UserId = a.AssignedUserId,

@@ -38,6 +38,9 @@ public class Task
 
     public string? HoldReason { get; set; }
     public string? CancellationReason { get; set; }
+    public string? ProgressNotes { get; set; }
+    public string? ReviewRemarks { get; set; }
+    public bool? IsApproved { get; set; }
     public Enums.TaskStatus? PreviousStatus { get; set; }
     public DateTime? RevisedDeadline { get; set; }
     public DateTime? HeldAt { get; set; }

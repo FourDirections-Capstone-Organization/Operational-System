@@ -427,6 +427,9 @@ public class TaskService : ITaskService
                 : null,
             AssignedDepartmentId = task.AssignedDepartmentId,
             AssignedDepartmentName = task.AssignedDepartment?.Name,
+            ProgressNotes = task.ProgressNotes,
+            ReviewRemarks = task.ReviewRemarks,
+            IsApproved = task.IsApproved,
             Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
             {
                 UserId = a.AssignedUserId,

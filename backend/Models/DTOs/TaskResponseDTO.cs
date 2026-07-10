@@ -18,6 +18,9 @@ public class TaskResponseDTO
     public string? CreatedByName { get; set; }
     public Guid? AssignedDepartmentId { get; set; }
     public string? AssignedDepartmentName { get; set; }
+    public string? ProgressNotes { get; set; }
+    public string? ReviewRemarks { get; set; }
+    public bool? IsApproved { get; set; }
     public List<TaskAssigneeDTO> Assignees { get; set; } = new();
     public int AttachmentCount { get; set; }
     public DateTime CreatedAt { get; set; }
