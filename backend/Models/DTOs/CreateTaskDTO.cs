@@ -1,0 +1,32 @@
+﻿using System.ComponentModel.DataAnnotations;
+using Backend.Models.Enums;
+
+namespace Backend.Models.DTOs;
+
+public class CreateTaskDTO
+{
+    [Required]
+    [MaxLength(150)]
+    public string Title { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(2000)]
+    public string Description { get; set; } = string.Empty;
+
+    [Required]
+    public PriorityLevel PriorityLevel { get; set; }
+
+    [Required]
+    public TaskClassification Classification { get; set; }
+
+    [Required]
+    public AssignmentScope AssignmentScope { get; set; }
+
+    public DateTime? Deadline { get; set; }
+
+    public List<Guid>? AssignedUserIds { get; set; }
+
+    public Guid? AssignedDepartmentId { get; set; }
+
+    public bool IsConfidential { get; set; } = false;
+}

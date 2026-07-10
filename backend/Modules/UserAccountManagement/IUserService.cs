@@ -13,5 +13,6 @@ public interface IUserService
     Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id);
     Task<ApiResponseDTO<bool>> ActivateAsync(Guid id);
     Task<ApiResponseDTO<string>> GenerateEmployeeNumberAsync();
-    Task SeedDefaultManagerAsync();
+    System.Threading.Tasks.Task SeedDefaultManagerAsync();
+    System.Threading.Tasks.Task SeedTestAccountsAsync();
 }

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Backend.Modules.AuthenticationAndCredentials;
 using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
+using Backend.Modules.TaskManagement;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,10 +47,11 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configure SMTP settings
+// Configure settings
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 builder.Services.Configure<SessionSettings>(builder.Configuration.GetSection("SessionSettings"));
+builder.Services.Configure<FileStorageSettings>(builder.Configuration.GetSection("FileStorageSettings"));
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
 
@@ -89,6 +91,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
+builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
 
 var app = builder.Build();
 
@@ -105,6 +110,10 @@ using (var scope = app.Services.CreateScope())
     // Seed default manager
     var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
     await userService.SeedDefaultManagerAsync();
+
+    // FOR TESTING ONLY - REMOVE FOR PRODUCTION
+    // Seeds test accounts: 2x Coordinator, 2x Dispatcher, 2x Encoder, 2x Courier
+    await userService.SeedTestAccountsAsync();
 }
 
 if (app.Environment.IsDevelopment())
