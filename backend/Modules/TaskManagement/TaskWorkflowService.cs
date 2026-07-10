@@ -78,6 +78,7 @@ public class TaskWorkflowService : ITaskWorkflowService
                 "A comment is required to push back a task");
 
         task.Status = Models.Enums.TaskStatus.InProgress;
+        task.PushBackComment = dto.Comment.Trim();
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -355,6 +356,7 @@ public class TaskWorkflowService : ITaskWorkflowService
             AssignedDepartmentName = task.AssignedDepartment?.Name,
             ProgressNotes = task.ProgressNotes,
             ReviewRemarks = task.ReviewRemarks,
+            PushBackComment = task.PushBackComment,
             IsApproved = task.IsApproved,
             Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
             {

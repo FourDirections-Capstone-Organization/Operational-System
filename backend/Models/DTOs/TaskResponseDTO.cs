@@ -20,6 +20,7 @@ public class TaskResponseDTO
     public string? AssignedDepartmentName { get; set; }
     public string? ProgressNotes { get; set; }
     public string? ReviewRemarks { get; set; }
+    public string? PushBackComment { get; set; }
     public bool? IsApproved { get; set; }
     public List<TaskAssigneeDTO> Assignees { get; set; } = new();
     public int AttachmentCount { get; set; }

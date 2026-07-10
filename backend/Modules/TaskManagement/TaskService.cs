@@ -429,6 +429,7 @@ public class TaskService : ITaskService
             AssignedDepartmentName = task.AssignedDepartment?.Name,
             ProgressNotes = task.ProgressNotes,
             ReviewRemarks = task.ReviewRemarks,
+            PushBackComment = task.PushBackComment,
             IsApproved = task.IsApproved,
             Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
             {

@@ -40,6 +40,7 @@ public class Task
     public string? CancellationReason { get; set; }
     public string? ProgressNotes { get; set; }
     public string? ReviewRemarks { get; set; }
+    public string? PushBackComment { get; set; }
     public bool? IsApproved { get; set; }
     public Enums.TaskStatus? PreviousStatus { get; set; }
     public DateTime? RevisedDeadline { get; set; }
