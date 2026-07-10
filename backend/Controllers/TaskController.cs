@@ -16,11 +16,13 @@ namespace Backend.Controllers;
 public class TaskController : ControllerBase
 {
     private readonly ITaskService _taskService;
+    private readonly ITaskWorkflowService _workflowService;
     private readonly AppDbContext _db;
 
-    public TaskController(ITaskService taskService, AppDbContext db)
+    public TaskController(ITaskService taskService, ITaskWorkflowService workflowService, AppDbContext db)
     {
         _taskService = taskService;
+        _workflowService = workflowService;
         _db = db;
     }
 
@@ -118,6 +120,95 @@ public class TaskController : ControllerBase
     public async Task<IActionResult> GetAssignableUsers()
     {
         var result = await _taskService.GetAssignableUsersAsync();
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> UpdateStatus(Guid id, TaskStatusUpdateDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var parsedUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.UpdateStatusAsync(id, dto, parsedUserId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/push-back")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> PushBack(Guid id, PushBackDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.PushBackAsync(id, dto, coordinatorId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/review")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> Review(Guid id, ReviewTaskDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var reviewerId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.ReviewTaskAsync(id, dto, reviewerId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/hold")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> PlaceOnHold(Guid id, PlaceOnHoldDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.PlaceOnHoldAsync(id, dto, coordinatorId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/resume")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> Resume(Guid id, ResumeTaskDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.ResumeTaskAsync(id, dto, coordinatorId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    [HttpPatch("{id:guid}/cancel")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> Cancel(Guid id, CancelTaskDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var result = await _workflowService.CancelTaskAsync(id, dto, coordinatorId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
         return Ok(result);
     }
 }

@@ -93,6 +93,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
 
 var app = builder.Build();
 
@@ -109,6 +110,10 @@ using (var scope = app.Services.CreateScope())
     // Seed default manager
     var userService = scope.ServiceProvider.GetRequiredService<IUserService>();
     await userService.SeedDefaultManagerAsync();
+
+    // FOR TESTING ONLY - REMOVE FOR PRODUCTION
+    // Seeds test accounts: 2x Coordinator, 2x Dispatcher, 2x Encoder, 2x Courier
+    await userService.SeedTestAccountsAsync();
 }
 
 if (app.Environment.IsDevelopment())

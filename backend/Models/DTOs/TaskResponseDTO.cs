@@ -18,6 +18,15 @@ public class TaskResponseDTO
     public string? CreatedByName { get; set; }
     public Guid? AssignedDepartmentId { get; set; }
     public string? AssignedDepartmentName { get; set; }
+    public string? ProgressNotes { get; set; }
+    public string? ReviewRemarks { get; set; }
+    public string? PushBackComment { get; set; }
+    public string? HoldReason { get; set; }
+    public string? CancellationReason { get; set; }
+    public bool? IsApproved { get; set; }
+    public Enums.TaskStatus? PreviousStatus { get; set; }
+    public DateTime? RevisedDeadline { get; set; }
+    public DateTime? HeldAt { get; set; }
     public List<TaskAssigneeDTO> Assignees { get; set; } = new();
     public int AttachmentCount { get; set; }
     public DateTime CreatedAt { get; set; }
