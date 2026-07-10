@@ -1,0 +1,360 @@
+using Microsoft.EntityFrameworkCore;
+using Backend.Data;
+using Backend.Models;
+using Backend.Models.DTOs;
+using Backend.Models.Enums;
+using Backend.Modules.Notifications;
+
+namespace Backend.Modules.TaskManagement;
+
+public class TaskTemplateService : ITaskTemplateService
+{
+    private readonly AppDbContext _db;
+    private readonly INotificationService _notificationService;
+
+    public TaskTemplateService(AppDbContext db, INotificationService notificationService)
+    {
+        _db = db;
+        _notificationService = notificationService;
+    }
+
+    public async Task<ApiResponseDTO<TaskTemplateResponseDTO>> CreateAsync(
+        CreateTaskTemplateDTO dto, Guid creatorId)
+    {
+        var creator = await _db.Users.FindAsync(creatorId);
+        if (creator is null)
+            return ApiResponseDTO<TaskTemplateResponseDTO>.Failure("Creator not found");
+
+        if (creator.Role != UserRole.Coordinator && creator.Role != UserRole.Manager)
+            return ApiResponseDTO<TaskTemplateResponseDTO>.Failure(
+                "Only Coordinators and Managers can create task templates");
+
+        if (dto.DefaultAssigneeId.HasValue)
+        {
+            var assigneeExists = await _db.Users
+                .AnyAsync(u => u.Id == dto.DefaultAssigneeId.Value && u.IsActive && !u.IsDeactivated);
+
+            if (!assigneeExists)
+                return ApiResponseDTO<TaskTemplateResponseDTO>.Failure(
+                    "Default assignee is inactive or does not exist");
+        }
+
+        if (dto.DefaultDepartmentId.HasValue)
+        {
+            var deptExists = await _db.Departments
+                .AnyAsync(d => d.Id == dto.DefaultDepartmentId.Value && d.IsActive);
+
+            if (!deptExists)
+                return ApiResponseDTO<TaskTemplateResponseDTO>.Failure(
+                    "Default department is inactive or does not exist");
+        }
+
+        var nextGenDate = CalculateNextGenerationDate(dto.RecurrenceStartDate, dto.RecurrenceRule);
+
+        var template = new TaskTemplate
+        {
+            TemplateName = dto.TemplateName.Trim(),
+            DefaultTitle = dto.DefaultTitle.Trim(),
+            DefaultDescription = dto.DefaultDescription.Trim(),
+            DefaultPriorityLevel = dto.DefaultPriorityLevel,
+            DefaultClassification = dto.DefaultClassification,
+            DefaultAssignmentScope = dto.DefaultAssignmentScope,
+            DefaultAssigneeId = dto.DefaultAssigneeId,
+            DefaultDepartmentId = dto.DefaultDepartmentId,
+            RecurrenceRule = dto.RecurrenceRule,
+            RecurrenceStartDate = dto.RecurrenceStartDate,
+            NextGenerationDate = nextGenDate,
+            IsActive = dto.IsActive,
+            CreatedById = creatorId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.TaskTemplates.Add(template);
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<TaskTemplateResponseDTO>.Success(
+            await MapToResponseDTOAsync(template),
+            "Task template created successfully");
+    }
+
+    public async Task<ApiResponseDTO<List<TaskTemplateResponseDTO>>> GetAllAsync()
+    {
+        var templates = await _db.TaskTemplates
+            .Include(t => t.DefaultAssignee)
+            .Include(t => t.DefaultDepartment)
+            .Include(t => t.CreatedBy)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+
+        var response = new List<TaskTemplateResponseDTO>();
+        foreach (var template in templates)
+        {
+            response.Add(await MapToResponseDTOAsync(template));
+        }
+
+        return ApiResponseDTO<List<TaskTemplateResponseDTO>>.Success(response);
+    }
+
+    public async Task<ApiResponseDTO<TaskTemplateResponseDTO>> GetByIdAsync(Guid id)
+    {
+        var template = await _db.TaskTemplates
+            .Include(t => t.DefaultAssignee)
+            .Include(t => t.DefaultDepartment)
+            .Include(t => t.CreatedBy)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (template is null)
+            return ApiResponseDTO<TaskTemplateResponseDTO>.Failure("Template not found");
+
+        return ApiResponseDTO<TaskTemplateResponseDTO>.Success(await MapToResponseDTOAsync(template));
+    }
+
+    public async Task<ApiResponseDTO<TaskTemplateResponseDTO>> UpdateAsync(
+        Guid id, UpdateTaskTemplateDTO dto)
+    {
+        var template = await _db.TaskTemplates
+            .Include(t => t.DefaultAssignee)
+            .Include(t => t.DefaultDepartment)
+            .Include(t => t.CreatedBy)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (template is null)
+            return ApiResponseDTO<TaskTemplateResponseDTO>.Failure("Template not found");
+
+        if (!string.IsNullOrWhiteSpace(dto.TemplateName))
+            template.TemplateName = dto.TemplateName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(dto.DefaultTitle))
+            template.DefaultTitle = dto.DefaultTitle.Trim();
+
+        if (!string.IsNullOrWhiteSpace(dto.DefaultDescription))
+            template.DefaultDescription = dto.DefaultDescription.Trim();
+
+        if (dto.DefaultPriorityLevel.HasValue)
+            template.DefaultPriorityLevel = dto.DefaultPriorityLevel.Value;
+
+        if (dto.DefaultClassification.HasValue)
+            template.DefaultClassification = dto.DefaultClassification.Value;
+
+        if (dto.DefaultAssignmentScope.HasValue)
+            template.DefaultAssignmentScope = dto.DefaultAssignmentScope.Value;
+
+        if (dto.DefaultAssigneeId.HasValue)
+            template.DefaultAssigneeId = dto.DefaultAssigneeId;
+
+        if (dto.DefaultDepartmentId.HasValue)
+            template.DefaultDepartmentId = dto.DefaultDepartmentId;
+
+        if (dto.RecurrenceRule.HasValue || dto.RecurrenceStartDate.HasValue)
+        {
+            var rule = dto.RecurrenceRule ?? template.RecurrenceRule;
+            var startDate = dto.RecurrenceStartDate ?? template.RecurrenceStartDate;
+            template.RecurrenceRule = rule;
+            template.RecurrenceStartDate = startDate;
+            template.NextGenerationDate = CalculateNextGenerationDate(startDate, rule);
+        }
+
+        if (dto.IsActive.HasValue)
+            template.IsActive = dto.IsActive.Value;
+
+        template.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<TaskTemplateResponseDTO>.Success(
+            await MapToResponseDTOAsync(template),
+            "Task template updated successfully");
+    }
+
+    public async Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id)
+    {
+        var template = await _db.TaskTemplates.FindAsync(id);
+
+        if (template is null)
+            return ApiResponseDTO<bool>.Failure("Template not found");
+
+        if (!template.IsActive)
+            return ApiResponseDTO<bool>.Failure("Template is already inactive");
+
+        template.IsActive = false;
+        template.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<bool>.Success(true, "Template deactivated successfully");
+    }
+
+    public async Task<ApiResponseDTO<TaskResponseDTO>> DeployManuallyAsync(Guid id, Guid coordinatorId)
+    {
+        var template = await _db.TaskTemplates
+            .Include(t => t.DefaultAssignee)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (template is null)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("Template not found");
+
+        if (!template.IsActive)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("Template is Inactive and cannot be deployed");
+
+        var now = DateTime.UtcNow;
+        var deadline = CalculateDeadline(template.DefaultPriorityLevel, now);
+
+        var task = new Models.Task
+        {
+            Title = template.DefaultTitle,
+            Description = template.DefaultDescription,
+            PriorityLevel = template.DefaultPriorityLevel,
+            Classification = template.DefaultClassification,
+            Status = Models.Enums.TaskStatus.NotStarted,
+            AssignmentScope = template.DefaultAssignmentScope,
+            Deadline = deadline,
+            IsSLALocked = template.DefaultPriorityLevel == PriorityLevel.Urgent,
+            CreatedById = coordinatorId,
+            AssignedDepartmentId = template.DefaultDepartmentId,
+            CreatedAt = now
+        };
+
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var assigneeIds = new List<Guid>();
+
+        if (template.DefaultAssigneeId.HasValue)
+        {
+            var assigneeAvailable = await _db.Users
+                .AnyAsync(u => u.Id == template.DefaultAssigneeId.Value
+                    && u.IsActive && !u.IsDeactivated);
+
+            if (assigneeAvailable)
+            {
+                assigneeIds.Add(template.DefaultAssigneeId.Value);
+            }
+        }
+
+        if (template.DefaultAssignmentScope == AssignmentScope.Department
+            && template.DefaultDepartmentId.HasValue)
+        {
+            var deptUsers = await _db.Users
+                .Where(u => u.DepartmentId == template.DefaultDepartmentId.Value
+                    && u.IsActive && !u.IsDeactivated)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            assigneeIds.AddRange(deptUsers);
+        }
+
+        assigneeIds = assigneeIds.Distinct().ToList();
+
+        foreach (var userId in assigneeIds)
+        {
+            _db.TaskAssignments.Add(new TaskAssignment
+            {
+                TaskId = task.Id,
+                AssignedUserId = userId,
+                AssignedAt = now
+            });
+        }
+
+        if (assigneeIds.Count > 0)
+            await _db.SaveChangesAsync();
+
+        foreach (var userId in assigneeIds)
+        {
+            await _notificationService.SendNotificationAsync(
+                userId,
+                NotificationType.TaskAssigned,
+                "New Task Assigned",
+                $"You have been assigned task '{task.Title}' (deployed from template).",
+                task.Id);
+        }
+
+        await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
+        await _db.Entry(task).Collection(t => t.Assignments).LoadAsync();
+
+        return ApiResponseDTO<TaskResponseDTO>.Success(
+            await MapTaskToResponseDTOAsync(task),
+            "Task deployed manually successfully");
+    }
+
+    public static DateTime CalculateNextGenerationDate(DateTime fromDate, RecurrenceRule rule)
+    {
+        return rule switch
+        {
+            RecurrenceRule.Daily => fromDate.AddDays(1),
+            RecurrenceRule.Weekly => fromDate.AddDays(7),
+            RecurrenceRule.Monthly => fromDate.AddMonths(1),
+            _ => fromDate.AddDays(1)
+        };
+    }
+
+    private static DateTime CalculateDeadline(PriorityLevel priority, DateTime createdAt)
+    {
+        if (priority == PriorityLevel.Urgent)
+            return createdAt.AddHours(24);
+
+        return createdAt.AddDays(7);
+    }
+
+    private async Task<TaskTemplateResponseDTO> MapToResponseDTOAsync(TaskTemplate template)
+    {
+        return new TaskTemplateResponseDTO
+        {
+            Id = template.Id,
+            TemplateName = template.TemplateName,
+            DefaultTitle = template.DefaultTitle,
+            DefaultDescription = template.DefaultDescription,
+            DefaultPriorityLevel = template.DefaultPriorityLevel,
+            DefaultClassification = template.DefaultClassification,
+            DefaultAssignmentScope = template.DefaultAssignmentScope,
+            DefaultAssigneeId = template.DefaultAssigneeId,
+            DefaultAssigneeName = template.DefaultAssignee is not null
+                ? $"{template.DefaultAssignee.FirstName} {template.DefaultAssignee.LastName}".Trim()
+                : null,
+            DefaultDepartmentId = template.DefaultDepartmentId,
+            DefaultDepartmentName = template.DefaultDepartment?.Name,
+            RecurrenceRule = template.RecurrenceRule,
+            RecurrenceStartDate = template.RecurrenceStartDate,
+            NextGenerationDate = template.NextGenerationDate,
+            LastGeneratedDate = template.LastGeneratedDate,
+            IsActive = template.IsActive,
+            CreatedById = template.CreatedById,
+            CreatedByName = template.CreatedBy is not null
+                ? $"{template.CreatedBy.FirstName} {template.CreatedBy.LastName}".Trim()
+                : null,
+            CreatedAt = template.CreatedAt
+        };
+    }
+
+    private async Task<TaskResponseDTO> MapTaskToResponseDTOAsync(Models.Task task)
+    {
+        return new TaskResponseDTO
+        {
+            Id = task.Id,
+            Title = task.Title,
+            Description = task.Description,
+            PriorityLevel = task.PriorityLevel,
+            Classification = task.Classification,
+            Status = task.Status,
+            AssignmentScope = task.AssignmentScope,
+            Deadline = task.Deadline,
+            IsSLALocked = task.IsSLALocked,
+            IsConfidential = task.IsConfidential,
+            CreatedById = task.CreatedById,
+            CreatedByName = task.CreatedBy is not null
+                ? $"{task.CreatedBy.FirstName} {task.CreatedBy.LastName}".Trim()
+                : null,
+            AssignedDepartmentId = task.AssignedDepartmentId,
+            AssignedDepartmentName = task.AssignedDepartment?.Name,
+            Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
+            {
+                UserId = a.AssignedUserId,
+                FullName = a.AssignedUser is not null
+                    ? $"{a.AssignedUser.FirstName} {a.AssignedUser.LastName}".Trim()
+                    : "Unknown",
+                EmployeeNumber = a.AssignedUser?.EmployeeNumber ?? "",
+                Role = a.AssignedUser?.Role.ToString()
+            }).ToList(),
+            AttachmentCount = 0,
+            CreatedAt = task.CreatedAt,
+            UpdatedAt = task.UpdatedAt
+        };
+    }
+}

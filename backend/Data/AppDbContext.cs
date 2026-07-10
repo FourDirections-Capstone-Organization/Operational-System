@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Models.Task> Tasks => Set<Models.Task>();
     public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
+    public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
 
@@ -121,6 +122,30 @@ public class AppDbContext : DbContext
             entity.HasOne(a => a.UploadedBy)
                 .WithMany()
                 .HasForeignKey(a => a.UploadedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // TaskTemplate Configuration
+        modelBuilder.Entity<TaskTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TemplateName).IsRequired().HasMaxLength(150);
+            entity.Property(e => e.DefaultTitle).IsRequired().HasMaxLength(150);
+            entity.Property(e => e.DefaultDescription).IsRequired().HasMaxLength(2000);
+
+            entity.HasOne(t => t.DefaultAssignee)
+                .WithMany()
+                .HasForeignKey(t => t.DefaultAssigneeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.DefaultDepartment)
+                .WithMany()
+                .HasForeignKey(t => t.DefaultDepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.CreatedBy)
+                .WithMany()
+                .HasForeignKey(t => t.CreatedById)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

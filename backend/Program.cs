@@ -97,7 +97,13 @@ builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+builder.Services.AddScoped<ITaskTemplateService, TaskTemplateService>();
+
+
+// Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
+builder.Services.AddHostedService<RecurringTaskGenerator>();
+
 
 var app = builder.Build();
 
