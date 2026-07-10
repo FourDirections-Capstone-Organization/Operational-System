@@ -38,11 +38,11 @@ public class ApiResponseDTO<T>
 
 ## Module Structure
 
-Modules 2 and 3 are divided into **5 sub-modules** with **19 Functional Requirements (FRs)**:
+Modules 2 and 3 are divided into **5 sub-modules** with **23 Functional Requirements (FRs)**:
 
 | Sub-Module | FRs Covered | Focus Area |
 |------------|-------------|------------|
-| 2.1 Task Creation & SLA | FR-017 to FR-021 | Creating tasks, attachments, destination scoping, priority, urgent SLA |
+| 2.1 Task Creation & SLA | FR-010 to FR-013, FR-017 to FR-021 | Task visibility filtering, confidential tasks, creating tasks, attachments, destination scoping, priority, urgent SLA |
 | 2.2 Task Workflow (FSM) | FR-022 to FR-026 | State machine transitions, push-back, completion restriction, on-hold, cancellation |
 | 2.3 Recurring Task Automation | FR-027 to FR-029 | Task templates, auto-generation, availability validation |
 | 2.4 Recommendations & Remarks | FR-030 to FR-032 | Recommendations, evaluation archiving, task comments |
@@ -77,12 +77,16 @@ The sub-modules should be implemented in this order because each one builds on t
 
 ## Detailed Breakdown
 
-### Phase 1: Sub-Module 2.1 - Task Creation & SLA (FR-017 to FR-021)
+### Phase 1: Sub-Module 2.1 - Task Creation & SLA (FR-010, FR-011, FR-012, FR-013, FR-017 to FR-021)
 
-**Why first?** The Task model is the core of the entire system. Every other sub-module depends on tasks existing.
+**Why first?** The Task model is the core of the entire system. Every other sub-module depends on tasks existing. This phase also implements task visibility filtering from Module 1's RBAC (FR-010 to FR-013).
 
 | FR ID | Requirement | What We'll Build |
 |-------|-------------|------------------|
+| FR-010 | Assigned Task Visibility | Visibility filter: Dispatcher/Encoder/Courier see only assigned tasks |
+| FR-011 | Coordinator Management Scoping | Visibility filter: Coordinator sees tasks in their department |
+| FR-012 | Manager Dashboard Access | Visibility filter: Manager sees all tasks |
+| FR-013 | Confidential Task Visibility | `IsConfidential` flag on Task, filter out confidential tasks for non-Coordinators/Managers |
 | FR-017 | Task Form Configuration | `Task` model, Task CRUD endpoints, task creation with all fields |
 | FR-018 | Document Memo Attachments | `TaskAttachment` model, file upload/download endpoints, file validation |
 | FR-019 | Destination Scoping | `AssignmentScope` enum, scope-based assignment logic (Single/Team/Department) |
@@ -108,6 +112,8 @@ The sub-modules should be implemented in this order because each one builds on t
 - Update `Data/AppDbContext.cs` with new DbSets
 
 **Key Concepts:**
+- Task visibility filtering based on role (Manager=all, Coordinator=department, others=assigned only)
+- Confidential task flag (IsConfidential) - hidden from non-Coordinators/Managers
 - File upload with size/type validation
 - Enums for task status, priority, classification, scope
 - Urgent SLA = creation timestamp + 24 hours (auto-enforced)
@@ -537,6 +543,13 @@ Background jobs use built-in `IHostedService` - no external packages needed (lik
 - [ ] Urgent tasks auto-set deadline to creation + 24 hours
 - [ ] Urgent task deadline is locked (not editable)
 - [ ] Task classification (Routine/Special) is required and filterable
+- [ ] Manager sees ALL tasks in task list
+- [ ] Coordinator sees only tasks in their department
+- [ ] Dispatcher/Encoder/Courier sees only tasks assigned to them
+- [ ] Confidential tasks are hidden from Dispatcher/Encoder/Courier
+- [ ] Confidential tasks are visible to Coordinators and Managers
+- [ ] Task can be marked as confidential during creation (IsConfidential flag)
+- [ ] GetById returns 403 for non-authorized users accessing confidential or unassigned tasks
 
 ### Sub-Module 2.2 (Task Workflow)
 - [ ] Tasks start at Not Started
