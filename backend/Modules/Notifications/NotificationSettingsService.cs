@@ -2,6 +2,7 @@
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.Notifications;
 

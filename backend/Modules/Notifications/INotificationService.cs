@@ -1,6 +1,7 @@
 ﻿using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
+using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.Notifications;
 

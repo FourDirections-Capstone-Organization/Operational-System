@@ -1,4 +1,6 @@
-﻿namespace Backend.Models.DTOs;
+﻿using Backend.Models.Enums;
+
+namespace Backend.Models.DTOs;
 
 public class NotificationResponseDTO
 {

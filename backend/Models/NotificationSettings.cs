@@ -1,4 +1,6 @@
-﻿namespace Backend.Models;
+﻿using Backend.Models.Enums;
+
+namespace Backend.Models;
 
 public class NotificationSettings
 {
