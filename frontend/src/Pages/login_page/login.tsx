@@ -12,7 +12,8 @@ type UserRole =
     | 'Coordinator'
     | 'Dispatcher'
     | 'Encoder'
-    | 'Courier';
+    | 'Courier'
+    | 'Accountant';
 
 interface LoginResponse {
     accessToken: string;
@@ -31,6 +32,7 @@ const normalizeRole = (role: string): UserRole | '' => {
         dispatcher: 'Dispatcher',
         encoder: 'Encoder',
         courier: 'Courier',
+        accountant: 'Accountant',
     };
     return map[role.toLowerCase()] ?? '';
 };
@@ -41,6 +43,7 @@ const dashboardRoutes: Record<UserRole, string> = {
     Dispatcher: '/OpEmployee_Dashboard',
     Encoder: '/OpEmployee_Dashboard',
     Courier: '/OpEmployee_Dashboard',
+    Accountant: '/OpEmployee_Dashboard',
 };
 
 /* ══════════════════════════════════════════
@@ -122,7 +125,7 @@ export default function Login() {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? '',
+                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
                             overrideToken: data?.overrideToken,
                             leaveId: data?.leaveId,
@@ -135,7 +138,7 @@ export default function Login() {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? '',
+                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
                         }
                     });
@@ -154,7 +157,7 @@ export default function Login() {
             // Unwrap ApiResponseDTO wrapper
             const d = data?.data ?? data;
 
-            const roleMap: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+            const roleMap: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
             const roleStr = roleMap[d.role] ?? d.role?.toString?.() ?? '';
             const normalizedRole = normalizeRole(roleStr);
 

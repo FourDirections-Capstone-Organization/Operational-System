@@ -11,4 +11,5 @@ public interface IDepartmentService
     Task<ApiResponseDTO<DepartmentResponseDTO>> UpdateAsync(Guid id, UpdateDepartmentDTO dto);
     Task<ApiResponseDTO<bool>> DeleteAsync(Guid id);
     System.Threading.Tasks.Task SeedDefaultDepartmentsAsync();
+    System.Threading.Tasks.Task SeedDefaultPositionsAsync();
 }

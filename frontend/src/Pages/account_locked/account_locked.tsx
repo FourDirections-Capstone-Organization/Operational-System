@@ -174,6 +174,7 @@ function ContactAdminModal({
 export default function AccountLocked() {
     const navigate = useNavigate();
     const location = useLocation();
+    const params = new URLSearchParams(location.search);
 
     const state = location.state as {
         employeeNumber?: string;
@@ -181,8 +182,8 @@ export default function AccountLocked() {
         reason?: string;
     } | null;
 
-    const employeeName = state?.employeeName || 'Employee';
-    const employeeNumber = state?.employeeNumber || '—';
+    const employeeNumber = state?.employeeNumber || params.get('employeeNumber') || '—';
+    const employeeName = state?.employeeName || `Employee #${employeeNumber}`;
     const reason = state?.reason || '';
     const meta = getReasonMeta(reason);
 

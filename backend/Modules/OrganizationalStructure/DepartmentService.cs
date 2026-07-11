@@ -159,11 +159,45 @@ public class DepartmentService : IDepartmentService
 
     public async System.Threading.Tasks.Task SeedDefaultDepartmentsAsync()
     {
+        // Migrate old department names to new ones, handling duplicates
+        var oldToNew = new Dictionary<string, string>
+        {
+            ["Coordinator & Customer Service Team"] = "Coordinator and Customer Service Team",
+            ["Forwarding Team (Vismin Airline Cargo Forwarders)"] = "Forwarding and Delivery Team"
+        };
+
+        foreach (var kvp in oldToNew)
+        {
+            var oldDept = await _db.Departments.FirstOrDefaultAsync(d => d.Name == kvp.Key);
+            var newDept = await _db.Departments.FirstOrDefaultAsync(d => d.Name == kvp.Value);
+
+            if (oldDept is not null && newDept is not null)
+            {
+                // Both exist — reassign users and positions, then remove old
+                var usersInOld = await _db.Users.Where(u => u.DepartmentId == oldDept.Id).ToListAsync();
+                foreach (var user in usersInOld)
+                    user.DepartmentId = newDept.Id;
+
+                var positionsInOld = await _db.JobPositions.Where(p => p.DepartmentId == oldDept.Id).ToListAsync();
+                foreach (var pos in positionsInOld)
+                    pos.DepartmentId = newDept.Id;
+
+                _db.Departments.Remove(oldDept);
+            }
+            else if (oldDept is not null)
+            {
+                // Only old exists — rename it
+                oldDept.Name = kvp.Value;
+                oldDept.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
         var defaultDepartments = new[]
         {
-            new { Name = "Coordinator & Customer Service Team", Description = "Handles customer coordination and service operations" },
+            new { Name = "Coordinator and Customer Service Team", Description = "Handles customer coordination and service operations" },
             new { Name = "Dispatch Team", Description = "Manages dispatch operations and logistics" },
-            new { Name = "Forwarding Team (Vismin Airline Cargo Forwarders)", Description = "Handles vismin airline cargo forwarding operations" }
+            new { Name = "Forwarding and Delivery Team", Description = "Handles forwarding and delivery operations" },
+            new { Name = "Accounting Team", Description = "Manages financial and accounting operations" }
         };
 
         foreach (var dept in defaultDepartments)
@@ -179,6 +213,53 @@ public class DepartmentService : IDepartmentService
                    Description = dept.Description,
                    IsActive = true,
                    CreatedAt = DateTime.UtcNow 
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    public async System.Threading.Tasks.Task SeedDefaultPositionsAsync()
+    {
+        var departments = await _db.Departments.ToListAsync();
+
+        var defaultPositions = new[]
+        {
+            // Coordinator and Customer Service Team
+            new { Name = "Operational Manager", DeptName = "Coordinator and Customer Service Team" },
+
+            // Dispatch Team
+            new { Name = "Operational Admin", DeptName = "Dispatch Team" },
+            new { Name = "Operational Team", DeptName = "Dispatch Team" },
+
+            // Forwarding and Delivery Team
+            new { Name = "Operational Admin", DeptName = "Forwarding and Delivery Team" },
+            new { Name = "Operational Team", DeptName = "Forwarding and Delivery Team" },
+
+            // Accounting Team (org chart only, no STARS access)
+            new { Name = "Finance Manager", DeptName = "Accounting Team" },
+            new { Name = "Head Accountant", DeptName = "Accounting Team" },
+            new { Name = "Accountant", DeptName = "Accounting Team" },
+            new { Name = "Assistant of Finance Manager", DeptName = "Accounting Team" }
+        };
+
+        foreach (var pos in defaultPositions)
+        {
+            var dept = departments.FirstOrDefault(d => d.Name == pos.DeptName);
+            if (dept is null) continue;
+
+            var exists = await _db.JobPositions
+                .AnyAsync(jp => jp.Name.ToLower() == pos.Name.ToLower() && jp.DepartmentId == dept.Id);
+
+            if (!exists)
+            {
+                _db.JobPositions.Add(new JobPosition
+                {
+                    Name = pos.Name,
+                    DepartmentId = dept.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
                 });
             }
         }

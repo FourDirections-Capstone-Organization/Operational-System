@@ -41,6 +41,15 @@ axios.interceptors.response.use(
             return Promise.reject(error);
         }
 
+        // Handle deactivated/locked account
+        const msg = error.response?.data?.message ?? '';
+        if (msg.toLowerCase().includes('deactivated') || msg.toLowerCase().includes('locked')) {
+            const empNum = localStorage.getItem('employeeId') || '';
+            localStorage.clear();
+            window.location.href = `/account_locked?employeeNumber=${encodeURIComponent(empNum)}`;
+            return Promise.reject(error);
+        }
+
         if (error.response?.status !== 401 || originalRequest._retry) {
             return Promise.reject(error);
         }
@@ -152,8 +161,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         </Route>
                     </Route>
 
-                    {/* Encoder / Dispatcher / Courier routes */}
-                    <Route element={<ProtectedRoute allowedRoles={['Encoder', 'Dispatcher', 'Courier']} />}>
+                    {/* Encoder / Dispatcher / Courier / Accountant routes */}
+                    <Route element={<ProtectedRoute allowedRoles={['Encoder', 'Dispatcher', 'Courier', 'Accountant']} />}>
                         <Route element={<PasswordChangedGuard />}>
                             <Route path="/OpEmployee_Dashboard" element={<OpEmployee_Dashboard />} />
                         </Route>

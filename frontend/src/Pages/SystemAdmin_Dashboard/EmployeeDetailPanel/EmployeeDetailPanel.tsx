@@ -42,6 +42,7 @@ interface ConfirmModalState {
     notice?: string;
     confirmLabel?: string;
     cancelLabel?: string;
+    isLoading?: boolean;
     onConfirm: () => void;
 }
 
@@ -96,7 +97,7 @@ const ROLES = [
 ];
 
 const toBackendRole = (role: string) => role;
-const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
 const toDisplayRole = (role: any) => {
     if (typeof role === 'number') return ROLE_MAP[role] || String(role);
     if (typeof role === 'string') {
@@ -242,7 +243,10 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                     email: form.email.trim(),
                 }),
             });
-            if (!updateRes.ok) throw new Error('Failed to update employee details. Please try again.');
+            if (!updateRes.ok) {
+                const errData = await updateRes.json().catch(() => ({}));
+                throw new Error(errData.message || errData.Message || 'Failed to update employee details.');
+            }
 
             // 2. Update status in database if changed
             if (form.accountStatus !== profile.accountStatus) {
@@ -251,7 +255,10 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                     method: 'PATCH',
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                if (!statusRes.ok) throw new Error('Failed to update account status. Please try again.');
+                if (!statusRes.ok) {
+                    const errData = await statusRes.json().catch(() => ({}));
+                    throw new Error(errData.message || errData.Message || 'Failed to update account status.');
+                }
             }
 
             onSaved({
@@ -281,90 +288,39 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
         setGatePassword('');
         setGateError('');
         setShowGatePassword(false);
+        const isStatusChanging = form.accountStatus !== profile.accountStatus;
         setConfirmModal({
             isOpen: true,
-            variant: form.accountStatus !== profile.accountStatus
-                ? (form.accountStatus === 'Active' ? 'success' : 'warning')
-                : 'info',
-            title: form.accountStatus !== profile.accountStatus
+            variant: isStatusChanging ? (form.accountStatus === 'Active' ? 'success' : 'warning') : 'info',
+            title: isStatusChanging
                 ? `${form.accountStatus === 'Active' ? 'Activate' : 'Deactivate'} Account`
                 : 'Confirm your identity',
-            description: form.accountStatus !== profile.accountStatus
+            description: isStatusChanging
                 ? `You are about to ${form.accountStatus === 'Active' ? 'activate' : 'deactivate'} ${profile.employeeName}. Enter your password to confirm.`
                 : 'Enter your password to save these changes.',
-            confirmLabel: form.accountStatus !== profile.accountStatus
-                ? (form.accountStatus === 'Active' ? 'Activate account' : 'Deactivate account')
-                : 'Verify & save',
-            onConfirm: () => {
-                setConfirmModal(CONFIRM_CLOSED);
-                setGatePassword('');
+            confirmLabel: 'Verify & save',
+            isLoading: false,
+            onConfirm: async () => {
+                const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
+                if (!pw) { setGateError('Please enter your password.'); return; }
+                setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
-                setShowGatePassword(false);
-                setConfirmModal({
-                    isOpen: true,
-                    variant: 'info',
-                    title: 'Confirm your identity',
-                    description: (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                                Enter your password to confirm these changes.
-                            </p>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    id="gate-pw-input"
-                                    type={showGatePassword ? 'text' : 'password'}
-                                    placeholder="Enter your current password"
-                                    style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box' }}
-                                    autoFocus
-                                    onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                            const btn = document.getElementById('gate-confirm-btn');
-                                            btn?.click();
-                                        }
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowGatePassword(p => !p)}
-                                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}
-                                    tabIndex={-1}
-                                >
-                                    {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                                </button>
-                            </div>
-                            {gateError && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-danger)' }}>
-                                    <AlertCircle size={12} />{gateError}
-                                </div>
-                            )}
-                        </div>
-                    ),
-                    confirmLabel: gateLoading ? 'Verifying…' : 'Verify & save',
-                    onConfirm: async () => {
-                        const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
-                        if (!pw) { setGateError('Please enter your password.'); return; }
-                        setGateLoading(true);
-                        setGateError('');
-                        try {
-                            const token = localStorage.getItem('authToken');
-                            const adminId = localStorage.getItem('employeeId') ?? '';
-                            const res = await fetch('/api/auth/verify-password', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                body: JSON.stringify({ employeeID: adminId, password: pw }),
-                            });
-                            const verifyData = await res.json().catch(() => ({}));
-                            if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
-                            setConfirmModal(CONFIRM_CLOSED);
-                            await doSave();
-                        } catch (err: any) {
-                            setGateError(err.message ?? 'Incorrect password. Please try again.');
-                        } finally {
-                            setGateLoading(false);
-                        }
-                    },
-                });
+                try {
+                    const token = localStorage.getItem('authToken');
+                    const adminId = localStorage.getItem('employeeId') ?? '';
+                    const res = await fetch('/api/auth/verify-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ employeeID: adminId, password: pw }),
+                    });
+                    const verifyData = await res.json().catch(() => ({}));
+                    if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
+                    setConfirmModal(CONFIRM_CLOSED);
+                    await doSave();
+                } catch (err: any) {
+                    setGateError(err.message ?? 'Incorrect password. Please try again.');
+                    setConfirmModal(prev => ({ ...prev, isLoading: false }));
+                }
             },
         });
     };
@@ -443,6 +399,16 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 description={confirmModal.description}
                 confirmLabel={confirmModal.confirmLabel}
                 cancelLabel={confirmModal.cancelLabel}
+                isLoading={confirmModal.isLoading}
+                extraContent={confirmModal.isOpen ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ position: 'relative' }}>
+                            <input id="gate-pw-input" type={showGatePassword ? 'text' : 'password'} placeholder="Enter your current password" style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }} autoFocus onChange={e => { setGatePassword(e.target.value); setGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('gate-confirm-btn')?.click(); }} />
+                            <button type="button" onClick={() => setShowGatePassword(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>{showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                        </div>
+                        {gateError && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}><AlertCircle size={12} />{gateError}</div>}
+                    </div>
+                ) : undefined}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
             />
@@ -538,22 +504,13 @@ export default function EmployeeDetailPanel({
             isOpen: true,
             variant,
             title,
-            description: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{description}</p>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>Enter your password to confirm.</p>
-                    <div style={{ position: 'relative' }}>
-                        <input id="gate-pw-input" type={showGatePassword ? 'text' : 'password'} placeholder="Enter your current password" style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: '1.5px solid #e2e8f0', padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }} autoFocus onChange={e => { setGatePassword(e.target.value); setGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('gate-confirm-btn')?.click(); }} />
-                        <button type="button" onClick={() => setShowGatePassword(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>{showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
-                    </div>
-                    {gateError && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}><AlertCircle size={12} />{gateError}</div>}
-                </div>
-            ),
+            description: (<> <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{description}</p> </>),
+            isLoading: false,
             confirmLabel: 'Verify & proceed',
             onConfirm: async () => {
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
-                setGateLoading(true);
+                setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
                 try {
                     const token = localStorage.getItem('authToken');
@@ -579,10 +536,13 @@ export default function EmployeeDetailPanel({
                             const delRes = await fetch(`/api/user/${userId}/deactivate`, {
                                 method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
                             });
-                            if (!delRes.ok) throw new Error();
+                            if (!delRes.ok) {
+                                const errData = await delRes.json().catch(() => ({}));
+                                throw new Error(errData.message || errData.Message || 'Failed to archive employee.');
+                            }
                             success(`Successfully archived ${profile.employeeName}.`);
                             onEmployeeUpdated({ ...profile, accountStatus: '__deleted__' });
-                        } catch { error('Failed to Archive Employee.'); } finally { setDeleting(false); }
+                        } catch (err: any) { error(err.message); } finally { setDeleting(false); }
                     } else {
                         const next = action.nextStatus!;
                         const isActive = next === 'Active';
@@ -590,15 +550,18 @@ export default function EmployeeDetailPanel({
                             const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
                                 method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
                             });
-                            if (!statusRes.ok) throw new Error();
+                            if (!statusRes.ok) {
+                                const errData = await statusRes.json().catch(() => ({}));
+                                throw new Error(errData.message || errData.Message || `Failed to ${isActive ? 'activate' : 'deactivate'} employee.`);
+                            }
                             const updatedProfile = { ...profile, accountStatus: next };
                             setProfile(updatedProfile);
                             onEmployeeUpdated(updatedProfile);
                             success(`Successfully ${next === 'Active' ? 'activated' : 'deactivated'} ${profile.employeeName}.`);
-                        } catch { error(`Failed to ${next === 'Active' ? 'activate' : 'deactivate'} employee.`); }
+                        } catch (err: any) { error(err.message); }
                     }
                 } catch (err: any) { setGateError(err.message ?? 'Incorrect password.'); }
-                finally { setGateLoading(false); }
+                finally { setConfirmModal(prev => ({ ...prev, isLoading: false })); }
             },
         });
     };
@@ -968,7 +931,16 @@ export default function EmployeeDetailPanel({
                 description={confirmModal.description}
                 confirmLabel={confirmModal.confirmLabel}
                 cancelLabel={confirmModal.cancelLabel}
-                isLoading={gateLoading}
+                isLoading={confirmModal.isLoading}
+                extraContent={pendingAction ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ position: 'relative' }}>
+                            <input id="gate-pw-input" type={showGatePassword ? 'text' : 'password'} placeholder="Enter your current password" style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }} autoFocus onChange={e => { setGatePassword(e.target.value); setGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('gate-confirm-btn')?.click(); }} />
+                            <button type="button" onClick={() => setShowGatePassword(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>{showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                        </div>
+                        {gateError && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}><AlertCircle size={12} />{gateError}</div>}
+                    </div>
+                ) : undefined}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
             />

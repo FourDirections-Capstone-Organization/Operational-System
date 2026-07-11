@@ -93,14 +93,13 @@ interface EmployeeRegisterDTO {
 }
 
 interface FieldError {
-    employeeNumber?: string;
     firstName?: string;
     lastName?: string;
     email?: string;
     departmentId?: string;
     jobPositionId?: string;
     role?: string;
-    employmentStatus?: string;
+    contactNumber?: string;
 }
 
 type FormState = EmployeeRegisterDTO;
@@ -307,19 +306,25 @@ function validate(form: FormState): FieldError {
         errs.role = 'Please select a system role.';
     }
 
-    // Employment Status
-    if (!form.employmentStatus) errs.employmentStatus = 'Please select an employment status.';
+    // Contact Number
+    const contact = form.contactNumber.trim();
+    if (!contact) {
+        errs.contactNumber = 'Contact number is required.';
+    } else if (!/^09\d{9}$/.test(contact)) {
+        errs.contactNumber = 'Enter a valid PH mobile number (09xxxxxxxxx).';
+    }
 
     return errs;
 }
 
 const toBackendRole = (role: string) => {
-    if (role === 'Manager' || role === 'Supervisor') return 'Manager';
-    if (role === 'Coordinator') return 'Coordinator';
-    if (role === 'Encoder') return 'Encoder';
-    return role;
+    const roleMap: Record<string, number> = {
+        Manager: 0, Coordinator: 1, Dispatcher: 2,
+        Encoder: 3, Courier: 4, Accountant: 5,
+    };
+    return roleMap[role] ?? 3; // default to Encoder (3)
 };
-const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
 const toDisplayRole = (role: any) => {
     if (typeof role === 'number') return ROLE_MAP[role] || String(role);
     if (typeof role === 'string') {
@@ -401,7 +406,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
     const [empNumError, setEmpNumError] = useState('');
     const [departments, setDepartments] = useState<DepartmentResponseDTO[]>([]);
     const [jobPositions, setJobPositions] = useState<JobPositionResponseDTO[]>([]);
-    const [availableRoles, setAvailableRoles] = useState<string[]>(['Manager', 'Coordinator', 'Encoder']);
+    const [availableRoles, setAvailableRoles] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [loadingOrg, setLoadingOrg] = useState(true);
     const { success } = useToast();
 
@@ -428,21 +433,21 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                     const rawRoles = Array.isArray(rolesData) ? rolesData : rolesData.data ?? rolesData.$values ?? [];
 
                     setDepartments(rawDepts.map((d: any) => ({
-                        departmentId: d.departmentId ?? d.DepartmentId,
+                        departmentId: d.id ?? d.departmentId ?? d.DepartmentId,
                         name: d.name ?? d.Name,
                         isActive: d.isActive ?? d.IsActive ?? ((d.status ?? d.Status) === 'Active'),
                         status: d.status ?? d.Status ?? 'Active'
                     })).filter((d: any) => d.status === 'Active' || d.isActive !== false));
 
                     setJobPositions(rawPos.map((p: any) => ({
-                        jobPositionId: p.jobPositionId ?? p.JobPositionId,
+                        jobPositionId: p.id ?? p.jobPositionId ?? p.JobPositionId,
                         name: p.name ?? p.Name,
                         departmentId: p.departmentId ?? p.DepartmentId,
                         isActive: p.isActive ?? p.IsActive ?? ((p.status ?? p.Status) === 'Active'),
                         status: p.status ?? p.Status ?? 'Active'
                     })).filter((p: any) => p.status === 'Active' || p.isActive !== false));
 
-                    setAvailableRoles(rawRoles.map((r: any) => toDisplayRole(r.name ?? r.Name)));
+                    setAvailableRoles(rawRoles.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name)));
                 }
             } catch (err) {
                 console.error('Error loading organization data:', err);
@@ -503,8 +508,12 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 return !value ? 'Please select a position.' : '';
             case 'role':
                 return !value ? 'Please select a system role.' : '';
-            case 'employmentStatus':
-                return !value ? 'Please select an employment status.' : '';
+            case 'contactNumber': {
+                const v = value.trim();
+                if (!v) return 'Contact number is required.';
+                if (!/^09\d{9}$/.test(v)) return 'Enter a valid PH mobile number (09xxxxxxxxx).';
+                return '';
+            }
             default:
                 return '';
         }
@@ -536,27 +545,37 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
         setApiError('');
         try {
             const token = localStorage.getItem('authToken');
-            const formData = new FormData();
-            formData.append('EmployeeNumber', form.employeeNumber);
-            formData.append('FirstName', form.firstName.trim());
-            formData.append('MiddleName', form.middleName.trim());
-            formData.append('LastName', form.lastName.trim());
-            formData.append('Suffix', form.suffix.trim());
-            formData.append('ContactNumber', form.contactNumber);
-            formData.append('Role', toBackendRole(form.role));
-            formData.append('Email', form.email.trim());
-            formData.append('DepartmentId', form.departmentId);
-            formData.append('JobPositionId', form.jobPositionId);
+
+            const body = JSON.stringify({
+                employeeNumber: form.employeeNumber,
+                firstName: form.firstName.trim() || 'New',
+                middleName: form.middleName.trim() || null,
+                lastName: form.lastName.trim() || 'Employee',
+                suffix: form.suffix.trim() || null,
+                contactNumber: form.contactNumber || null,
+                role: toBackendRole(form.role),
+                email: form.email.trim(),
+                departmentId: form.departmentId || null,
+                jobPositionId: form.jobPositionId || null,
+            });
 
             const res = await fetch('/api/user/register', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body,
             });
 
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Employee registration failed. Please try again.');
+                const validationMsg = errorData.errors
+                    ? Object.values(errorData.errors).flat().join('. ')
+                    : '';
+                const msg = errorData.message ?? errorData.Message ?? validationMsg
+                    ?? (typeof errorData === 'string' ? errorData : '');
+                throw new Error(msg || 'Employee registration failed. Please try again.');
             }
 
             const responseData = await res.json();
@@ -575,7 +594,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 lastName: '',
                 suffix: '',
                 contactNumber: '',
-                role: data.role ?? toBackendRole(form.role),
+                role: data.role ?? form.role,
                 accountStatus: 'Pending Verification',
                 email: form.email.trim(),
             });
@@ -611,9 +630,16 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 isSubmitting={submitting}
                 submitDisabled={empNumLoading || !!empNumError || loadingOrg}
                 submitLabel="Register Employee"
-                size="md"
+                size="lg"
                 confirmOnCancel={true}
                 dirty={dirty}
+                infoCard={form.employeeNumber ? {
+                    avatarText: form.employeeNumber.slice(-4),
+                    title: `Employee #${form.employeeNumber}`,
+                    subtitle: form.email || 'Enter email address below',
+                    badgeText: 'NEW',
+                    badgeStatus: 'Pending',
+                } : undefined}
             >
                 <div className="fm-section">
                     <h5 className="fm-section-title">Account Information</h5>
@@ -669,6 +695,16 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                                 autoComplete="off"
                             />
                             <FieldErr msg={errors.email} />
+                        </div>
+                        {/* Contact Number */}
+                        <div className="fm-field">
+                            <label className="fm-label" htmlFor="emp-contact">
+                                Contact Number <span style={{ color: 'var(--status-failed)' }}>*</span>
+                            </label>
+                            <input id="emp-contact" type="text" placeholder="e.g. 09171234567"
+                                value={form.contactNumber} onChange={handleChange('contactNumber')}
+                                className="fm-input" style={inputStyle(errors.contactNumber)} maxLength={11} />
+                            <FieldErr msg={errors.contactNumber} />
                         </div>
                     </div>
                 </div>
@@ -2612,7 +2648,7 @@ export default function Dashboard() {
                     employeeName: e.employeeName ?? buildDisplayName(e.firstName ?? '', e.middleName ?? '', e.lastName ?? '', e.suffix ?? ''),
                     contactNumber: e.contactNumber,
                     role: e.role,
-                    accountStatus: e.accountStatus ?? 'Unknown',
+                    accountStatus: e.isDeactivated ? 'Deactivated' : (e.isActive !== false ? 'Active' : 'Inactive'),
                     presenceStatus: e.presenceStatus ?? 'Offline',
                     email: e.email ?? '',
                     attachments: e.attachments ?? [],
