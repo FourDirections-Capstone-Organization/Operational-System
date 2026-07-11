@@ -53,6 +53,13 @@ public class RoleService : IRoleService
                 DisplayName = "Courier/Driver",
                 Description = "Can view and update assigned delivery tasks",
                 Permissions = GetPermissionsForRole(UserRole.Courier)
+            },
+            new RoleResponseDTO
+            {
+                Role = UserRole.Accountant,
+                DisplayName = "Accountant",
+                Description = "Can view and update assigned financial tasks",
+                Permissions = GetPermissionsForRole(UserRole.Accountant)
             }
         };
 
@@ -165,6 +172,10 @@ public class RoleService : IRoleService
                 permissions.Add("UpdateTaskStatus");
                 permissions.Add("UpdateDeliveryStatus");
                 break;
+
+            case UserRole.Accountant:
+                permissions.Add("UpdateTaskStatus");
+                break;
         }
 
         return permissions;
@@ -179,6 +190,7 @@ public class RoleService : IRoleService
             UserRole.Dispatcher => "Dispatcher",
             UserRole.Encoder => "Encoder",
             UserRole.Courier => "Courier/Driver",
+            UserRole.Accountant => "Accountant",
             _ => role.ToString()
         };
     }
@@ -192,6 +204,7 @@ public class RoleService : IRoleService
             UserRole.Dispatcher => "Can view and update assigned tasks",
             UserRole.Encoder => "Can view and update assigned tasks",
             UserRole.Courier => "Can view and update assigned delivery tasks",
+            UserRole.Accountant => "Can view and update assigned financial tasks",
             _ => ""
         };
     }

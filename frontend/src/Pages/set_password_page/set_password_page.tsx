@@ -4,8 +4,10 @@ import axios from 'axios';
 
 export default function SetPasswordPage() {
     const navigate = useNavigate();
+    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [showCur, setShowCur] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export default function SetPasswordPage() {
         e.preventDefault();
         setError('');
 
-        if (!newPassword || !confirmPassword) {
+        if (!currentPassword || !newPassword || !confirmPassword) {
             setError('Please fill in all fields.');
             return;
         }
@@ -42,14 +44,16 @@ export default function SetPasswordPage() {
         setLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            await axios.post('/api/profile/set-initial-password',
-                { newPassword, confirmPassword },
+            const res = await axios.post('/api/auth/change-password',
+                { currentPassword, newPassword, confirmPassword },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
+            const d = res.data;
+            if (!d.isSuccess) throw new Error(d.message || 'Failed to set password.');
             localStorage.setItem('isPasswordChanged', 'true');
             const employeeId = localStorage.getItem('employeeId');
             const role = localStorage.getItem('userRole');
-            if (employeeId === '0000' && (role === 'System Admin' || role === 'SuperAdmin')) {
+            if (employeeId === '0000' && role === 'Manager') {
                 navigate('/SystemAdmin_Dashboard');
             } else {
                 navigate('/onboarding?fresh=true');
@@ -112,6 +116,41 @@ export default function SetPasswordPage() {
                 )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                            Current Password <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type={showCur ? 'text' : 'password'}
+                                placeholder="Enter your current password"
+                                value={currentPassword}
+                                onChange={e => { setCurrentPassword(e.target.value); setError(''); }}
+                                style={{
+                                    height: 42, borderRadius: 10, border: '1px solid #e2e8f0',
+                                    padding: '0 40px 0 14px', fontSize: 13, color: '#0f172a',
+                                    background: 'white', outline: 'none', width: '100%',
+                                    boxSizing: 'border-box', fontFamily: 'inherit'
+                                }}
+                            />
+                            <button type="button" onClick={() => setShowCur(v => !v)} style={{
+                                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                                background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4
+                            }}>
+                                {showCur ? (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+                                        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+                                        <line x1="1" y1="1" x2="23" y2="23" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
                             New Password <span style={{ color: '#ef4444' }}>*</span>

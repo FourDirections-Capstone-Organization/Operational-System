@@ -18,6 +18,7 @@ export interface ConfirmationModalProps {
     confirmLabel?: string;
     cancelLabel?: string;
     isLoading?: boolean;
+    extraContent?: React.ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -50,6 +51,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     confirmLabel,
     cancelLabel = "Cancel",
     isLoading = false,
+    extraContent,
     onConfirm,
     onCancel,
 }) => {
@@ -108,6 +110,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         <span>{notice}</span>
                     </div>
                 )}
+
+                {extraContent && <div className="cm-extra">{extraContent}</div>}
 
                 <div className="cm-actions">
                     <button

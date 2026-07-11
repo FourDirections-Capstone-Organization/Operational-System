@@ -115,9 +115,10 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 
-    // Seed default departments
+    // Seed default departments and positions
     var departmentService = scope.ServiceProvider.GetRequiredService<IDepartmentService>();
     await departmentService.SeedDefaultDepartmentsAsync();
+    await departmentService.SeedDefaultPositionsAsync();
 
     // Seed default manager
     var userService = scope.ServiceProvider.GetRequiredService<IUserService>();

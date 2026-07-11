@@ -117,6 +117,11 @@
     margin-top: 1px;
 }
 
+/* ── Extra content (between description and actions) ──────── */
+.cm-extra {
+    padding: 0 28px 16px;
+}
+
 /* ── Divider before actions ──────────────────────────────── */
 .cm-actions {
     display: flex;

@@ -82,6 +82,14 @@ public class UserService : IUserService
         var passwordHasher = new PasswordHasher<User>();
         user.PasswordHash = passwordHasher.HashPassword(user, tempPassword);
 
+        // Generate email verification token
+        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        var tokenBytes = new byte[32];
+        rng.GetBytes(tokenBytes);
+        user.EmailVerificationToken = Convert.ToBase64String(tokenBytes)
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        user.EmailVerificationTokenExpiry = DateTime.UtcNow.AddDays(1);
+
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
@@ -89,9 +97,10 @@ public class UserService : IUserService
         await _db.Entry(user).Reference(u => u.Department).LoadAsync();
         await _db.Entry(user).Reference(u => u.JobPosition).LoadAsync();
 
-        // Send welcome email with credentials
+        // Send verification email (credentials will be sent after verification)
         var fullName = $"{user.FirstName} {user.LastName}".Trim();
-        await _emailService.SendWelcomeEmailAsync(user.Email, fullName, user.EmployeeNumber, tempPassword);
+        var verificationUrl = $"http://localhost:5173/verify-email";
+        await _emailService.SendEmailVerificationAsync(user.Email, fullName, user.EmailVerificationToken, verificationUrl);
 
         _logger.LogInformation("New user registered: {EmployeeNumber} - {Email}", user.EmployeeNumber, user.Email);
 
@@ -406,9 +415,9 @@ public class UserService : IUserService
         // ============================================================================
 
         var departments = await _db.Departments.ToListAsync();
-        var coordinatorDept = departments.FirstOrDefault(d => d.Name == "Coordinator & Customer Service Team");
+        var coordinatorDept = departments.FirstOrDefault(d => d.Name == "Coordinator and Customer Service Team");
         var dispatchDept = departments.FirstOrDefault(d => d.Name == "Dispatch Team");
-        var forwardingDept = departments.FirstOrDefault(d => d.Name == "Forwarding Team (Vismin Airline Cargo Forwarders)");
+        var forwardingDept = departments.FirstOrDefault(d => d.Name == "Forwarding and Delivery Team");
 
         var testAccounts = new[]
         {

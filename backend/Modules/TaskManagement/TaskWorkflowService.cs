@@ -385,10 +385,12 @@ public class TaskWorkflowService : ITaskWorkflowService
             { (Models.Enums.TaskStatus.NotStarted, UserRole.Dispatcher), new[] { Models.Enums.TaskStatus.InProgress } },
             { (Models.Enums.TaskStatus.NotStarted, UserRole.Encoder), new[] { Models.Enums.TaskStatus.InProgress } },
             { (Models.Enums.TaskStatus.NotStarted, UserRole.Courier), new[] { Models.Enums.TaskStatus.InProgress } },
+            { (Models.Enums.TaskStatus.NotStarted, UserRole.Accountant), new[] { Models.Enums.TaskStatus.InProgress } },
 
             { (Models.Enums.TaskStatus.InProgress, UserRole.Dispatcher), new[] { Models.Enums.TaskStatus.DonePendingReview } },
             { (Models.Enums.TaskStatus.InProgress, UserRole.Encoder), new[] { Models.Enums.TaskStatus.DonePendingReview } },
             { (Models.Enums.TaskStatus.InProgress, UserRole.Courier), new[] { Models.Enums.TaskStatus.DonePendingReview } },
+            { (Models.Enums.TaskStatus.InProgress, UserRole.Accountant), new[] { Models.Enums.TaskStatus.DonePendingReview } },
 
             { (Models.Enums.TaskStatus.DonePendingReview, UserRole.Coordinator), new[] { Models.Enums.TaskStatus.Completed } },
             { (Models.Enums.TaskStatus.DonePendingReview, UserRole.Manager), new[] { Models.Enums.TaskStatus.Completed } },

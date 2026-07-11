@@ -26,7 +26,6 @@ import {
     Users,
     Search,
     Trash2,
-    CalendarDays,
     Mail,
     RotateCcw,
     ThumbsUp,
@@ -48,12 +47,6 @@ import NotificationBell from '../../components/NotificationBell/NotificationBell
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
 import ApprovalTracker, { TrackerData } from '../../components/ApprovalTracker/ApprovalTracker';
-import LeaveRequestModal, {
-    LeaveRecord,
-    LeaveType,
-    LeaveStatus,
-    LEAVE_TYPES,
-} from '../../components/LeaveRequestModal/LeaveRequestModal';
 import PendingApprovalsTab from './PendingApprovalsTab';
 import RoutingManagementTab from './RoutingManagementTab';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
@@ -133,7 +126,6 @@ type NavTab =
     | 'dashboard'
     | 'tasks'
     | 'team'
-    | 'leave'
     | 'reports'
     | 'profile'
     | 'reopen'
@@ -378,7 +370,6 @@ const NAV_GROUPS = [
         label: 'ACCOUNT',
         items: [
             { tab: 'profile' as NavTab, icon: UserCircle2, label: 'Profile' },
-            { tab: 'leave' as NavTab, icon: CalendarDays, label: 'Leave Requests' },
             { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
         ],
     },
@@ -600,7 +591,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         const fetchRecommendations = async () => {
             try {
                 const token = localStorage.getItem('authToken');
-                const res = await fetch('/api/task/assignable-employees?pageNumber=1&pageSize=50', {
+                const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=50', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const json = await res.json();
@@ -2861,7 +2852,7 @@ function ProfileTab() {
     useEffect(() => {
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/profile/view-profile', {
+        fetch('/api/auth/me', {
             headers: { Authorization: `Bearer ${t}` },
         })
             .then(res => res.ok ? res.json() : null)
@@ -2934,7 +2925,7 @@ function ProfileTab() {
         setGateLoading(true);
         setGateError('');
         try {
-            const verifyRes = await fetch('/api/authentication/verify-password', {
+            const verifyRes = await fetch('/api/auth/verify-password', {
                 method: 'POST',
                 headers: authHeader(),
                 body: JSON.stringify({
@@ -3025,7 +3016,7 @@ function ProfileTab() {
         if (pwForm.next !== pwForm.confirm) { setPwError('Passwords do not match.'); return; }
         setPwSaving(true);
         try {
-            const res = await fetch('/api/profile/change-password', {
+            const res = await fetch('/api/auth/change-password', {
                 method: 'PATCH',
                 headers: authHeader(),
                 body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
@@ -3045,7 +3036,7 @@ function ProfileTab() {
     };
 
     const displayName = [profileForm.firstName, profileForm.middleName, profileForm.lastName]
-        .filter(Boolean).join(' ') || 'Operation Admin';
+        .filter(Boolean).join(' ') || 'Coordinator';
     const displayContact = profileForm.contactNumber || employeeContact;
 
     return (
@@ -3195,7 +3186,7 @@ function ProfileTab() {
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Role</span>
-                                    <span className="detail-value">Operation Admin</span>
+                                    <span className="detail-value">Coordinator</span>
                                 </div>
                             </div>
                             <div className="modal-actions" style={{ padding: '4px 0 0' }}>
@@ -3263,7 +3254,7 @@ function ProfileTab() {
                                 <span className="detail-label">
                                     <Shield size={11} style={{ display: 'inline', marginRight: 4 }} />Role
                                 </span>
-                                <span className="detail-value">Operation Admin</span>
+                                <span className="detail-value">Coordinator</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
@@ -3474,160 +3465,6 @@ function ProfileTab() {
     );
 }
 
-
-// --- Leave Requests Tab --------------------------------------------------------------
-
-const LeaveTab: React.FC<{
-    records: LeaveRecord[];
-    loading: boolean;
-    onNewRecord: (r: LeaveRecord) => void;
-}> = ({ records, loading, onNewRecord }) => {
-    const { success } = useToast();
-    const [showModal, setShowModal] = useState(false);
-    const [histFilter, setHistFilter] = useState<'all' | LeaveStatus>('all');
-    const [currentPage, setCurrentPage] = useState(1);
-    const PAGE_SIZE = 5;
-
-    const pendingCount = records.filter(r => r.status === 'Pending').length;
-    const approvedCount = records.filter(r => r.status === 'Approved').length;
-    const declinedCount = records.filter(r => r.status === 'Declined').length;
-
-    const filteredRecords = histFilter === 'all'
-        ? records
-        : records.filter(r => r.status === histFilter);
-    const sortedRecords = [...filteredRecords].sort((a, b) =>
-        b.submittedAt.localeCompare(a.submittedAt)
-    );
-    const totalPages = Math.max(1, Math.ceil(sortedRecords.length / PAGE_SIZE));
-    const paginatedRecords = sortedRecords.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE
-    );
-
-    const handleFilterChange = (f: 'all' | LeaveStatus) => {
-        setHistFilter(f);
-        setCurrentPage(1);
-    };
-
-    const handleSubmit = (record: LeaveRecord) => {
-        onNewRecord(record);
-        success('Request submitted — your manager will review it shortly.');
-    };
-
-    return (
-        <div className="tab-content">
-
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                    <Plus size={14} /> Request Leave
-                </button>
-            </div>
-
-            {/* Stat cards */}
-            <div className="stats-row" style={{ marginBottom: 16 }}>
-                {[
-                    { label: 'TOTAL REQUESTS', value: records.length, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary', subtext: 'All submitted' },
-                    { label: 'PENDING', value: pendingCount, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'warning', subtext: 'Awaiting review' },
-                    { label: 'APPROVED', value: approvedCount, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', subtext: 'This period' },
-                    { label: 'DECLINED', value: declinedCount, icon: <X size={20} strokeWidth={2.3} />, variant: 'danger', subtext: 'Not approved' },
-                ].map(s => (
-                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
-                ))}
-            </div>
-
-            <DataTable
-                title="My Leave History"
-                filterElements={
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        {(['all', 'Pending', 'Approved', 'Declined'] as const).map(f => (
-                            <button
-                                key={f}
-                                className={`filter-pill${histFilter === f ? ' active' : ''}`}
-                                onClick={() => handleFilterChange(f)}
-                                style={{ fontSize: 12, padding: '4px 11px' }}
-                            >
-                                {f === 'all' ? 'All' : f}
-                                <span style={{
-                                    marginLeft: 5, fontSize: 11, fontWeight: 600,
-                                    padding: '1px 6px', borderRadius: 999,
-                                    background: histFilter === f ? 'rgba(67,24,255,0.15)' : 'var(--border)',
-                                    color: histFilter === f ? 'var(--primary)' : 'var(--text-secondary)',
-                                }}>
-                                    {f === 'all' ? records.length : records.filter(r => r.status === f).length}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                }
-                loading={loading}
-                emptyIcon={<CalendarDays size={26} color="var(--primary)" />}
-                emptyMessage={histFilter === 'all' ? 'No leave requests yet' : `No ${histFilter} requests`}
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            >
-                <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-                    {paginatedRecords.map(r => <LeaveRecordCard key={r.id} record={r} />)}
-                </div>
-            </DataTable>
-
-            {showModal && (
-                <LeaveRequestModal
-                    onClose={() => setShowModal(false)}
-                    onSubmit={handleSubmit}
-                />
-            )}
-        </div>
-    );
-};
-
-
-const LeaveRecordCard: React.FC<{ record: LeaveRecord }> = ({ record }) => {
-    const statusColors: Record<LeaveStatus, { bg: string; color: string }> = {
-        Pending: { bg: 'rgba(255,181,71,0.12)', color: '#c05c00' },
-        Approved: { bg: 'rgba(5,205,153,0.12)', color: 'var(--status-active)' },
-        Declined: { bg: 'rgba(238,93,80,0.12)', color: 'var(--status-failed)' },
-    };
-    const meta = statusColors[record.status];
-
-    return (
-        <div style={{
-            border: '1px solid var(--border)', borderRadius: 10,
-            padding: '12px 16px', background: 'var(--bg-card)',
-            display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
-                    {record.leaveType}
-                </span>
-                <span style={{
-                    fontSize: 12, fontWeight: 600, padding: '3px 10px',
-                    borderRadius: 999, background: meta.bg, color: meta.color,
-                }}>
-                    {record.status}
-                </span>
-            </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-secondary)' }}>
-                <span>From: <strong style={{ color: 'var(--text-primary)' }}>{record.startDate}</strong></span>
-                <span>To: <strong style={{ color: 'var(--text-primary)' }}>{record.endDate}</strong></span>
-            </div>
-            {record.reason && (
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
-                    {record.reason}
-                </p>
-            )}
-            {record.reviewNote && (
-                <div style={{
-                    fontSize: 12, padding: '6px 10px', borderRadius: 8,
-                    background: meta.bg, color: meta.color,
-                }}>
-                    <strong>Note:</strong> {record.reviewNote}
-                </div>
-            )}
-        </div>
-    );
-};
 
 // --- Modal: Reopen Approval --------------------------------------------------
 
@@ -3930,10 +3767,6 @@ export default function OpsAdminDashboard() {
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
     const [binTasks, setBinTasks] = useState<Task[]>([]);
 
-    // Fetch Leave records
-    const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>([]);
-    const [leaveLoading, setLeaveLoading] = useState(false);
-
     // Reopen Requests state
     const [reopenRequests, setReopenRequests] = useState<ReopenRequest[]>([]);
     const [reopenLoading, setReopenLoading] = useState(false);
@@ -4032,7 +3865,7 @@ export default function OpsAdminDashboard() {
     const fetchTasks = async () => {
         setLoadingTasks(true);
         try {
-            const res = await fetch('/api/task/all-tasks', {
+            const res = await fetch('/api/task', {
                 headers: { Authorization: `Bearer ${token()}` },
             });
             if (!res.ok) throw new Error();
@@ -4138,7 +3971,7 @@ export default function OpsAdminDashboard() {
     // -- Fetch Team Members (for assignee dropdown) --
     const fetchTeamMembers = async () => {
         try {
-            const res = await fetch('/api/task/assignable-employees?pageNumber=1&pageSize=100', {
+            const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=100', {
                 headers: { Authorization: `Bearer ${token()}` },
             });
             if (!res.ok) throw new Error();
@@ -4153,22 +3986,6 @@ export default function OpsAdminDashboard() {
             })));
         } catch {
             setTeamMembers([]);
-        }
-    };
-
-    const fetchLeaveRecords = async () => {
-        setLeaveLoading(true);
-        try {
-            const res = await fetch('/api/leaverequest/my-leave-requests', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            setLeaveRecords(Array.isArray(data) ? data : []);
-        } catch {
-            setLeaveRecords([]);
-        } finally {
-            setLeaveLoading(false);
         }
     };
 
@@ -4206,12 +4023,11 @@ export default function OpsAdminDashboard() {
         fetchTasks();
         fetchBinRecords();
         fetchTeamMembers();
-        fetchLeaveRecords();
         fetchReopenRequests();
         fetchDashboardFilterOptions();
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/profile/view-profile', {
+        fetch('/api/auth/me', {
             headers: { Authorization: `Bearer ${t}` },
         })
             .then(res => res.ok ? res.json() : null)
@@ -4251,7 +4067,7 @@ export default function OpsAdminDashboard() {
             if (data.recommendedEmployeeId) formData.append('recommendedEmployeeId', data.recommendedEmployeeId);
             if (data.supportingEvidence) formData.append('supportingEvidence', data.supportingEvidence);
 
-            const res = await fetch('/api/task/create-task', {
+            const res = await fetch('/api/task', {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token()}` },
                 body: formData,
@@ -4291,7 +4107,7 @@ export default function OpsAdminDashboard() {
             if (data.taskRemarks) formData.append('TaskRemarks', data.taskRemarks);
             const dto = data as any;
             if (dto.supportingEvidence) formData.append('SupportingEvidence', dto.supportingEvidence);
-            const res = await fetch(`/api/task/update-task/${taskId}`, {
+            const res = await fetch(`/api/task/${taskId}`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token()}` },
                 body: formData,
@@ -4343,7 +4159,7 @@ export default function OpsAdminDashboard() {
         try {
             const formData = new FormData();
             formData.append('TaskStatus', newStatus);
-            const res = await fetch(`/api/task/${taskId}/progress`, {
+            const res = await fetch(`/api/task/${taskId}/status`, {
                 method: 'PATCH',
                 headers: { Authorization: `Bearer ${token()}` },
                 body: formData,
@@ -4528,7 +4344,7 @@ export default function OpsAdminDashboard() {
         const token = localStorage.getItem('authToken');
 
         if (token) {
-            await fetch('/api/authentication/logout', {
+            await fetch('/api/auth/logout', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4549,7 +4365,6 @@ export default function OpsAdminDashboard() {
         team: 'Team Management',
         reports: 'Performance Reports',
         profile: 'My Profile',
-        leave: 'Leave Requests',
         reopen: 'Reopen Requests',
         templates: 'Task Templates',
         approvals: 'Approvals',
@@ -4599,7 +4414,7 @@ export default function OpsAdminDashboard() {
                 <div className="sidebar-role-section">
                     <div className="sidebar-role-badge super-admin">
                         <div className="role-dot-inner" />
-                        OPERATION ADMIN
+                        COORDINATOR
                     </div>
                 </div>
 
@@ -4633,7 +4448,7 @@ export default function OpsAdminDashboard() {
                     <div className="profile-card">
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                             <div className="profile-avatar">
-                                {getInitials(employeeName || 'Operation Admin')}
+{getInitials(employeeName || 'Coordinator')}
                             </div>
                             <span style={{
                                 position: 'absolute', bottom: 1, right: 1,
@@ -4644,8 +4459,8 @@ export default function OpsAdminDashboard() {
                             }} />
                         </div>
                         <div className="profile-info">
-                            <span className="profile-name">{employeeName || 'Op Admin'}</span>
-                            <span className="profile-role">OPERATION ADMIN</span>
+                            <span className="profile-name">{employeeName || 'Coordinator'}</span>
+                            <span className="profile-role">COORDINATOR</span>
                         </div>
                         <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
                             <LogOut size={18} />
@@ -4704,13 +4519,6 @@ export default function OpsAdminDashboard() {
                 {activeTab === 'approvals' && <ApprovalsWrapper />}
                 {activeTab === 'reports' && <ReportsTab teamMembers={teamMembers} />}
                 {activeTab === 'profile' && <ProfileTab />}
-                {activeTab === 'leave' && (
-                    <LeaveTab
-                        records={leaveRecords}
-                        loading={leaveLoading}
-                        onNewRecord={record => setLeaveRecords(prev => [record, ...prev])}
-                    />
-                )}
                 {activeTab === 'reopen' && (
                     <ReopenTab
                         requests={reopenRequests}

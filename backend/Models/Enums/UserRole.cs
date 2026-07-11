@@ -6,5 +6,6 @@ public enum UserRole
     Coordinator,
     Dispatcher,
     Encoder,
-    Courier
+    Courier,
+    Accountant
 }

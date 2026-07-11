@@ -100,10 +100,10 @@ export default function ResetPassword() {
         setStatus(null);
 
         try {
-            const res = await fetch('/api/authentication/reset-password', {
+            const res = await fetch('/api/auth/reset-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, newPassword }),
+                body: JSON.stringify({ token, newPassword, confirmPassword }),
             });
 
             if (!res.ok) {
@@ -145,7 +145,7 @@ export default function ResetPassword() {
                     </div>
                     <div className="feature-list">
                         <FeatureItem title="Real-Time Delivery Tracking" description="Live shipment visibility and updates" />
-                        <FeatureItem title="Operational Task Management" description="Personalized and organized task workflow experience" />
+                        <FeatureItem title="STARS" description="Personalized and organized task workflow experience" />
                         <FeatureItem title="Courier Management" description="Secured and efficient management of courier operations" />
                     </div>
                 </div>

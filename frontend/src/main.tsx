@@ -5,6 +5,8 @@ import './index.css'
 import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import axios from 'axios'
 
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || '';
+
 axios.interceptors.request.use((config) => {
     const token = localStorage.getItem('authToken');
     if (token) {
@@ -32,6 +34,22 @@ axios.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // Handle SESSION_TIMEOUT from backend
+        if (error.response?.data?.code === 'SESSION_TIMEOUT') {
+            localStorage.clear();
+            window.location.href = '/';
+            return Promise.reject(error);
+        }
+
+        // Handle deactivated/locked account
+        const msg = error.response?.data?.message ?? '';
+        if (msg.toLowerCase().includes('deactivated') || msg.toLowerCase().includes('locked')) {
+            const empNum = localStorage.getItem('employeeId') || '';
+            localStorage.clear();
+            window.location.href = `/account_locked?employeeNumber=${encodeURIComponent(empNum)}`;
+            return Promise.reject(error);
+        }
+
         if (error.response?.status !== 401 || originalRequest._retry) {
             return Promise.reject(error);
         }
@@ -56,12 +74,13 @@ axios.interceptors.response.use(
         isRefreshing = true;
 
         try {
-            const { data } = await axios.post('/api/authentication/refresh', {
+            const { data: raw } = await axios.post('/api/auth/refresh-token', {
                 refreshToken,
             });
 
-            const newAccessToken = data.accessToken;
-            const newRefreshToken = data.refreshToken;
+            const d = raw?.data ?? raw;
+            const newAccessToken = d.accessToken;
+            const newRefreshToken = d.refreshToken;
 
             localStorage.setItem('authToken', newAccessToken);
             localStorage.setItem('refreshToken', newRefreshToken);
@@ -91,21 +110,22 @@ import AccountLocked from './Pages/account_locked/account_locked'
 import ProtectedRoute from './components/Auth/ProtectedRoute'
 import ChangePassword from './Pages/change_password/change_password'
 import EmailVerificationPage from './Pages/email_verification_page/email_verification_page'
-import ApplicantVerifyEmail from './Pages/applicant_verify_email/applicant_verify_email'
 import SetPasswordPage from './Pages/set_password_page/set_password_page'
 import { ToastProvider } from './components/Toast/Toast'
 import AuthSyncWatcher from './components/Auth/AuthSyncWatcher'
+import SessionTimeoutWatcher from './components/Auth/SessionTimeoutWatcher'
 import OnboardingPage from './Pages/onboarding_page/onboarding_page'
-import PublicApplicationPortal from './Pages/public_application_portal/public_application_portal'
 
 function PasswordChangedGuard() {
+    const hasToken = !!localStorage.getItem('authToken');
+    if (!hasToken) return <Navigate to="/" replace />;
     const isPasswordChanged = localStorage.getItem('isPasswordChanged') === 'true';
     if (!isPasswordChanged) {
         const employeeId = localStorage.getItem('employeeId');
         if (employeeId === '0000') {
             return <Navigate to="/set-password" replace />;
         }
-        return <Navigate to="/onboarding" replace />;
+        return <Navigate to="/onboarding?fresh=true" replace />;
     }
     return <Outlet />;
 }
@@ -115,6 +135,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
             <ToastProvider>
                 <AuthSyncWatcher />
+                <SessionTimeoutWatcher />
                 <Routes>
                     {/* Public routes */}
                     <Route path="/" element={<LoginPage />} />
@@ -124,26 +145,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                     <Route path="/change-password" element={<ChangePassword />} />
                     <Route path="/set-password" element={<SetPasswordPage />} />
                     <Route path="/verify-email" element={<EmailVerificationPage />} />
-                    <Route path="/applicant/verify-email" element={<ApplicantVerifyEmail />} />
                     <Route path="/onboarding" element={<OnboardingPage />} />
-                    <Route path="/apply" element={<PublicApplicationPortal />} />
 
-                    {/* System Admin routes */}
-                    <Route element={<ProtectedRoute allowedRoles={['System Admin', 'SystemAdmin']} />}>
+                    {/* Manager routes */}
+                    <Route element={<ProtectedRoute allowedRoles={['Manager']} />}>
                         <Route element={<PasswordChangedGuard />}>
                             <Route path="/SystemAdmin_Dashboard" element={<SystemAdmin_Dashboard />} />
                         </Route>
                     </Route>
 
-                    {/* Op Admin routes */}
-                    <Route element={<ProtectedRoute allowedRoles={['Operation Admin', 'OperationAdmin']} />}>
+                    {/* Coordinator routes */}
+                    <Route element={<ProtectedRoute allowedRoles={['Coordinator']} />}>
                         <Route element={<PasswordChangedGuard />}>
                             <Route path="/OpAdmin_Dashboard" element={<OpAdmin_Dashboard />} />
                         </Route>
                     </Route>
 
-                    {/* Op Employee routes */}
-                    <Route element={<ProtectedRoute allowedRoles={['Coordinator', 'Encoder']} />}>
+                    {/* Encoder / Dispatcher / Courier / Accountant routes */}
+                    <Route element={<ProtectedRoute allowedRoles={['Encoder', 'Dispatcher', 'Courier', 'Accountant']} />}>
                         <Route element={<PasswordChangedGuard />}>
                             <Route path="/OpEmployee_Dashboard" element={<OpEmployee_Dashboard />} />
                         </Route>

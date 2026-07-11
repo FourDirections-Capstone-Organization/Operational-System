@@ -1506,11 +1506,6 @@ body {
     letter-spacing: 0.03em;
 }
 
-/* ─── Leave Request Modal ────────────────────────────────────────────────── */
-.leave-request-modal {
-    width: 480px;
-}
-
 .leave-modal-title-block {
     display: flex;
     align-items: center;

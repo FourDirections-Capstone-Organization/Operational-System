@@ -140,6 +140,7 @@ public class TaskService : ITaskService
             case UserRole.Dispatcher:
             case UserRole.Encoder:
             case UserRole.Courier:
+            case UserRole.Accountant:
                 query = query.Where(t => t.Assignments.Any(a => a.AssignedUserId == requestUserId));
                 query = query.Where(t => !t.IsConfidential);
                 break;
@@ -198,7 +199,8 @@ public class TaskService : ITaskService
         // ACCESS CHECK (FR-010, FR-013)
         if (requestUserRole == UserRole.Dispatcher ||
             requestUserRole == UserRole.Encoder ||
-            requestUserRole == UserRole.Courier)
+            requestUserRole == UserRole.Courier ||
+            requestUserRole == UserRole.Accountant)
         {
             if (task.IsConfidential)
                 return ApiResponseDTO<TaskResponseDTO>.Failure("Access denied: task is confidential");
@@ -314,7 +316,7 @@ public class TaskService : ITaskService
 
     public async Task<ApiResponseDTO<List<TaskAssigneeDTO>>> GetAssignableUsersAsync()
     {
-        var assignableRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier };
+        var assignableRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier, UserRole.Accountant };
 
         var users = await _db.Users
             .Where(u => assignableRoles.Contains(u.Role) && u.IsActive && !u.IsDeactivated)
@@ -359,9 +361,9 @@ public class TaskService : ITaskService
                     .Select(u => u.Role)
                     .FirstOrDefaultAsync();
 
-                var allowedRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier };
+                var allowedRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier, UserRole.Accountant };
                 if (!allowedRoles.Contains(userRole))
-                    return (false, "Assigned user must be an active Dispatcher, Encoder, or Courier");
+                    return (false, "Assigned user must be an active Dispatcher, Encoder, Courier, or Accountant");
 
                 return (true, null);
 

@@ -21,7 +21,7 @@ function VerifyEmail() {
                 return;
             }
             try {
-                await axios.get(`/api/authentication/verify-email?token=${token}`);
+                await axios.get(`/api/auth/verify-email?token=${token}`);
                 setState("success");
             } catch (error: any) {
                 console.log("Error response:", error.response?.data); 

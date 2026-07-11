@@ -81,10 +81,6 @@ export interface DepartmentResponseDTO {
 export interface CreateDepartmentDTO {
     name: string;
     description?: string;
-    code: string;
-    status: 'Active' | 'Inactive';
-    headEmployeeId?: string;
-    effectiveDate: string;
 }
 
 // ── Employees (for dropdowns) ──
@@ -117,14 +113,7 @@ export interface JobPositionResponseDTO {
 }
 export interface CreateJobPositionDTO {
     name: string;
-    description?: string;
     departmentId: string;
-    code: string;
-    status: 'Active' | 'Inactive';
-    reportsToId?: string;
-    employmentType: EmploymentType;
-    positionLevel: PositionLevel;
-    effectiveDate: string;
 }
 
 // ── Shared ──
@@ -309,17 +298,17 @@ const DEFAULT_DEPT_FORM = {
     name: '',
     description: '',
     code: '',
-    status: 'Active' as 'Active' | 'Inactive',
+    status: 'Active' as const,
     headEmployeeId: '',
     effectiveDate: '',
 };
 
 const DEFAULT_POS_FORM = {
     name: '',
+    departmentId: '',
     description: '',
     code: '',
-    departmentId: '',
-    status: 'Active' as 'Active' | 'Inactive',
+    status: 'Active' as const,
     reportsToId: '',
     employmentType: 'Regular' as EmploymentType,
     positionLevel: 'Staff' as PositionLevel,
@@ -396,23 +385,32 @@ export default function RoleManagementTab() {
     const fetchRoles = async () => {
         setRolesLoading(true);
         try {
-            const [rRes, pRes] = await Promise.all([
-                fetch('/api/roles', { headers: authHeaders() }),
-                fetch('/api/roles/permissions', { headers: authHeaders() }),
-            ]);
+            const rRes = await fetch('/api/role', { headers: authHeaders() });
             if (!rRes.ok) throw new Error(`Failed to fetch roles`);
-            if (!pRes.ok) throw new Error(`Failed to fetch permissions`);
-            const rd = await rRes.json(); const pd = await pRes.json();
-            const normalize = (d: any): RoleResponseDTO => ({
-                roleId: d.roleId ?? d.RoleId, name: d.name ?? d.Name,
-                description: d.description ?? d.Description,
-                isSystemDefined: d.isSystemDefined ?? d.IsSystemDefined ?? false,
-                permissions: d.permissions ?? d.Permissions ?? [],
-            });
-            setRoles((Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? []).map(normalize));
-            setPermissions((Array.isArray(pd) ? pd : pd.data ?? pd.$values ?? []).map((p: any) => ({
-                permissionId: p.permissionId ?? p.PermissionId,
-                name: p.name ?? p.Name, description: p.description ?? p.Description,
+            const rd = await rRes.json();
+
+            const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
+            const normalize = (d: any): RoleResponseDTO => {
+                const roleVal = d.role ?? d.Role;
+                const roleInt = typeof roleVal === 'number' ? roleVal : parseInt(roleVal, 10);
+                const roleName = ROLE_MAP[roleInt] || ((d.displayName ?? d.DisplayName) ?? String(roleVal));
+                return {
+                    roleId: String(roleVal),
+                    name: roleName,
+                    description: d.description ?? d.Description ?? '',
+                    isSystemDefined: true,
+                    permissions: d.permissions ?? d.Permissions ?? [],
+                };
+            };
+            const rolesList = (Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? []).map(normalize);
+            setRoles(rolesList);
+
+            const allPerms = new Set<string>();
+            rolesList.forEach(r => r.permissions.forEach(p => allPerms.add(p)));
+            setPermissions(Array.from(allPerms).map((p, i) => ({
+                permissionId: String(i),
+                name: p,
+                description: p,
             })));
         } catch (e: any) { toastError(e.message || 'Failed to load roles'); } finally { setRolesLoading(false); }
     };
@@ -420,7 +418,7 @@ export default function RoleManagementTab() {
     const fetchDepartments = async () => {
         setDeptsLoading(true);
         try {
-            const res = await fetch('/api/organization/departments', { headers: authHeaders() });
+            const res = await fetch('/api/department', { headers: authHeaders() });
             if (!res.ok) throw new Error(`Failed to fetch departments`);
             const data = await res.json();
             const normalize = (d: any): DepartmentResponseDTO => ({
@@ -443,7 +441,7 @@ export default function RoleManagementTab() {
     const fetchPositions = async () => {
         setPosLoading(true);
         try {
-            const res = await fetch('/api/organization/job-positions', { headers: authHeaders() });
+            const res = await fetch('/api/job-positions', { headers: authHeaders() });
             if (!res.ok) throw new Error(`Failed to fetch positions`);
             const data = await res.json();
             const normalize = (p: any): JobPositionResponseDTO => ({
@@ -471,7 +469,7 @@ export default function RoleManagementTab() {
         if (employees.length > 0) return; // already loaded
         setEmployeesLoading(true);
         try {
-            const res = await fetch('/api/employees?status=Active&pageSize=500', { headers: authHeaders() });
+            const res = await fetch('/api/user', { headers: authHeaders() });
             if (!res.ok) { setEmployees([]); return; }
             const data = await res.json();
             const raw: any[] = Array.isArray(data) ? data : data.data ?? data.$values ?? data.items ?? [];
@@ -547,11 +545,6 @@ export default function RoleManagementTab() {
 
     // ─── Role Actions ─────────────────────────────────────────────────────────
 
-    const openCreateRole = () => {
-        setCreateRoleName(''); setCreateRoleDesc(''); setCreateRolePerms(new Set()); setCreateRoleErrors({});
-        setIsCreateRoleOpen(true);
-    };
-
     const openCreatePos = () => {
         setPosForm(DEFAULT_POS_FORM); setPosFormErrors({});
         setShowQuickDept(false); setQuickDeptForm({ name: '', code: '', effectiveDate: '' }); setQuickDeptErrors({});
@@ -567,7 +560,7 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setQuickDeptErrors(errors); return; }
         setQuickDeptLoading(true);
         try {
-            const res = await fetch('/api/organization/departments', {
+            const res = await fetch('/api/department', {
                 method: 'POST', headers: authHeaders(),
                 body: JSON.stringify({
                     name: quickDeptForm.name.trim(),
@@ -587,60 +580,12 @@ export default function RoleManagementTab() {
         } catch (e: any) { toastError(e.message); setQuickDeptErrors({ api: e.message }); } finally { setQuickDeptLoading(false); }
     };
 
-    const handleCreateRole = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const errors: Record<string, string> = {};
-        if (!createRoleName.trim()) errors.name = 'Role name is required.';
-        else if (!/^[a-zA-Z0-9_ -]{3,50}$/.test(createRoleName.trim()))
-            errors.name = 'Role name must be 3–50 characters (letters, numbers, spaces, underscores, dashes).';
-        if (Object.keys(errors).length) { setCreateRoleErrors(errors); return; }
-        setActionLoading(true);
-        try {
-            const res = await fetch('/api/roles', {
-                method: 'POST', headers: authHeaders(),
-                body: JSON.stringify({ name: createRoleName.trim(), description: createRoleDesc.trim() || undefined, permissions: Array.from(createRolePerms) }),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create role.'); }
-            toastSuccess('Role created successfully!');
-            setCreateRoleDirty(false); setIsCreateRoleOpen(false); fetchRoles();
-        } catch (e: any) { toastError(e.message); setCreateRoleErrors({ api: e.message }); } finally { setActionLoading(false); }
+    const openViewRole = (role: RoleResponseDTO) => {
+        setEditingRole(role);
     };
 
-    const openEditRole = (role: RoleResponseDTO) => {
-        setEditRoleDirty(false); setEditingRole(role); setEditRoleDesc(role.description || ''); setEditRolePerms(new Set(role.permissions)); setEditRoleError('');
-    };
-
-    const handleEditRole = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingRole) return;
-        setActionLoading(true);
-        try {
-            const res = await fetch(`/api/roles/${editingRole.roleId}`, {
-                method: 'PUT', headers: authHeaders(),
-                body: JSON.stringify({ description: editRoleDesc.trim() || undefined, permissions: Array.from(editRolePerms) }),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update role.'); }
-            toastSuccess('Role updated successfully!');
-            setEditRoleDirty(false); setEditingRole(null); fetchRoles();
-        } catch (e: any) { toastError(e.message); setEditRoleError(e.message); } finally { setActionLoading(false); }
-    };
-
-    const confirmDeleteRole = (role: RoleResponseDTO) => {
-        setConfirmModal({
-            isOpen: true, variant: 'danger', icon: 'ti-trash',
-            title: `Delete Role: ${role.name}?`,
-            description: (<>Permanently delete role <strong>{role.name}</strong>? This cannot be undone.</>),
-            notice: 'Accounts currently assigned to this role must be reassigned first.',
-            confirmLabel: 'Delete Role',
-            onConfirm: async () => {
-                setActionLoading(true);
-                try {
-                    const res = await fetch(`/api/roles/${role.roleId}`, { method: 'DELETE', headers: authHeaders() });
-                    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed.'); }
-                    toastSuccess('Role deleted.'); setConfirmModal(CONFIRM_CLOSED); fetchRoles();
-                } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
-            },
-        });
+    const closeViewRole = () => {
+        setEditingRole(null);
     };
 
     // ─── Department Actions ───────────────────────────────────────────────────
@@ -703,15 +648,7 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setDeptFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const payload: CreateDepartmentDTO = {
-                name: deptForm.name.trim(),
-                description: deptForm.description.trim() || undefined,
-                code: deptForm.code.trim(),
-                status: deptForm.status,
-                headEmployeeId: deptForm.headEmployeeId || undefined,
-                effectiveDate: deptForm.effectiveDate,
-            };
-            const res = await fetch('/api/organization/departments', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+            const res = await fetch('/api/department', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: deptForm.name.trim(), description: deptForm.description.trim() || undefined }) });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create department.'); }
             toastSuccess('Department created successfully!');
             setDeptDirty(false); setIsCreateDeptOpen(false); fetchDepartments();
@@ -738,15 +675,7 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setDeptFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const payload: CreateDepartmentDTO = {
-                name: deptForm.name.trim(),
-                description: deptForm.description.trim() || undefined,
-                code: deptForm.code.trim(),
-                status: deptForm.status,
-                headEmployeeId: deptForm.headEmployeeId || undefined,
-                effectiveDate: deptForm.effectiveDate,
-            };
-            const res = await fetch(`/api/organization/departments/${editingDept.departmentId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+            const res = await fetch(`/api/department/${editingDept.departmentId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ name: deptForm.name.trim(), description: deptForm.description.trim() || undefined }) });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update department.'); }
             toastSuccess('Department updated successfully!');
             setEditingDept(null); fetchDepartments();
@@ -766,15 +695,13 @@ export default function RoleManagementTab() {
             onConfirm: async () => {
                 setActionLoading(true);
                 try {
-                    const patchRes = await fetch(`/api/organization/departments/${dept.departmentId}/toggle-status`, { method: 'PATCH', headers: authHeaders() });
-                    if (!patchRes.ok) {
-                        const putRes = await fetch(`/api/organization/departments/${dept.departmentId}`, {
-                            method: 'PUT', headers: authHeaders(),
-                            body: JSON.stringify({ name: dept.name, description: dept.description, code: dept.code, status: activate ? 'Active' : 'Inactive', effectiveDate: dept.effectiveDate }),
-                        });
-                        if (!putRes.ok) { const e = await putRes.json().catch(() => ({})); throw new Error(e.message || 'Failed to update status.'); }
+                    if (activate) {
+                        toastError('Activation requires backend support. Use the Edit function to update department details.');
+                    } else {
+                        const res = await fetch(`/api/department/${dept.departmentId}`, { method: 'DELETE', headers: authHeaders() });
+                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to deactivate.'); }
+                        toastSuccess(`Department deactivated.`);
                     }
-                    toastSuccess(`Department ${activate ? 'activated' : 'deactivated'}.`);
                     setConfirmModal(CONFIRM_CLOSED); fetchDepartments();
                 } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
@@ -794,7 +721,7 @@ export default function RoleManagementTab() {
             onConfirm: empCount > 0 ? () => setConfirmModal(CONFIRM_CLOSED) : async () => {
                 setActionLoading(true);
                 try {
-                    const res = await fetch(`/api/organization/departments/${dept.departmentId}`, { method: 'DELETE', headers: authHeaders() });
+                    const res = await fetch(`/api/department/${dept.departmentId}`, { method: 'DELETE', headers: authHeaders() });
                     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete department.'); }
                     toastSuccess('Department deleted.'); setConfirmModal(CONFIRM_CLOSED); fetchDepartments();
                 } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
@@ -854,18 +781,7 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setPosFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const payload: CreateJobPositionDTO = {
-                name: posForm.name.trim(),
-                description: posForm.description.trim() || undefined,
-                departmentId: posForm.departmentId,
-                code: posForm.code.trim(),
-                status: posForm.status,
-                reportsToId: posForm.reportsToId || undefined,
-                employmentType: posForm.employmentType,
-                positionLevel: posForm.positionLevel,
-                effectiveDate: posForm.effectiveDate,
-            };
-            const res = await fetch('/api/organization/job-positions', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+            const res = await fetch('/api/job-positions', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: posForm.name.trim(), departmentId: posForm.departmentId }) });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create position.'); }
             toastSuccess('Position created successfully!');
             setIsCreatePosOpen(false); fetchPositions();
@@ -895,18 +811,7 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setPosFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const payload: CreateJobPositionDTO = {
-                name: posForm.name.trim(),
-                description: posForm.description.trim() || undefined,
-                departmentId: posForm.departmentId,
-                code: posForm.code.trim(),
-                status: posForm.status,
-                reportsToId: posForm.reportsToId || undefined,
-                employmentType: posForm.employmentType,
-                positionLevel: posForm.positionLevel,
-                effectiveDate: posForm.effectiveDate,
-            };
-            const res = await fetch(`/api/organization/job-positions/${editingPos.jobPositionId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) });
+            const res = await fetch(`/api/job-positions/${editingPos.jobPositionId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ name: posForm.name.trim(), departmentId: posForm.departmentId }) });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update position.'); }
             toastSuccess('Position updated successfully!');
             setEditingPos(null); fetchPositions();
@@ -926,15 +831,13 @@ export default function RoleManagementTab() {
             onConfirm: async () => {
                 setActionLoading(true);
                 try {
-                    const patchRes = await fetch(`/api/organization/job-positions/${pos.jobPositionId}/toggle-status`, { method: 'PATCH', headers: authHeaders() });
-                    if (!patchRes.ok) {
-                        const putRes = await fetch(`/api/organization/job-positions/${pos.jobPositionId}`, {
-                            method: 'PUT', headers: authHeaders(),
-                            body: JSON.stringify({ name: pos.name, description: pos.description, departmentId: pos.departmentId, code: pos.code, status: activate ? 'Active' : 'Inactive' }),
-                        });
-                        if (!putRes.ok) { const e = await putRes.json().catch(() => ({})); throw new Error(e.message || 'Failed to update status.'); }
+                    if (activate) {
+                        toastError('Activation requires backend support. Use the Edit function to update position details.');
+                    } else {
+                        const res = await fetch(`/api/job-positions/${pos.jobPositionId}`, { method: 'DELETE', headers: authHeaders() });
+                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to deactivate.'); }
+                        toastSuccess(`Position deactivated.`);
                     }
-                    toastSuccess(`Position ${activate ? 'activated' : 'deactivated'}.`);
                     setConfirmModal(CONFIRM_CLOSED); fetchPositions();
                 } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
@@ -954,7 +857,7 @@ export default function RoleManagementTab() {
             onConfirm: empCount > 0 ? () => setConfirmModal(CONFIRM_CLOSED) : async () => {
                 setActionLoading(true);
                 try {
-                    const res = await fetch(`/api/organization/job-positions/${pos.jobPositionId}`, { method: 'DELETE', headers: authHeaders() });
+                    const res = await fetch(`/api/job-positions/${pos.jobPositionId}`, { method: 'DELETE', headers: authHeaders() });
                     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete position.'); }
                     toastSuccess('Position deleted.'); setConfirmModal(CONFIRM_CLOSED); fetchPositions();
                 } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
@@ -1399,13 +1302,12 @@ export default function RoleManagementTab() {
                         title="Roles" totalResults={filteredRoles.length}
                         searchQuery={roleSearch} setSearchQuery={v => { setRoleSearch(v); setRolePage(1); }}
                         searchPlaceholder="Search roles…"
-                        headers={['Role Name', 'Type', 'Permissions', 'Actions']}
+                        headers={['Role Name', 'Type', 'Permissions']}
                         loading={rolesLoading} emptyMessage="No roles match your search." emptyIcon={<Shield size={20} />}
-                        actionButton={{ label: 'Create Role', icon: <Plus size={14} />, onClick: openCreateRole }}
                         currentPage={rolePage} totalPages={roleTotalPages} onPageChange={setRolePage}
                     >
                         {pagedRoles.map(role => (
-                            <tr key={role.roleId}>
+                            <tr key={role.roleId} onClick={() => openViewRole(role)} style={{ cursor: 'pointer' }}>
                                 <td>
                                     <div className="rm2-role-name-cell">
                                         <div className={`rm2-role-icon ${role.isSystemDefined ? 'rm2-role-icon--system' : 'rm2-role-icon--custom'}`}><Shield size={14} /></div>
@@ -1417,12 +1319,6 @@ export default function RoleManagementTab() {
                                 </td>
                                 <td><RoleTypeBadge isSystem={role.isSystemDefined} /></td>
                                 <td><span className="rm2-perm-pill">{role.permissions.length} permissions</span></td>
-                                <td>
-                                    <ActionsDropdown actions={[
-                                        { label: 'Edit Role', icon: <Pencil size={13} />, onClick: () => openEditRole(role) },
-                                        ...(!role.isSystemDefined ? [{ label: 'Delete Role', icon: <Trash2 size={13} />, onClick: () => confirmDeleteRole(role), variant: 'danger' as const }] : []),
-                                    ]} />
-                                </td>
                             </tr>
                         ))}
                     </DataTable>
@@ -1547,47 +1443,42 @@ export default function RoleManagementTab() {
                 </>
             )}
 
-            {/* ─── CREATE ROLE MODAL ───────────────────────────────────────── */}
-            <FormModal isOpen={isCreateRoleOpen} onClose={() => { setCreateRoleDirty(false); setIsCreateRoleOpen(false); }}
-                title="Create Custom Role" subtitle="Define a new role and assign permissions."
-                onSubmit={handleCreateRole} submitLabel="Create Role" isSubmitting={actionLoading}
-                apiError={createRoleErrors.api} size="md"
-                confirmOnCancel={true} dirty={createRoleDirty}>
-                <div className="rm2-form-body">
-                    <div className="rm2-field">
-                        <label className="rm2-form-label">Role Name <span className="rm2-req">*</span></label>
-                        <input type="text" className={`form-input${createRoleErrors.name ? ' rm2-input--error' : ''}`}
-                            placeholder="e.g. Operation Auditor" value={createRoleName}
-                            onChange={e => { setCreateRoleName(e.target.value); setCreateRoleDirty(true); setCreateRoleErrors(p => ({ ...p, name: '' })); }} />
-                        {createRoleErrors.name && <span className="rm2-field-error"><AlertCircle size={11} /> {createRoleErrors.name}</span>}
-                    </div>
-                    <div className="rm2-field">
-                        <label className="rm2-form-label">Description</label>
-                        <textarea className="form-input" rows={2} placeholder="Briefly describe what this role does…"
-                            value={createRoleDesc} onChange={e => { setCreateRoleDesc(e.target.value); setCreateRoleDirty(true); }} />
-                    </div>
-                    <PermissionSelector grouped={grouped} selected={createRolePerms} setSelected={(s) => { setCreateRolePerms(s); setCreateRoleDirty(true); }} />
-                </div>
-            </FormModal>
-
-            {/* ─── EDIT ROLE MODAL ─────────────────────────────────────────── */}
-            <FormModal isOpen={!!editingRole} onClose={() => { setEditRoleDirty(false); setEditingRole(null); }}
-                title={editingRole ? `Edit Role: ${editingRole.name}` : ''} subtitle="Update role description and permissions."
-                onSubmit={handleEditRole} submitLabel="Save Changes" isSubmitting={actionLoading}
-                apiError={editRoleError} size="md"
-                confirmOnCancel={true} dirty={editRoleDirty}>
+            {/* ─── VIEW ROLE MODAL (read-only) ─────────────────────────────── */}
+            <FormModal isOpen={!!editingRole} onClose={closeViewRole}
+                title={editingRole ? `Role: ${editingRole.name}` : ''}
+                subtitle={editingRole?.description || 'No description'}
+                size="lg">
                 {editingRole && (
                     <div className="rm2-form-body">
                         <div className="rm2-field">
-                            <label className="rm2-form-label">Role Name</label>
-                            <input type="text" className="form-input rm2-input--disabled" value={editingRole.name} disabled />
-                            <span className="rm2-field-hint"><Info size={11} /> Role names cannot be changed after creation.</span>
+                            <label className="rm2-form-label">Role Type</label>
+                            <RoleTypeBadge isSystem={editingRole.isSystemDefined} />
                         </div>
                         <div className="rm2-field">
-                            <label className="rm2-form-label">Description</label>
-                            <textarea className="form-input" rows={2} value={editRoleDesc} onChange={e => { setEditRoleDesc(e.target.value); setEditRoleDirty(true); }} />
+                            <label className="rm2-form-label">Assigned Permissions</label>
+                            <div className="rm2-perm-viewer">
+                                {Object.entries(groupPermissions(editingRole.permissions.map((p, i) => ({
+                                    permissionId: String(i),
+                                    name: p,
+                                })))).map(([cat, perms]) => (
+                                    <div key={cat} className="rm2-perm-group">
+                                        <label className="rm2-perm-category" style={{ cursor: 'default' }}>
+                                            <span>{formatCategory(cat)} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({perms.length})</span></span>
+                                        </label>
+                                        <div className="rm2-perm-items">
+                                            {perms.map(perm => (
+                                                <div key={perm.permissionId} className="rm2-perm-item rm2-perm-item--readonly" title={perm.description}>
+                                                    <div className="rm2-perm-item__info">
+                                                        <span className="rm2-perm-item__name">{getFriendlyName(perm.name)}</span>
+                                                        {perm.description && <span className="rm2-perm-item__desc">{perm.description}</span>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <PermissionSelector grouped={grouped} selected={editRolePerms} setSelected={(s) => { setEditRolePerms(s); setEditRoleDirty(true); }} />
                     </div>
                 )}
             </FormModal>
@@ -1602,7 +1493,7 @@ export default function RoleManagementTab() {
                 submitLabel="Create Department"
                 isSubmitting={actionLoading}
                 apiError={deptFormErrors.api}
-                size="md"
+                size="lg"
                 confirmOnCancel={true}
                 dirty={deptDirty}
             >
@@ -1619,7 +1510,7 @@ export default function RoleManagementTab() {
                 submitLabel="Save Changes"
                 isSubmitting={actionLoading}
                 apiError={deptFormErrors.api}
-                size="md"
+                size="lg"
                 confirmOnCancel={true}
                 dirty={deptDirty}
             >
@@ -1636,7 +1527,7 @@ export default function RoleManagementTab() {
                 submitLabel="Create Position"
                 isSubmitting={actionLoading}
                 apiError={posFormErrors.api}
-                size="md"
+                size="lg"
                 confirmOnCancel={true}
                 dirty={posDirty}
             >
@@ -1653,7 +1544,7 @@ export default function RoleManagementTab() {
                 submitLabel="Save Changes"
                 isSubmitting={actionLoading}
                 apiError={posFormErrors.api}
-                size="md"
+                size="lg"
                 confirmOnCancel={true}
                 dirty={posDirty}
             >

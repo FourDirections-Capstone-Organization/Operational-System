@@ -41,7 +41,7 @@ const getCurrentAccountId = (): string => {
     const token = localStorage.getItem('authToken');
     if (!token) return '';
     try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '')));
         return payload[
             'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
         ] ?? payload.sub ?? payload.nameid ?? '';
