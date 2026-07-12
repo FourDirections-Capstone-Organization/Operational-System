@@ -36,6 +36,7 @@ import {
     Mail,
     Download,
     RefreshCw,
+    GitBranch,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
@@ -60,7 +61,10 @@ import ActionButton from '../../components/ActionButton/ActionButton';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import SubTabNav from '../../components/ui/SubTabNav';
 import EmployeeDocumentsTab from './EmployeeDocumentsTab/EmployeeDocumentsTab';
+import OrgStructureTab from './OrgStructureTab/OrgStructureTab';
 import { ReportsTab } from '../OpAdmin_Dashboard/OpAdmin_Dashboard';
+import TaskManager from '../../components/TaskManager/TaskManager';
+import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +78,9 @@ type NavTab =
     | 'reports'
     | 'activity_logs'
     | 'government_records'
-    | 'profile';
+    | 'tasks'
+    | 'profile'
+    | 'org-structure';
 
 // ─── Updated Types ────────────────────────────────────────────────────────────
 
@@ -193,7 +199,7 @@ const CONFIRM_CLOSED: ConfirmModalState = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
-const SYSTEM_ROLES = ['Manager', 'Coordinator', 'Encoder'];
+const SYSTEM_ROLES = ['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant'];
 
 const DEPARTMENTS = [
     'Operations',
@@ -231,6 +237,7 @@ const NAV_GROUPS = [
         label: 'INTEGRATION',
         items: [
             { tab: 'delivery' as NavTab, icon: FileText, label: 'Delivery Summary' },
+            { tab: 'tasks' as NavTab, icon: ClipboardList, label: 'Task Management' },
             { tab: 'finance' as NavTab, icon: BarChart3, label: 'Finance' },
         ],
     },
@@ -251,6 +258,7 @@ const NAV_GROUPS = [
         items: [
             { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
             { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
+            { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
             { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
         ],
     },
@@ -983,6 +991,19 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                     if (!statusRes.ok) {
                         const err = await statusRes.json().catch(() => ({}));
                         throw new Error(err.message || 'Failed to update account status. Please try again.');
+                    }
+                }
+                const newRoleVal = toBackendRole(form.role);
+                const oldRoleVal = typeof employee.role === 'number' ? employee.role : parseInt(employee.role, 10);
+                if (newRoleVal !== oldRoleVal) {
+                    const roleRes = await fetch(`/api/role/user/${userId}/role`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ newRole: newRoleVal, reason: 'Role updated via admin panel' }),
+                    });
+                    if (!roleRes.ok) {
+                        const err = await roleRes.json().catch(() => ({}));
+                        throw new Error(err.message || 'Failed to update role. Please try again.');
                     }
                 }
                 onUpdated({
@@ -2537,7 +2558,7 @@ export default function Dashboard() {
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
-    const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Encoder']);
+    const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
     const [empModalEditMode, setEmpModalEditMode] = useState(false);
@@ -2555,6 +2576,289 @@ export default function Dashboard() {
     const [empLoading, setEmpLoading] = useState(true);
     const [empPage, setEmpPage] = useState(1);
     const [empTotalPages, setEmpTotalPages] = useState(1);
+
+    // ── Task Management ──
+    const [tmTasks, setTmTasks] = useState<any[]>([]);
+    const [tmLoading, setTmLoading] = useState(false);
+    const [showNewTask, setShowNewTask] = useState(false);
+    const [tmDetailTask, setTmDetailTask] = useState<TaskViewTask | null>(null);
+    const [tmEditingTask, setTmEditingTask] = useState<TaskViewTask | null>(null);
+    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+    const [newTaskErrors, setNewTaskErrors] = useState<Record<string, string>>({});
+    const [newTaskSubmitting, setNewTaskSubmitting] = useState(false);
+    const [newTaskApiError, setNewTaskApiError] = useState('');
+    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+    const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const [editApiError, setEditApiError] = useState('');
+    const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
+    const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Critical: 3 };
+    const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+
+    const toLocalDateTimeInput = (iso: string | null | undefined): string => {
+        if (!iso) return '';
+        try {
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            const pad = (n: number) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        } catch { return ''; }
+    };
+
+    const mapManagerTaskToView = (t: any): TaskViewTask => {
+        const statusNum = t.status;
+        const mappedStatus = STATUS_LABELS[statusNum] ?? 'Assigned';
+        const assignees = t.assignees ?? [];
+        const firstAssignee = assignees[0];
+        return {
+            taskId: t.id ?? t.taskId ?? '',
+            taskTitle: t.title ?? t.taskTitle ?? '',
+            taskDescription: t.description ?? t.taskDescription ?? '',
+            priority: ({ 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' } as Record<number, any>)[t.priorityLevel] ?? 'Medium',
+            dueAt: t.deadline ?? t.dueAt ?? null,
+            taskStatus: mappedStatus as TaskViewTask['taskStatus'],
+            taskRemarks: t.remarks ?? t.taskRemarks ?? '',
+            assignedEmployee: firstAssignee?.fullName ?? t.assignedEmployee ?? 'Unassigned',
+            createdByEmployee: t.createdByName ?? t.createdByEmployee ?? localStorage.getItem('employeeName') ?? 'Manager',
+            assignedTo: firstAssignee?.userId ?? t.assignedTo ?? '',
+            createdAt: t.createdAt ?? new Date().toISOString(),
+            isConfidential: t.isConfidential ?? false,
+        };
+    };
+
+    const fetchManagerTasks = async () => {
+        setTmLoading(true);
+        try {
+            const token = localStorage.getItem('authToken');
+            const res = await fetch('/api/task', { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) { setTmTasks([]); return; }
+            const json = await res.json();
+            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.data) ? json.data.data : (Array.isArray(json?.data) ? json.data : []));
+            setTmTasks(raw.map((t: any) => ({
+                id: t.id ?? t.taskId,
+                name: t.title ?? t.taskTitle ?? '',
+                referenceNumber: t.taskReferenceNumber ?? '',
+                project: t.classification === 1 ? 'SpecialTask' : '',
+                assignee: t.assignees?.length ? { id: t.assignees[0].userId ?? '', name: t.assignees[0].fullName ?? '' } : undefined,
+                priority: ({ 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' } as Record<number, any>)[t.priorityLevel] || 'Medium',
+                status: ({ 0: 'To do', 1: 'In progress', 2: 'In review', 3: 'Done', 4: 'On hold', 5: 'Cancelled' } as Record<number, any>)[t.status] || 'Backlog',
+                dueDate: t.deadline ?? t.dueAt ?? undefined,
+                progress: t.status === 3 ? 100 : t.status === 1 ? 50 : t.status === 2 ? 80 : t.status === 0 ? 10 : 0,
+                isArchived: false,
+                isConfidential: t.isConfidential ?? false,
+            })));
+        } catch { setTmTasks([]); }
+        setTmLoading(false);
+    };
+
+    useEffect(() => { if (activeTab === 'tasks') { fetchManagerTasks(); } }, [activeTab]);
+
+    const handleManagerTaskArchive = async (ids: string[]) => {
+        const token = localStorage.getItem('authToken');
+        for (const id of ids) {
+            try {
+                await fetch(`/api/task/${id}/archive`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
+            } catch { /* ignore individual failures */ }
+        }
+        success(`${ids.length} task${ids.length !== 1 ? 's' : ''} archived.`);
+        fetchManagerTasks();
+    };
+
+    const handleManagerTaskRestore = async (ids: string[]) => {
+        const token = localStorage.getItem('authToken');
+        for (const id of ids) {
+            try {
+                await fetch(`/api/task/${id}/restore`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
+            } catch { /* ignore individual failures */ }
+        }
+        success(`${ids.length} task${ids.length !== 1 ? 's' : ''} restored.`);
+        fetchManagerTasks();
+    };
+
+    const handleManagerTaskDelete = async (ids: string[]) => {
+        const token = localStorage.getItem('authToken');
+        for (const id of ids) {
+            try {
+                await fetch(`/api/task/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            } catch { /* ignore individual failures */ }
+        }
+        success(`${ids.length} task${ids.length !== 1 ? 's' : ''} deleted.`);
+        fetchManagerTasks();
+    };
+
+    const handleManagerTaskMarkDone = async (ids: string[]) => {
+        const token = localStorage.getItem('authToken');
+        for (const id of ids) {
+            try {
+                await fetch(`/api/task/${id}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 3 }),
+                });
+            } catch { /* ignore individual failures */ }
+        }
+        success(`${ids.length} task${ids.length !== 1 ? 's' : ''} marked done.`);
+        fetchManagerTasks();
+    };
+
+    const handleManagerTaskView = (id: string) => {
+        const found = tmTasks.find(t => t.id === id);
+        if (!found) return;
+        // The list view flattens the task; reconstruct a TaskViewTask from the raw data
+        // by re-fetching the full record so we get description, remarks, etc.
+        const token = localStorage.getItem('authToken');
+        fetch(`/api/task/${id}`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : null)
+            .then(json => {
+                const raw = json?.data ?? json;
+                if (raw) {
+                    setTmDetailTask(mapManagerTaskToView(raw));
+                } else {
+                    // Fallback: map from the list summary
+                    setTmDetailTask({
+                        taskId: found.id,
+                        taskTitle: found.name,
+                        taskDescription: '',
+                        priority: found.priority,
+                        dueAt: found.dueDate ?? null,
+                        taskStatus: found.status === 'Done' ? 'Completed' : 'In Progress',
+                        assignedEmployee: found.assignee?.name ?? 'Unassigned',
+                        createdByEmployee: localStorage.getItem('employeeName') ?? 'Manager',
+                        assignedTo: found.assignee?.id ?? '',
+                        createdAt: new Date().toISOString(),
+                    });
+                }
+            })
+            .catch(() => {
+                setTmDetailTask({
+                    taskId: found.id,
+                    taskTitle: found.name,
+                    taskDescription: '',
+                    priority: found.priority,
+                    dueAt: found.dueDate ?? null,
+                    taskStatus: found.status === 'Done' ? 'Completed' : 'In Progress',
+                    assignedEmployee: found.assignee?.name ?? 'Unassigned',
+                    createdByEmployee: localStorage.getItem('employeeName') ?? 'Manager',
+                    assignedTo: found.assignee?.id ?? '',
+                    createdAt: new Date().toISOString(),
+                });
+            });
+    };
+
+    useEffect(() => {
+        if (tmEditingTask) {
+            setEditForm({
+                title: tmEditingTask.taskTitle ?? '',
+                description: tmEditingTask.taskDescription ?? '',
+                priority: tmEditingTask.priority ?? '',
+                deadline: toLocalDateTimeInput(tmEditingTask.dueAt),
+                isConfidential: tmEditingTask.isConfidential ?? false,
+            });
+            setEditErrors({});
+            setEditApiError('');
+        }
+    }, [tmEditingTask]);
+
+    useEffect(() => {
+        if (!showNewTask) {
+            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+            setNewTaskErrors({});
+            setNewTaskApiError('');
+        }
+    }, [showNewTask]);
+
+    const handleManagerCreateTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const errs: Record<string, string> = {};
+        const t = newTaskForm.title.trim();
+        if (!t) errs.title = 'Title is required.';
+        else if (t.length < 3) errs.title = 'Title must be at least 3 characters.';
+        else if (t.length > 150) errs.title = 'Title must not exceed 150 characters.';
+        const d = newTaskForm.description.trim();
+        if (!d) errs.description = 'Description is required.';
+        else if (d.length > 2000) errs.description = 'Description must not exceed 2,000 characters.';
+        if (!newTaskForm.priority) errs.priority = 'Priority is required.';
+        if (!newTaskForm.deadline) errs.deadline = 'Deadline is required.';
+        if (Object.keys(errs).length) { setNewTaskErrors(errs); return; }
+        setNewTaskErrors({});
+
+        setNewTaskSubmitting(true);
+        setNewTaskApiError('');
+        const token = localStorage.getItem('authToken');
+        try {
+            const res = await fetch('/api/task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    title: t,
+                    description: d,
+                    priorityLevel: PRIORITY_NUM_FROM_LABEL[newTaskForm.priority] ?? 1,
+                    classification: 0,
+                    assignmentScope: 0,
+                    deadline: new Date(newTaskForm.deadline).toISOString(),
+                    isConfidential: newTaskForm.isConfidential,
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || err.Message || 'Failed to create task.');
+            }
+            success('Task created successfully.');
+            setShowNewTask(false);
+            fetchManagerTasks();
+        } catch (err: any) {
+            setNewTaskApiError(err.message || err.Message || 'Failed to create task.');
+        } finally {
+            setNewTaskSubmitting(false);
+        }
+    };
+
+    const handleManagerEditSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!tmEditingTask) return;
+        const errs: Record<string, string> = {};
+        const t = editForm.title.trim();
+        if (!t) errs.title = 'Title is required.';
+        else if (t.length < 3) errs.title = 'Title must be at least 3 characters.';
+        else if (t.length > 150) errs.title = 'Title must not exceed 150 characters.';
+        const d = editForm.description.trim();
+        if (!d) errs.description = 'Description is required.';
+        else if (d.length > 2000) errs.description = 'Description must not exceed 2,000 characters.';
+        if (!editForm.priority) errs.priority = 'Priority is required.';
+        if (!editForm.deadline) errs.deadline = 'Deadline is required.';
+        if (Object.keys(errs).length) { setEditErrors(errs); return; }
+        setEditErrors({});
+
+        setEditSubmitting(true);
+        setEditApiError('');
+        const token = localStorage.getItem('authToken');
+        try {
+            const res = await fetch(`/api/task/${tmEditingTask.taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    title: t,
+                    description: d,
+                    priorityLevel: PRIORITY_NUM_FROM_LABEL[editForm.priority] ?? 1,
+                    deadline: new Date(editForm.deadline).toISOString(),
+                    isConfidential: editForm.isConfidential,
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || err.Message || 'Failed to update task.');
+            }
+            success(editForm.isConfidential !== (tmEditingTask.isConfidential ?? false)
+                ? 'Confidentiality updated successfully.'
+                : 'Task updated successfully.');
+            setTmEditingTask(null);
+            fetchManagerTasks();
+        } catch (err: any) {
+            setEditApiError(err.message || err.Message || 'Failed to update task.');
+        } finally {
+            setEditSubmitting(false);
+        }
+    };
 
     // ── Activity Logs ──
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -2619,7 +2923,7 @@ export default function Dashboard() {
             if (res.ok) {
                 const data = await res.json();
                 const raw = Array.isArray(data) ? data : data.data ?? data.$values ?? [];
-                const roleNames = raw.map((r: any) => toDisplayRole(r.name ?? r.Name));
+                const roleNames = raw.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name));
                 setRolesList(roleNames);
             }
         } catch (err) {
@@ -2764,7 +3068,8 @@ export default function Dashboard() {
         dashboard: 'Dashboard', employees: 'Manage Employee',
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
         roles: 'Role Management', reports: 'Reports', activity_logs: 'Activity Logs', profile: 'My Profile',
-        government_records: 'Government Records'
+        government_records: 'Government Records', tasks: 'Task Manager',
+        'org-structure': 'Organizational Structure'
     };
 
     return (
@@ -2858,6 +3163,28 @@ export default function Dashboard() {
 
                 {activeTab === 'roles' && <RoleManagementTab />}
 
+                {activeTab === 'org-structure' && <OrgStructureTab />}
+
+                {activeTab === 'tasks' && (
+                    <div className="dashboard-content">
+                        <TaskManager
+                            tasks={tmTasks}
+                            teamMembers={[]}
+                            onNewTask={() => setShowNewTask(true)}
+                            onEdit={id => {
+                                const found = tmTasks.find(t => t.id === id);
+                                if (found) {
+                                    setTmEditingTask(mapManagerTaskToView(found));
+                                }
+                            }}
+                            onView={handleManagerTaskView}
+                            onArchive={ids => handleManagerTaskArchive(ids)}
+                            onRestore={ids => handleManagerTaskRestore(ids)}
+                            onDelete={ids => handleManagerTaskDelete(ids)}
+                            onMarkDone={ids => handleManagerTaskMarkDone(ids)}
+                        />
+                    </div>
+                )}
                 {activeTab === 'reports' && <ReportsTab teamMembers={[]} />}
 
                 {activeTab === 'delivery' && <div className="dashboard-content"><div className="card"><EmptyState icon={<Truck size={32} />} message="Delivery module coming soon." /></div></div>}
@@ -3026,6 +3353,292 @@ export default function Dashboard() {
                 onConfirm={doLogout}
                 onCancel={() => setLogoutConfirm(false)}
             />
+
+            {/* ── Task Detail Modal ── */}
+            {tmDetailTask && (
+                <TaskView
+                    task={tmDetailTask}
+                    onEdit={() => { setTmEditingTask(tmDetailTask); setTmDetailTask(null); }}
+                    onReopen={async () => {
+                        const token = localStorage.getItem('authToken');
+                        try {
+                            await fetch(`/api/task/${tmDetailTask.taskId}/reopen`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
+                            success('Task reopened.');
+                            setTmDetailTask(null);
+                            fetchManagerTasks();
+                        } catch {
+                            error('Failed to reopen task.');
+                        }
+                    }}
+                    onClose={() => setTmDetailTask(null)}
+                    onApprove={async (id) => {
+                        const token = localStorage.getItem('authToken');
+                        try {
+                            await fetch(`/api/task/${id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 3 }),
+                            });
+                            success('Task approved.');
+                            setTmDetailTask(null);
+                            fetchManagerTasks();
+                        } catch {
+                            error('Failed to approve task.');
+                        }
+                    }}
+                    onReject={async (id, reason) => {
+                        const token = localStorage.getItem('authToken');
+                        try {
+                            await fetch(`/api/task/${id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 1, remarks: reason }),
+                            });
+                            success('Task returned for rework.');
+                            setTmDetailTask(null);
+                            fetchManagerTasks();
+                        } catch {
+                            error('Failed to reject task.');
+                        }
+                    }}
+                />
+            )}
+
+            {/* ── New Task Modal ── */}
+            {showNewTask && (
+                <FormModal
+                    isOpen={true}
+                    onClose={() => setShowNewTask(false)}
+                    title="Create New Task"
+                    subtitle="Fill in the details to create a new task."
+                    apiError={newTaskApiError}
+                    onSubmit={handleManagerCreateTask}
+                    isSubmitting={newTaskSubmitting}
+                    size="md"
+                    submitLabel="Create Task"
+                >
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Task Information</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Task Title <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <input
+                                className="fm-input"
+                                value={newTaskForm.title}
+                                onChange={e => setNewTaskForm(p => ({ ...p, title: e.target.value }))}
+                                maxLength={150}
+                                placeholder="Enter task title"
+                            />
+                            {newTaskErrors.title && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{newTaskErrors.title}
+                                </span>
+                            )}
+                        </div>
+                        <div className="fm-field">
+                            <label className="fm-label">Description <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <textarea
+                                className="fm-input"
+                                rows={4}
+                                value={newTaskForm.description}
+                                onChange={e => setNewTaskForm(p => ({ ...p, description: e.target.value }))}
+                                maxLength={2000}
+                                placeholder="Describe the task…"
+                            />
+                            {newTaskErrors.description && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{newTaskErrors.description}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Schedule &amp; Priority</h5>
+                        <div className="fm-field-grid">
+                            <div className="fm-field">
+                                <label className="fm-label">Priority <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select
+                                    className="fm-select"
+                                    value={newTaskForm.priority}
+                                    onChange={e => setNewTaskForm(p => ({ ...p, priority: e.target.value }))}
+                                >
+                                    <option value="">Select priority</option>
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                                {newTaskErrors.priority && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.priority}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="fm-field">
+                                <label className="fm-label">Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <input
+                                    type="datetime-local"
+                                    className="fm-input"
+                                    value={newTaskForm.deadline}
+                                    onChange={e => setNewTaskForm(p => ({ ...p, deadline: e.target.value }))}
+                                />
+                                {newTaskErrors.deadline && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.deadline}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Visibility</h5>
+                        <div className="fm-field">
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    cursor: 'pointer',
+                                    padding: '8px 12px',
+                                    borderRadius: 8,
+                                    background: newTaskForm.isConfidential ? 'rgba(238, 93, 80, 0.06)' : 'transparent',
+                                    border: `1px solid ${newTaskForm.isConfidential ? 'rgba(238, 93, 80, 0.25)' : 'var(--border)'}`,
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={newTaskForm.isConfidential}
+                                    onChange={e => setNewTaskForm(p => ({ ...p, isConfidential: e.target.checked }))}
+                                />
+                                <Lock size={13} style={{ color: newTaskForm.isConfidential ? 'var(--status-failed, #ee5d50)' : 'var(--text-secondary)' }} />
+                                <span style={{ fontWeight: 600, fontSize: 13 }}>Confidential Task</span>
+                                {newTaskForm.isConfidential && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', fontWeight: 600 }}>
+                                        — Only Coordinators &amp; Manager can view
+                                    </span>
+                                )}
+                            </label>
+                        </div>
+                    </div>
+                </FormModal>
+            )}
+
+            {/* ── Edit Task Modal ── */}
+            {tmEditingTask && (
+                <FormModal
+                    isOpen={true}
+                    onClose={() => setTmEditingTask(null)}
+                    title="Edit Task"
+                    subtitle="Update the task details below."
+                    apiError={editApiError}
+                    onSubmit={handleManagerEditSave}
+                    isSubmitting={editSubmitting}
+                    size="md"
+                    submitLabel="Save Changes"
+                >
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Task Information</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Task Title <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <input
+                                className="fm-input"
+                                value={editForm.title}
+                                onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
+                                maxLength={150}
+                                placeholder="Enter task title"
+                            />
+                            {editErrors.title && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{editErrors.title}
+                                </span>
+                            )}
+                        </div>
+                        <div className="fm-field">
+                            <label className="fm-label">Description <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <textarea
+                                className="fm-input"
+                                rows={4}
+                                value={editForm.description}
+                                onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))}
+                                maxLength={2000}
+                                placeholder="Describe the task…"
+                            />
+                            {editErrors.description && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{editErrors.description}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Schedule &amp; Priority</h5>
+                        <div className="fm-field-grid">
+                            <div className="fm-field">
+                                <label className="fm-label">Priority <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select
+                                    className="fm-select"
+                                    value={editForm.priority}
+                                    onChange={e => setEditForm(p => ({ ...p, priority: e.target.value }))}
+                                >
+                                    <option value="">Select priority</option>
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                                {editErrors.priority && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{editErrors.priority}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="fm-field">
+                                <label className="fm-label">Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <input
+                                    type="datetime-local"
+                                    className="fm-input"
+                                    value={editForm.deadline}
+                                    onChange={e => setEditForm(p => ({ ...p, deadline: e.target.value }))}
+                                />
+                                {editErrors.deadline && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{editErrors.deadline}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Visibility</h5>
+                        <div className="fm-field">
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    cursor: 'pointer',
+                                    padding: '8px 12px',
+                                    borderRadius: 8,
+                                    background: editForm.isConfidential ? 'rgba(238, 93, 80, 0.06)' : 'transparent',
+                                    border: `1px solid ${editForm.isConfidential ? 'rgba(238, 93, 80, 0.25)' : 'var(--border)'}`,
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={editForm.isConfidential}
+                                    onChange={e => setEditForm(p => ({ ...p, isConfidential: e.target.checked }))}
+                                />
+                                <Lock size={13} style={{ color: editForm.isConfidential ? 'var(--status-failed, #ee5d50)' : 'var(--text-secondary)' }} />
+                                <span style={{ fontWeight: 600, fontSize: 13 }}>Confidential Task</span>
+                                {editForm.isConfidential && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', fontWeight: 600 }}>
+                                        — Only Coordinators &amp; Manager can view
+                                    </span>
+                                )}
+                            </label>
+                        </div>
+                    </div>
+                </FormModal>
+            )}
         </div>
     );
 }

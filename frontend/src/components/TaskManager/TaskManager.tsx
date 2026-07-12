@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3 } from 'lucide-react';
+import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock } from 'lucide-react';
 import DataTable from '../ui/DataTable';
 import StatusBadge from '../ui/StatusBadge';
 import StatCard from '../StatCard/StatCard';
@@ -17,6 +17,7 @@ export interface TMTask {
     progress: number;
     isArchived?: boolean;
     isDeleted?: boolean;
+    isConfidential?: boolean;
 }
 
 interface TMProps {
@@ -172,7 +173,19 @@ export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onV
                                 <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(t.id)} style={{ cursor: 'pointer' }} />
                             </td>
                             <td style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>#{refDisplay}</td>
-                            <td style={{ fontWeight: 600, color: tab === 'bin' ? '#94a3b8' : '#0f172a', textDecoration: tab === 'bin' ? 'line-through' : 'none' }}>{t.name}</td>
+                            <td style={{ fontWeight: 600, color: tab === 'bin' ? '#94a3b8' : '#0f172a', textDecoration: tab === 'bin' ? 'line-through' : 'none' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span>{t.name}</span>
+                                    {t.isConfidential && tab !== 'bin' && (
+                                        <span
+                                            title="Confidential — only Coordinators and Manager can view"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, color: 'var(--status-failed, #ee5d50)', background: 'rgba(238, 93, 80, 0.08)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap', letterSpacing: '0.04em' }}
+                                        >
+                                            <Lock size={9} /> CONFIDENTIAL
+                                        </span>
+                                    )}
+                                </div>
+                            </td>
                             <td>{t.assignee ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AssigneeAvatar name={t.assignee.name} /><span style={{ fontSize: 13 }}>{t.assignee.name}</span></div> : <span style={{ color: '#94a3b8' }}>—</span>}</td>
                             <td><PriorityBadge p={t.priority} /></td>
                             <td><DueLabel date={t.dueDate} /></td>

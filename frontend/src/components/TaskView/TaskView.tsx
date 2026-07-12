@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
-    XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw,
+    XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
 import StatusBadge from '../ui/StatusBadge';
@@ -25,6 +25,7 @@ export interface TaskViewTask {
     createdByEmployee: string;
     assignedTo: string;
     createdAt: string;
+    isConfidential?: boolean;
 }
 
 export interface Comment {
@@ -276,7 +277,17 @@ const TaskView: React.FC<TaskViewProps> = ({
                     <div className="tv-header-left">
                         <span className={priorityDotClass(task.priority)} />
                         <div className="tv-header-text">
-                            <h2 className="tv-title">{task.taskTitle}</h2>
+                            <h2 className="tv-title">
+                                {task.taskTitle}
+                                {task.isConfidential && (
+                                    <span
+                                        title="Confidential — only Coordinators and Manager can view"
+                                        style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--status-failed, #ee5d50)', background: 'rgba(238, 93, 80, 0.08)', padding: '2px 8px', borderRadius: 4, verticalAlign: 'middle', letterSpacing: '0.04em' }}
+                                    >
+                                        <Lock size={11} /> CONFIDENTIAL
+                                    </span>
+                                )}
+                            </h2>
                             <p className="tv-subtitle">
                                 Created by <strong>{task.createdByEmployee}</strong>
                                 {task.createdAt && <> · {fmtDate(task.createdAt)}</>}
