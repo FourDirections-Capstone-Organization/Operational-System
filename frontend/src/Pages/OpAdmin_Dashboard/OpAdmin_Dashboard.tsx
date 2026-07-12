@@ -911,13 +911,26 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                     </div>
 
                     {/* -- Confidential Task Toggle -- */}
-                    <div className="field" style={{ marginBottom: 8 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 12px', borderRadius: 8, background: form.isConfidential ? 'rgba(238,93,80,0.06)' : 'transparent', border: `1px solid ${form.isConfidential ? 'rgba(238,93,80,0.25)' : 'transparent'}` }}>
-                            <input type="checkbox" checked={form.isConfidential} onChange={e => setForm(prev => ({ ...prev, isConfidential: e.target.checked }))} />
-                            <span style={{ fontWeight: 600, fontSize: 13 }}>Confidential Task</span>
-                            {form.isConfidential && <span style={{ fontSize: 11, color: 'var(--status-failed)', fontWeight: 600 }}>— Only Coordinators & Manager can view</span>}
-                        </label>
-                    </div>
+                    <label className={`conf-card${form.isConfidential ? ' active' : ''}`} style={{ marginBottom: 12 }}>
+                        <input type="checkbox" checked={form.isConfidential}
+                            onChange={e => setForm(prev => ({ ...prev, isConfidential: e.target.checked }))} />
+                        <div className="conf-card-body">
+                            <div className="conf-label-row">
+                                <span className="conf-icon">
+                                    <Lock size={14} color={form.isConfidential ? '#ee5d50' : 'var(--text-secondary)'} />
+                                </span>
+                                <span className="conf-title">Confidential Task</span>
+                                {form.isConfidential && <span className="conf-badge">Restricted</span>}
+                            </div>
+                            <span className="conf-desc">
+                                {form.isConfidential ? (
+                                    <>Only <strong>Coordinators</strong> &amp; <strong>Manager</strong> can view this task</>
+                                ) : (
+                                    'Restrict visibility to Coordinators and Manager only'
+                                )}
+                            </span>
+                        </div>
+                    </label>
 
                     {/* -- Smart Task Routing Recommendation -- */}
                     {recommendation && (

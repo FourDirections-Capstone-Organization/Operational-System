@@ -3491,33 +3491,26 @@ export default function Dashboard() {
                     </div>
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
-                        <div className="fm-field">
-                            <label
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    cursor: 'pointer',
-                                    padding: '8px 12px',
-                                    borderRadius: 8,
-                                    background: newTaskForm.isConfidential ? 'rgba(238, 93, 80, 0.06)' : 'transparent',
-                                    border: `1px solid ${newTaskForm.isConfidential ? 'rgba(238, 93, 80, 0.25)' : 'var(--border)'}`,
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={newTaskForm.isConfidential}
-                                    onChange={e => setNewTaskForm(p => ({ ...p, isConfidential: e.target.checked }))}
-                                />
-                                <Lock size={13} style={{ color: newTaskForm.isConfidential ? 'var(--status-failed, #ee5d50)' : 'var(--text-secondary)' }} />
-                                <span style={{ fontWeight: 600, fontSize: 13 }}>Confidential Task</span>
-                                {newTaskForm.isConfidential && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', fontWeight: 600 }}>
-                                        — Only Coordinators &amp; Manager can view
+                        <label className={`conf-card${newTaskForm.isConfidential ? ' active' : ''}`}>
+                            <input type="checkbox" checked={newTaskForm.isConfidential}
+                                onChange={e => setNewTaskForm(p => ({ ...p, isConfidential: e.target.checked }))} />
+                            <div className="conf-card-body">
+                                <div className="conf-label-row">
+                                    <span className="conf-icon">
+                                        <Lock size={14} color={newTaskForm.isConfidential ? '#ee5d50' : 'var(--text-secondary)'} />
                                     </span>
-                                )}
-                            </label>
-                        </div>
+                                    <span className="conf-title">Confidential Task</span>
+                                    {newTaskForm.isConfidential && <span className="conf-badge">Restricted</span>}
+                                </div>
+                                <span className="conf-desc">
+                                    {newTaskForm.isConfidential ? (
+                                        <>Only <strong>Coordinators</strong> &amp; <strong>Manager</strong> can view this task</>
+                                    ) : (
+                                        'Restrict visibility to Coordinators and Manager only'
+                                    )}
+                                </span>
+                            </div>
+                        </label>
                     </div>
                 </FormModal>
             )}
@@ -3609,33 +3602,26 @@ export default function Dashboard() {
                     </div>
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
-                        <div className="fm-field">
-                            <label
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    cursor: 'pointer',
-                                    padding: '8px 12px',
-                                    borderRadius: 8,
-                                    background: editForm.isConfidential ? 'rgba(238, 93, 80, 0.06)' : 'transparent',
-                                    border: `1px solid ${editForm.isConfidential ? 'rgba(238, 93, 80, 0.25)' : 'var(--border)'}`,
-                                }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={editForm.isConfidential}
-                                    onChange={e => setEditForm(p => ({ ...p, isConfidential: e.target.checked }))}
-                                />
-                                <Lock size={13} style={{ color: editForm.isConfidential ? 'var(--status-failed, #ee5d50)' : 'var(--text-secondary)' }} />
-                                <span style={{ fontWeight: 600, fontSize: 13 }}>Confidential Task</span>
-                                {editForm.isConfidential && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', fontWeight: 600 }}>
-                                        — Only Coordinators &amp; Manager can view
+                        <label className={`conf-card${editForm.isConfidential ? ' active' : ''}`}>
+                            <input type="checkbox" checked={editForm.isConfidential}
+                                onChange={e => setEditForm(p => ({ ...p, isConfidential: e.target.checked }))} />
+                            <div className="conf-card-body">
+                                <div className="conf-label-row">
+                                    <span className="conf-icon">
+                                        <Lock size={14} color={editForm.isConfidential ? '#ee5d50' : 'var(--text-secondary)'} />
                                     </span>
-                                )}
-                            </label>
-                        </div>
+                                    <span className="conf-title">Confidential Task</span>
+                                    {editForm.isConfidential && <span className="conf-badge">Restricted</span>}
+                                </div>
+                                <span className="conf-desc">
+                                    {editForm.isConfidential ? (
+                                        <>Only <strong>Coordinators</strong> &amp; <strong>Manager</strong> can view this task</>
+                                    ) : (
+                                        'Restrict visibility to Coordinators and Manager only'
+                                    )}
+                                </span>
+                            </div>
+                        </label>
                     </div>
                 </FormModal>
             )}

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
     Building2, Briefcase, Users, ArrowRight, Loader2, AlertCircle, CheckCircle2,
     Plus, Pencil, Trash2, X, Search, RefreshCw, GitBranch, UserCircle2,
-    Shield, Mail, Phone, Hash, XCircle, Eye
+    Shield, Mail, Phone, Hash, XCircle, Eye, Download
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { useToast } from '../../../components/Toast/Toast';
 import DataTable, { ActionsDropdown } from '../../../components/ui/DataTable';
 import SubTabNav from '../../../components/ui/SubTabNav';
@@ -220,10 +222,47 @@ function ViewMembersModal({ isOpen, onClose, title, members, icon }: {
 function OrgChartView({ departments, positions, employees }: {
     departments: DeptDTO[]; positions: PosDTO[]; employees: EmployeeDTO[];
 }) {
+    const chartRef = useRef<HTMLDivElement>(null);
+    const [pdfLoading, setPdfLoading] = useState(false);
     const activeEmps = employees.filter(e => e.isActive && !e.isDeactivated);
     const byRole = (role: string) => activeEmps.filter(e => toDisplayRole(e.role) === role);
     const roles = ['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier'];
     const hasRole = (r: string) => byRole(r).length > 0;
+
+    const downloadPdf = async () => {
+        if (!chartRef.current) return;
+        setPdfLoading(true);
+        try {
+            const canvas = await html2canvas(chartRef.current, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            let heightLeft = pdfHeight;
+            let position = 0;
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+                position -= pageHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+                heightLeft -= pageHeight;
+            }
+
+            pdf.save('organizational-chart.pdf');
+        } catch (err) {
+            console.error('PDF generation failed:', err);
+        } finally {
+            setPdfLoading(false);
+        }
+    };
 
     if (!roles.some(r => hasRole(r))) {
         return (
@@ -239,9 +278,15 @@ function OrgChartView({ departments, positions, employees }: {
         <div className="card" style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700 }}>Organizational Chart</h3>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{activeEmps.length} employee{activeEmps.length !== 1 ? 's' : ''}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button className="btn btn-outline btn-sm" onClick={downloadPdf} disabled={pdfLoading}>
+                        {pdfLoading ? <Loader2 size={14} className="fm-spin" /> : <Download size={14} />}
+                        {pdfLoading ? 'Generating...' : 'Download PDF'}
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{activeEmps.length} employee{activeEmps.length !== 1 ? 's' : ''}</span>
+                </div>
             </div>
-            <div className="org-chart-container">
+            <div className="org-chart-container" ref={chartRef}>
                 {hasRole('Manager') && (
                     <>
                         <div className="org-chart-level">
