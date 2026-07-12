@@ -547,7 +547,7 @@
     flex-shrink: 0;
 }
 
-    .prio-dot.critical {
+    .prio-dot.urgent {
         background: #7c1d1d;
     }
 

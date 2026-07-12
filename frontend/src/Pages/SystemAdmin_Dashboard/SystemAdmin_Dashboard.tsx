@@ -2583,17 +2583,18 @@ export default function Dashboard() {
     const [showNewTask, setShowNewTask] = useState(false);
     const [tmDetailTask, setTmDetailTask] = useState<TaskViewTask | null>(null);
     const [tmEditingTask, setTmEditingTask] = useState<TaskViewTask | null>(null);
-    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
     const [newTaskErrors, setNewTaskErrors] = useState<Record<string, string>>({});
     const [newTaskSubmitting, setNewTaskSubmitting] = useState(false);
     const [newTaskApiError, setNewTaskApiError] = useState('');
-    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editApiError, setEditApiError] = useState('');
-    const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
-    const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Critical: 3 };
-    const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+    const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+    const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+    const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
+    const STATUS_LABELS: Record<number, string> = { 0: 'Not Started', 1: 'In Progress', 2: 'Done/Pending Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
 
     const toLocalDateTimeInput = (iso: string | null | undefined): string => {
         if (!iso) return '';
@@ -2607,14 +2608,14 @@ export default function Dashboard() {
 
     const mapManagerTaskToView = (t: any): TaskViewTask => {
         const statusNum = t.status;
-        const mappedStatus = STATUS_LABELS[statusNum] ?? 'Assigned';
+        const mappedStatus = STATUS_LABELS[statusNum] ?? 'Not Started';
         const assignees = t.assignees ?? [];
         const firstAssignee = assignees[0];
         return {
             taskId: t.id ?? t.taskId ?? '',
             taskTitle: t.title ?? t.taskTitle ?? '',
             taskDescription: t.description ?? t.taskDescription ?? '',
-            priority: ({ 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' } as Record<number, any>)[t.priorityLevel] ?? 'Medium',
+            priority: ({ 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' } as Record<number, any>)[t.priorityLevel] ?? 'Medium',
             dueAt: t.deadline ?? t.dueAt ?? null,
             taskStatus: mappedStatus as TaskViewTask['taskStatus'],
             taskRemarks: t.remarks ?? t.taskRemarks ?? '',
@@ -2623,6 +2624,11 @@ export default function Dashboard() {
             assignedTo: firstAssignee?.userId ?? t.assignedTo ?? '',
             createdAt: t.createdAt ?? new Date().toISOString(),
             isConfidential: t.isConfidential ?? false,
+            classification: t.classification === 1 ? 'special' : 'routine',
+            isSLALocked: t.isSLALocked ?? false,
+            assignmentScope: t.assignmentScope ?? t.AssignmentScope ?? 0,
+            assignedDepartmentId: t.assignedDepartmentId ?? t.AssignedDepartmentId ?? '',
+            assignedDepartmentName: t.assignedDepartmentName ?? t.AssignedDepartmentName ?? '',
         };
     };
 
@@ -2638,6 +2644,7 @@ export default function Dashboard() {
                 id: t.id ?? t.taskId,
                 name: t.title ?? t.taskTitle ?? '',
                 referenceNumber: t.taskReferenceNumber ?? '',
+                classification: t.classification === 1 ? 'special' : 'routine',
                 project: t.classification === 1 ? 'SpecialTask' : '',
                 assignee: t.assignees?.length ? { id: t.assignees[0].userId ?? '', name: t.assignees[0].fullName ?? '' } : undefined,
                 priority: ({ 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' } as Record<number, any>)[t.priorityLevel] || 'Medium',
@@ -2646,12 +2653,26 @@ export default function Dashboard() {
                 progress: t.status === 3 ? 100 : t.status === 1 ? 50 : t.status === 2 ? 80 : t.status === 0 ? 10 : 0,
                 isArchived: false,
                 isConfidential: t.isConfidential ?? false,
+                isSLALocked: t.isSLALocked ?? false,
             })));
         } catch { setTmTasks([]); }
         setTmLoading(false);
     };
 
     useEffect(() => { if (activeTab === 'tasks') { fetchManagerTasks(); } }, [activeTab]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+        fetch('/api/department', { headers: { Authorization: `Bearer ${token}` } })
+            .then(res => res.ok ? res.json() : null)
+            .then(json => {
+                if (json?.isSuccess && Array.isArray(json.data)) {
+                    setDepartments(json.data.map((d: any) => ({ id: d.id, name: d.name })));
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     const handleManagerTaskArchive = async (ids: string[]) => {
         const token = localStorage.getItem('authToken');
@@ -2752,7 +2773,10 @@ export default function Dashboard() {
                 description: tmEditingTask.taskDescription ?? '',
                 priority: tmEditingTask.priority ?? '',
                 deadline: toLocalDateTimeInput(tmEditingTask.dueAt),
+                classification: tmEditingTask.classification ?? '',
                 isConfidential: tmEditingTask.isConfidential ?? false,
+                assignmentScope: (tmEditingTask.assignmentScope !== undefined ? ['SingleEmployee', 'Team', 'Department'][tmEditingTask.assignmentScope] : 'SingleEmployee') as string,
+                assignedDepartmentId: tmEditingTask.assignedDepartmentId ?? '',
             });
             setEditErrors({});
             setEditApiError('');
@@ -2761,7 +2785,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (!showNewTask) {
-            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', isConfidential: false });
+            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
             setNewTaskErrors({});
             setNewTaskApiError('');
         }
@@ -2779,25 +2803,35 @@ export default function Dashboard() {
         else if (d.length > 2000) errs.description = 'Description must not exceed 2,000 characters.';
         if (!newTaskForm.priority) errs.priority = 'Priority is required.';
         if (!newTaskForm.deadline) errs.deadline = 'Deadline is required.';
+        if (!newTaskForm.classification) errs.classification = 'Classification is required.';
+        if (!newTaskForm.assignmentScope) errs.assignmentScope = 'Assignment scope is required.';
+        if (newTaskForm.assignmentScope === 'Department' && !newTaskForm.assignedDepartmentId) errs.assignedDepartmentId = 'Department is required for Department scope.';
         if (Object.keys(errs).length) { setNewTaskErrors(errs); return; }
         setNewTaskErrors({});
+
+        const SCOPE_MAP: Record<string, number> = { SingleEmployee: 0, Team: 1, Department: 2 };
+        const scopeNum = SCOPE_MAP[newTaskForm.assignmentScope] ?? 0;
 
         setNewTaskSubmitting(true);
         setNewTaskApiError('');
         const token = localStorage.getItem('authToken');
         try {
+            const createPayload: Record<string, any> = {
+                title: t,
+                description: d,
+                priorityLevel: PRIORITY_NUM_FROM_LABEL[newTaskForm.priority] ?? 1,
+                classification: newTaskForm.classification === 'special' ? 1 : 0,
+                assignmentScope: scopeNum,
+                isConfidential: newTaskForm.isConfidential,
+                assignedDepartmentId: scopeNum === 2 ? newTaskForm.assignedDepartmentId || undefined : undefined,
+            };
+            if (newTaskForm.priority !== 'Urgent') {
+                createPayload.deadline = new Date(newTaskForm.deadline).toISOString();
+            }
             const res = await fetch('/api/task', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    title: t,
-                    description: d,
-                    priorityLevel: PRIORITY_NUM_FROM_LABEL[newTaskForm.priority] ?? 1,
-                    classification: 0,
-                    assignmentScope: 0,
-                    deadline: new Date(newTaskForm.deadline).toISOString(),
-                    isConfidential: newTaskForm.isConfidential,
-                }),
+                body: JSON.stringify(createPayload),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -2826,23 +2860,33 @@ export default function Dashboard() {
         else if (d.length > 2000) errs.description = 'Description must not exceed 2,000 characters.';
         if (!editForm.priority) errs.priority = 'Priority is required.';
         if (!editForm.deadline) errs.deadline = 'Deadline is required.';
+        if (!editForm.classification) errs.classification = 'Classification is required.';
         if (Object.keys(errs).length) { setEditErrors(errs); return; }
         setEditErrors({});
+
+        const SCOPE_MAP: Record<string, number> = { SingleEmployee: 0, Team: 1, Department: 2 };
+        const scopeNum = SCOPE_MAP[editForm.assignmentScope] ?? 0;
 
         setEditSubmitting(true);
         setEditApiError('');
         const token = localStorage.getItem('authToken');
         try {
+            const updatePayload: Record<string, any> = {
+                title: t,
+                description: d,
+                priorityLevel: PRIORITY_NUM_FROM_LABEL[editForm.priority] ?? 1,
+                classification: editForm.classification === 'special' ? 1 : 0,
+                assignmentScope: scopeNum,
+                isConfidential: editForm.isConfidential,
+                assignedDepartmentId: scopeNum === 2 ? editForm.assignedDepartmentId || undefined : undefined,
+            };
+            if (!tmEditingTask.isSLALocked) {
+                updatePayload.deadline = new Date(editForm.deadline).toISOString();
+            }
             const res = await fetch(`/api/task/${tmEditingTask.taskId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    title: t,
-                    description: d,
-                    priorityLevel: PRIORITY_NUM_FROM_LABEL[editForm.priority] ?? 1,
-                    deadline: new Date(editForm.deadline).toISOString(),
-                    isConfidential: editForm.isConfidential,
-                }),
+                body: JSON.stringify(updatePayload),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -3360,24 +3404,16 @@ export default function Dashboard() {
                     task={tmDetailTask}
                     onEdit={() => { setTmEditingTask(tmDetailTask); setTmDetailTask(null); }}
                     onReopen={async () => {
-                        const token = localStorage.getItem('authToken');
-                        try {
-                            await fetch(`/api/task/${tmDetailTask.taskId}/reopen`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
-                            success('Task reopened.');
-                            setTmDetailTask(null);
-                            fetchManagerTasks();
-                        } catch {
-                            error('Failed to reopen task.');
-                        }
+                        error('Reopen is not supported by the backend FSM. Use Cancel to reset the task lifecycle.');
                     }}
                     onClose={() => setTmDetailTask(null)}
                     onApprove={async (id) => {
                         const token = localStorage.getItem('authToken');
                         try {
-                            await fetch(`/api/task/${id}/status`, {
+                            await fetch(`/api/task/${id}/review`, {
                                 method: 'PATCH',
                                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ status: 3 }),
+                                body: JSON.stringify({ isApproved: true, remarks: null }),
                             });
                             success('Task approved.');
                             setTmDetailTask(null);
@@ -3389,10 +3425,10 @@ export default function Dashboard() {
                     onReject={async (id, reason) => {
                         const token = localStorage.getItem('authToken');
                         try {
-                            await fetch(`/api/task/${id}/status`, {
+                            await fetch(`/api/task/${id}/review`, {
                                 method: 'PATCH',
                                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ status: 1, remarks: reason }),
+                                body: JSON.stringify({ isApproved: false, remarks: reason }),
                             });
                             success('Task returned for rework.');
                             setTmDetailTask(null);
@@ -3452,6 +3488,26 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <div className="fm-section">
+                        <h5 className="fm-section-title">Classification</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Task Classification <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <select
+                                className="fm-input"
+                                value={newTaskForm.classification}
+                                onChange={e => setNewTaskForm(p => ({ ...p, classification: e.target.value }))}
+                            >
+                                <option value="">Select classification</option>
+                                <option value="routine">Routine Daily Task</option>
+                                <option value="special">Special Task</option>
+                            </select>
+                            {newTaskErrors.classification && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{newTaskErrors.classification}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="fm-section">
                         <h5 className="fm-section-title">Schedule &amp; Priority</h5>
                         <div className="fm-field-grid">
                             <div className="fm-field">
@@ -3465,21 +3521,36 @@ export default function Dashboard() {
                                     <option value="Low">Low</option>
                                     <option value="Medium">Medium</option>
                                     <option value="High">High</option>
-                                    <option value="Critical">Critical</option>
+                                    <option value="Urgent">🔴 Urgent</option>
                                 </select>
                                 {newTaskErrors.priority && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <AlertCircle size={11} />{newTaskErrors.priority}
                                     </span>
                                 )}
+                                {!newTaskErrors.priority && newTaskForm.priority === 'Urgent' && (
+                                    <span style={{ fontSize: 11, color: '#7c1d1d', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Lock size={11} /> Urgent — deadline auto-set to 24h from creation (SLA enforced)
+                                    </span>
+                                )}
                             </div>
                             <div className="fm-field">
-                                <label className="fm-label">Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <label className="fm-label">
+                                    Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span>
+                                    {newTaskForm.priority === 'Urgent' && (
+                                        <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#7c1d1d', background: '#fef2f2', padding: '1px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}>
+                                            <Lock size={10} /> SLA LOCKED
+                                        </span>
+                                    )}
+                                </label>
                                 <input
                                     type="datetime-local"
                                     className="fm-input"
                                     value={newTaskForm.deadline}
                                     onChange={e => setNewTaskForm(p => ({ ...p, deadline: e.target.value }))}
+                                    disabled={newTaskForm.priority === 'Urgent'}
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    style={newTaskForm.priority === 'Urgent' ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}}
                                 />
                                 {newTaskErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
@@ -3488,6 +3559,53 @@ export default function Dashboard() {
                                 )}
                             </div>
                         </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Assignment Scope</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                {['SingleEmployee', 'Team', 'Department'].map(scope => (
+                                    <label key={scope} onClick={() => setNewTaskForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                        style={{
+                                            flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                                            fontSize: 12, fontWeight: 600, border: `2px solid ${newTaskForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
+                                            background: newTaskForm.assignmentScope === scope ? 'rgba(67,24,255,0.06)' : '#fff',
+                                            color: newTaskForm.assignmentScope === scope ? 'var(--primary)' : 'var(--text-secondary)',
+                                        }}
+                                    >
+                                        <input type="radio" name="scope" value={scope}
+                                            checked={newTaskForm.assignmentScope === scope}
+                                            onChange={() => {}} style={{ display: 'none' }} />
+                                        {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                    </label>
+                                ))}
+                            </div>
+                            {newTaskErrors.assignmentScope && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{newTaskErrors.assignmentScope}
+                                </span>
+                            )}
+                        </div>
+                        {newTaskForm.assignmentScope === 'Department' && (
+                            <div className="fm-field">
+                                <label className="fm-label">Target Department <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select className="fm-input"
+                                    value={newTaskForm.assignedDepartmentId}
+                                    onChange={e => setNewTaskForm(p => ({ ...p, assignedDepartmentId: e.target.value }))}
+                                >
+                                    <option value="">Select department</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                </select>
+                                {newTaskErrors.assignedDepartmentId && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.assignedDepartmentId}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
@@ -3563,6 +3681,26 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <div className="fm-section">
+                        <h5 className="fm-section-title">Classification</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Task Classification <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <select
+                                className="fm-input"
+                                value={editForm.classification}
+                                onChange={e => setEditForm(p => ({ ...p, classification: e.target.value }))}
+                            >
+                                <option value="">Select classification</option>
+                                <option value="routine">Routine Daily Task</option>
+                                <option value="special">Special Task</option>
+                            </select>
+                            {editErrors.classification && (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                    <AlertCircle size={11} />{editErrors.classification}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="fm-section">
                         <h5 className="fm-section-title">Schedule &amp; Priority</h5>
                         <div className="fm-field-grid">
                             <div className="fm-field">
@@ -3576,21 +3714,36 @@ export default function Dashboard() {
                                     <option value="Low">Low</option>
                                     <option value="Medium">Medium</option>
                                     <option value="High">High</option>
-                                    <option value="Critical">Critical</option>
+                                    <option value="Urgent">🔴 Urgent</option>
                                 </select>
                                 {editErrors.priority && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <AlertCircle size={11} />{editErrors.priority}
                                     </span>
                                 )}
+                                {!editErrors.priority && editForm.priority === 'Urgent' && (
+                                    <span style={{ fontSize: 11, color: '#7c1d1d', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Lock size={11} /> Urgent — deadline auto-set to 24h (SLA enforced)
+                                    </span>
+                                )}
                             </div>
                             <div className="fm-field">
-                                <label className="fm-label">Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <label className="fm-label">
+                                    Deadline <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span>
+                                    {(editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) && (
+                                        <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#7c1d1d', background: '#fef2f2', padding: '1px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' }}>
+                                            <Lock size={10} /> SLA LOCKED
+                                        </span>
+                                    )}
+                                </label>
                                 <input
                                     type="datetime-local"
                                     className="fm-input"
                                     value={editForm.deadline}
                                     onChange={e => setEditForm(p => ({ ...p, deadline: e.target.value }))}
+                                    disabled={editForm.priority === 'Urgent' || (tmEditingTask?.isSLALocked ?? false)}
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    style={(editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}}
                                 />
                                 {editErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
@@ -3599,6 +3752,43 @@ export default function Dashboard() {
                                 )}
                             </div>
                         </div>
+                    </div>
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Assignment Scope</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                {['SingleEmployee', 'Team', 'Department'].map(scope => (
+                                    <label key={scope} onClick={() => setEditForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                        style={{
+                                            flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                                            fontSize: 12, fontWeight: 600, border: `2px solid ${editForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
+                                            background: editForm.assignmentScope === scope ? 'rgba(67,24,255,0.06)' : '#fff',
+                                            color: editForm.assignmentScope === scope ? 'var(--primary)' : 'var(--text-secondary)',
+                                        }}
+                                    >
+                                        <input type="radio" name="editScope" value={scope}
+                                            checked={editForm.assignmentScope === scope}
+                                            onChange={() => {}} style={{ display: 'none' }} />
+                                        {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        {editForm.assignmentScope === 'Department' && (
+                            <div className="fm-field">
+                                <label className="fm-label">Target Department <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select className="fm-input"
+                                    value={editForm.assignedDepartmentId}
+                                    onChange={e => setEditForm(p => ({ ...p, assignedDepartmentId: e.target.value }))}
+                                >
+                                    <option value="">Select department</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>

@@ -120,7 +120,7 @@ interface ApiResponse<T> {
 
 // --- Types --------------------------------------------------------------------
 
-type Priority = 'Critical' | 'High' | 'Medium' | 'Low';  // match backend casing
+type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';  // match backend casing
 type TaskStatus = 'Draft' | 'Assigned' | 'Pending' | 'In Progress' | 'Pending Admin Review' | 'Done' | 'Completed' | 'Overdue';
 type NavTab =
     | 'dashboard'
@@ -416,7 +416,7 @@ const isTransitionValid = (from: string, to: string): boolean =>
     FSM_TRANSITIONS[from]?.includes(to) ?? false;
 
 const priorityDotClass = (p: Priority): string =>
-    ({ Critical: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
+    ({ Urgent: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
 
 const fmtDate = (d: string): string => {
     if (!d) return '—';
@@ -4139,7 +4139,7 @@ export default function OpsAdminDashboard() {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${token()}` },
                     body: fileFormData,
-                }).catch(() => {});
+                }).catch(() => { });
                 setPendingFile(null);
             }
 
@@ -4498,7 +4498,7 @@ export default function OpsAdminDashboard() {
                     <div className="profile-card">
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                             <div className="profile-avatar">
-{getInitials(employeeName || 'Coordinator')}
+                                {getInitials(employeeName || 'Coordinator')}
                             </div>
                             <span style={{
                                 position: 'absolute', bottom: 1, right: 1,

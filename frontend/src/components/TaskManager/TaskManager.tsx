@@ -8,6 +8,7 @@ export interface TMTask {
     id: string;
     name: string;
     referenceNumber?: string;
+    classification?: string;
     project?: string;
     assignee?: { id: string; name: string };
     priority: 'Critical' | 'High' | 'Medium' | 'Low';
@@ -18,6 +19,7 @@ export interface TMTask {
     isArchived?: boolean;
     isDeleted?: boolean;
     isConfidential?: boolean;
+    isSLALocked?: boolean;
 }
 
 interface TMProps {
@@ -30,6 +32,14 @@ interface TMProps {
     onRestore?: (ids: string[]) => void;
     onDelete: (ids: string[]) => void;
     onMarkDone: (ids: string[]) => void;
+    searchQuery?: string;
+    onSearchChange?: (val: string) => void;
+    filterPrio?: string;
+    onFilterPrioChange?: (val: string) => void;
+    filterClassification?: string;
+    onFilterClassificationChange?: (val: string) => void;
+    filterAssignee?: string;
+    onFilterAssigneeChange?: (val: string) => void;
 }
 
 type TabType = 'active' | 'completed' | 'bin';
@@ -55,7 +65,7 @@ const AssigneeAvatar = ({ name }: { name: string }) => (
     </div>
 );
 
-const DueLabel = ({ date }: { date?: string }) => {
+const DueLabel = ({ date, isSLALocked }: { date?: string; isSLALocked?: boolean }) => {
     if (!date) return <span style={{ color: '#94a3b8', fontSize: 11 }}>—</span>;
     let diff: number;
     try {
@@ -64,18 +74,58 @@ const DueLabel = ({ date }: { date?: string }) => {
         diff = Math.round((d.getTime() - n.getTime()) / 86400000);
     } catch { return <span style={{ color: '#94a3b8', fontSize: 11 }}>{date}</span>; }
     if (isNaN(diff)) return <span style={{ color: '#94a3b8', fontSize: 11 }}>{date}</span>;
-    if (diff < 0) return <span style={{ color: '#dc2626', fontSize: 11, fontWeight: 700 }}>Overdue</span>;
-    if (diff === 0) return <span style={{ color: '#d97706', fontSize: 11, fontWeight: 600 }}>Today</span>;
-    if (diff <= 3) return <span style={{ color: '#d97706', fontSize: 11, fontWeight: 600 }}>{diff}d left</span>;
-    return <span style={{ color: '#94a3b8', fontSize: 11 }}>{fmtDate(date)}</span>;
+    const label = diff < 0
+        ? <span style={{ color: '#dc2626', fontSize: 11, fontWeight: 700 }}>Overdue</span>
+        : diff === 0
+            ? <span style={{ color: '#d97706', fontSize: 11, fontWeight: 600 }}>Today</span>
+            : diff <= 3
+                ? <span style={{ color: '#d97706', fontSize: 11, fontWeight: 600 }}>{diff}d left</span>
+                : <span style={{ color: '#94a3b8', fontSize: 11 }}>{fmtDate(date)}</span>;
+    return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {isSLALocked && <span title="SLA Locked — deadline enforced by system"><Lock size={11} color="#7c1d1d" /></span>}
+        {label}
+    </span>;
 };
 
-export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onView, onArchive, onRestore, onDelete, onMarkDone }: TMProps) {
+export default function TaskManager({
+    tasks, teamMembers, onNewTask, onEdit, onView, onArchive, onRestore, onDelete, onMarkDone,
+    searchQuery: externalSearch,
+    onSearchChange,
+    filterPrio: externalFilterPrio,
+    onFilterPrioChange,
+    filterClassification: externalFilterClassification,
+    onFilterClassificationChange,
+    filterAssignee: externalFilterAssignee,
+    onFilterAssigneeChange,
+}: TMProps) {
     const [tab, setTab] = useState<TabType>('active');
-    const [search, setSearch] = useState('');
-    const [filterPrio, setFilterPrio] = useState('');
-    const [filterAssignee, setFilterAssignee] = useState('');
+    const [internalSearch, setInternalSearch] = useState('');
+    const [internalFilterPrio, setInternalFilterPrio] = useState('');
+    const [internalFilterClassification, setInternalFilterClassification] = useState('');
+    const [internalFilterAssignee, setInternalFilterAssignee] = useState('');
     const [page, setPage] = useState(1);
+
+    const search = externalSearch !== undefined ? externalSearch : internalSearch;
+    const filterPrio = externalFilterPrio !== undefined ? externalFilterPrio : internalFilterPrio;
+    const filterClassification = externalFilterClassification !== undefined ? externalFilterClassification : internalFilterClassification;
+    const filterAssignee = externalFilterAssignee !== undefined ? externalFilterAssignee : internalFilterAssignee;
+
+    const handleSearch = (val: string) => {
+        if (onSearchChange) onSearchChange(val); else setInternalSearch(val);
+        setPage(1);
+    };
+    const handlePrioChange = (val: string) => {
+        if (onFilterPrioChange) onFilterPrioChange(val); else setInternalFilterPrio(val);
+        setPage(1);
+    };
+    const handleClassificationChange = (val: string) => {
+        if (onFilterClassificationChange) onFilterClassificationChange(val); else setInternalFilterClassification(val);
+        setPage(1);
+    };
+    const handleAssigneeChange = (val: string) => {
+        if (onFilterAssigneeChange) onFilterAssigneeChange(val); else setInternalFilterAssignee(val);
+        setPage(1);
+    };
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const toggleSelect = (id: string) => {
@@ -97,9 +147,10 @@ export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onV
         const q = search.toLowerCase().trim();
         if (q) list = list.filter(t => t.name.toLowerCase().includes(q) || (t.assignee?.name || '').toLowerCase().includes(q) || (t.project || '').toLowerCase().includes(q));
         if (filterPrio) list = list.filter(t => t.priority === filterPrio);
+        if (filterClassification) list = list.filter(t => t.classification === filterClassification);
         if (filterAssignee) list = list.filter(t => t.assignee?.id === filterAssignee);
         return list;
-    }, [tabTasks, search, filterPrio, filterAssignee]);
+    }, [tabTasks, search, filterPrio, filterClassification, filterAssignee]);
 
     const totalPages = Math.ceil(filtered.length / 8);
     const paginated = filtered.slice((page - 1) * 8, page * 8);
@@ -142,14 +193,19 @@ export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onV
                 onTabChange={handleTabChange}
                 title="Task Manager"
                 searchQuery={search}
-                onSearchChange={val => { setSearch(val); setPage(1); }}
+                onSearchChange={handleSearch}
                 searchPlaceholder="Search by task, assignee, project…"
                 filterElements={tab !== 'bin' ? <>
-                    <select value={filterPrio} onChange={e => { setFilterPrio(e.target.value); setPage(1); }} style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
+                    <select value={filterPrio} onChange={e => handlePrioChange(e.target.value)} style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
                         <option value="">All Priorities</option>
                         {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    <select value={filterAssignee} onChange={e => { setFilterAssignee(e.target.value); setPage(1); }} style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
+                    <select value={filterClassification} onChange={e => handleClassificationChange(e.target.value)} style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
+                        <option value="">All Classifications</option>
+                        <option value="routine">Routine Daily</option>
+                        <option value="special">Special Task</option>
+                    </select>
+                    <select value={filterAssignee} onChange={e => handleAssigneeChange(e.target.value)} style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
                         <option value="">All Assignees</option>
                         {teamMembers.map(m => <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>)}
                     </select>
@@ -176,6 +232,18 @@ export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onV
                             <td style={{ fontWeight: 600, color: tab === 'bin' ? '#94a3b8' : '#0f172a', textDecoration: tab === 'bin' ? 'line-through' : 'none' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                     <span>{t.name}</span>
+                                    {t.classification && tab !== 'bin' && (
+                                        <span
+                                            style={{
+                                                fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                                                background: t.classification === 'special' ? 'rgba(67,24,255,0.08)' : 'rgba(5,150,105,0.08)',
+                                                color: t.classification === 'special' ? '#4318FF' : '#059669',
+                                                whiteSpace: 'nowrap', letterSpacing: '0.03em'
+                                            }}
+                                        >
+                                            {t.classification === 'special' ? 'SPECIAL' : 'ROUTINE'}
+                                        </span>
+                                    )}
                                     {t.isConfidential && tab !== 'bin' && (
                                         <span
                                             title="Confidential — only Coordinators and Manager can view"
@@ -188,7 +256,7 @@ export default function TaskManager({ tasks, teamMembers, onNewTask, onEdit, onV
                             </td>
                             <td>{t.assignee ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AssigneeAvatar name={t.assignee.name} /><span style={{ fontSize: 13 }}>{t.assignee.name}</span></div> : <span style={{ color: '#94a3b8' }}>—</span>}</td>
                             <td><PriorityBadge p={t.priority} /></td>
-                            <td><DueLabel date={t.dueDate} /></td>
+                            <td><DueLabel date={t.dueDate} isSLALocked={t.isSLALocked} /></td>
                             <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <StatusBadge status={t.status} size="sm" />

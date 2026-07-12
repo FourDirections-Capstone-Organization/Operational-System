@@ -1,0 +1,210 @@
+.tr-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tr-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+    color: var(--text-primary, #1e293b);
+    background: var(--bg-secondary, #f8fafc);
+}
+
+.tr-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.tr-count {
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--primary, #4318FF);
+    color: #fff;
+    border-radius: 50%;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.tr-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--status-failed, #ee5d50);
+    padding: 0 14px;
+}
+
+.tr-loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary, #64748b);
+    padding: 14px;
+    justify-content: center;
+}
+
+.tr-spin {
+    animation: tr-spin 1s linear infinite;
+}
+
+@keyframes tr-spin {
+    to { transform: rotate(360deg); }
+}
+
+.tr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 14px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.tr-empty {
+    font-size: 12px;
+    color: var(--text-secondary, #64748b);
+    text-align: center;
+    padding: 14px 0;
+}
+
+.tr-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--bg-primary, #fff);
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.tr-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.tr-category {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(67, 24, 255, 0.07);
+    color: var(--primary, #4318FF);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tr-author {
+    font-size: 11px;
+    color: var(--text-secondary, #64748b);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.tr-notes {
+    font-size: 12px;
+    color: var(--text-primary, #1e293b);
+    line-height: 1.45;
+}
+
+.tr-time {
+    font-size: 10px;
+    color: var(--text-secondary, #64748b);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.tr-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-color, #e2e8f0);
+}
+
+.tr-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tr-select {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 6px;
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #1e293b);
+    outline: none;
+}
+
+.tr-select:focus {
+    border-color: var(--primary, #4318FF);
+    box-shadow: 0 0 0 2px rgba(67, 24, 255, 0.12);
+}
+
+.tr-textarea {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 6px;
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #1e293b);
+    resize: vertical;
+    min-height: 50px;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.45;
+}
+
+.tr-textarea:focus {
+    border-color: var(--primary, #4318FF);
+    box-shadow: 0 0 0 2px rgba(67, 24, 255, 0.12);
+}
+
+.tr-char-count {
+    font-size: 10px;
+    color: var(--text-secondary, #64748b);
+    text-align: right;
+}
+
+.tr-submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    background: var(--primary, #4318FF);
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.tr-submit-btn:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.tr-submit-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
