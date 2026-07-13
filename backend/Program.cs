@@ -100,6 +100,7 @@ builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsSer
 builder.Services.AddScoped<ITaskTemplateService, TaskTemplateService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<ITaskCommentService, TaskCommentService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 
 // Hosted Services

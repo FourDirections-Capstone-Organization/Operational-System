@@ -11,11 +11,13 @@ public class TaskService : ITaskService
 {
     private readonly AppDbContext _db;
     private readonly INotificationService _notificationService;
+    private readonly IDashboardService _dashboardService;
 
-    public TaskService(AppDbContext db, INotificationService notificationService)
+    public TaskService(AppDbContext db, INotificationService notificationService, IDashboardService dashboardService)
     {
         _db = db;
         _notificationService = notificationService;
+        _dashboardService = dashboardService;
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId)
@@ -57,6 +59,20 @@ public class TaskService : ITaskService
         if (!assignmentValidation.IsValid)
             return ApiResponseDTO<TaskResponseDTO>.Failure(assignmentValidation.ErrorMessage!);
 
+        // FR-039: Re-validate assignee availability at submission time
+        if (dto.AssignmentScope == AssignmentScope.SingleEmployee || dto.AssignmentScope == AssignmentScope.Team)
+        {
+            if (dto.AssignedUserIds != null)
+            {
+                foreach (var assignedUserId in dto.AssignedUserIds)
+                {
+                    var availabilityCheck = await _dashboardService.ValidateAssigneeAvailabilityAsync(assignedUserId);
+                    if (!availabilityCheck.IsSuccess)
+                        return ApiResponseDTO<TaskResponseDTO>.Failure(availabilityCheck.Message);
+                }
+            }
+        }
+
         var task = new Models.Task
         {
             Title = dto.Title.Trim(),
@@ -72,6 +88,10 @@ public class TaskService : ITaskService
             AssignedDepartmentId = dto.AssignedDepartmentId,
             CreatedAt = now
         };
+
+        // FR-038: Default task department to creator's department for Coordinators
+        if (!task.AssignedDepartmentId.HasValue && creator.Role == UserRole.Coordinator)
+            task.AssignedDepartmentId = creator.DepartmentId;
 
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
@@ -279,8 +299,20 @@ public class TaskService : ITaskService
         if (dto.IsConfidential.HasValue)
             task.IsConfidential = dto.IsConfidential.Value;
 
+        // FR-039: Re-validate assignee availability at submission time
         if (dto.AssignedUserIds != null)
         {
+            var scope = dto.AssignmentScope ?? task.AssignmentScope;
+            if (scope == AssignmentScope.SingleEmployee || scope == AssignmentScope.Team)
+            {
+                foreach (var assignedUserId in dto.AssignedUserIds)
+                {
+                    var availabilityCheck = await _dashboardService.ValidateAssigneeAvailabilityAsync(assignedUserId);
+                    if (!availabilityCheck.IsSuccess)
+                        return ApiResponseDTO<TaskResponseDTO>.Failure(availabilityCheck.Message);
+                }
+            }
+
             _db.TaskAssignments.RemoveRange(task.Assignments);
 
             foreach (var userId in dto.AssignedUserIds)
@@ -319,6 +351,7 @@ public class TaskService : ITaskService
         var assignableRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier, UserRole.Accountant };
 
         var users = await _db.Users
+            .Include(u => u.Department)
             .Where(u => assignableRoles.Contains(u.Role) && u.IsActive && !u.IsDeactivated)
             .OrderBy(u => u.LastName)
             .ThenBy(u => u.FirstName)
@@ -330,7 +363,10 @@ public class TaskService : ITaskService
             FullName = $"{u.FirstName} {u.MiddleName} {u.LastName} {u.Suffix}"
                 .Replace("  ", " ").Trim(),
             EmployeeNumber = u.EmployeeNumber,
-            Role = u.Role.ToString()
+            Role = u.Role.ToString(),
+            AvailabilityStatus = u.AvailabilityStatus.ToString(),
+            IsAvailable = u.AvailabilityStatus == AvailabilityStatus.Active,
+            Department = u.Department?.Name ?? ""
         }).ToList();
 
         return ApiResponseDTO<List<TaskAssigneeDTO>>.Success(result);
@@ -471,7 +507,10 @@ public class TaskService : ITaskService
                         .Replace("  ", " ").Trim()
                     : "Unknown",
                 EmployeeNumber = a.AssignedUser?.EmployeeNumber ?? "",
-                Role = a.AssignedUser?.Role.ToString()
+                Role = a.AssignedUser?.Role.ToString(),
+                AvailabilityStatus = a.AssignedUser?.AvailabilityStatus.ToString(),
+                IsAvailable = a.AssignedUser?.AvailabilityStatus == AvailabilityStatus.Active,
+                Department = a.AssignedUser?.Department?.Name ?? ""
             }).ToList(),
             AttachmentCount = task.Attachments?.Count ?? 0,
             CreatedAt = task.CreatedAt,

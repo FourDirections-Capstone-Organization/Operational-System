@@ -41,6 +41,8 @@ public class User
 
     public UserRole Role { get; set; } = UserRole.Encoder;
 
+    public AvailabilityStatus AvailabilityStatus { get; set; } = AvailabilityStatus.Active;
+
     // Foreign Keys
     public Guid? DepartmentId { get; set; }
     public Guid? JobPositionId { get; set; }
