@@ -35,7 +35,36 @@ import './RoleManagementTab.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SubTab = 'roles' | 'departments' | 'positions' | 'overview';
+type SubTab = 'roles' | 'departments' | 'positions' | 'client-accounts' | 'overview';
+
+// ── Client Accounts (FR-011) ──
+export interface ClientAccountDTO {
+    id: string;
+    name: string;
+    code: string;
+    description: string;
+    isActive: boolean;
+    assignedCoordinators?: { userId: string; fullName: string }[];
+    createdAt?: string;
+}
+
+export interface CreateClientAccountDTO {
+    name: string;
+    code: string;
+    description?: string;
+}
+
+export interface UpdateClientAccountDTO {
+    name?: string;
+    code?: string;
+    description?: string;
+    isActive?: boolean;
+}
+
+export interface CoordinatorAssignmentDTO {
+    coordinatorId: string;
+    clientAccountIds: string[];
+}
 
 // ── Audit / Activity ──
 export interface OrgAuditEntry {
@@ -333,6 +362,19 @@ export default function RoleManagementTab() {
     const [positions, setPositions] = useState<JobPositionResponseDTO[]>([]);
     const [employees, setEmployees] = useState<EmployeeSummaryDTO[]>([]);
 
+    // ── Client Accounts (FR-011) ──
+    const [clientAccounts, setClientAccounts] = useState<ClientAccountDTO[]>([]);
+    const [coordinators, setCoordinators] = useState<EmployeeSummaryDTO[]>([]);
+    const [caLoading, setCaLoading] = useState(false);
+    const [caFormOpen, setCaFormOpen] = useState(false);
+    const [editingCa, setEditingCa] = useState<ClientAccountDTO | null>(null);
+    const [caForm, setCaForm] = useState({ name: '', code: '', description: '' });
+    const [caErrors, setCaErrors] = useState<Record<string, string>>({});
+    const [caActionLoading, setCaActionLoading] = useState(false);
+    const [assignModalOpen, setAssignModalOpen] = useState(false);
+    const [assignCoordinator, setAssignCoordinator] = useState('');
+    const [assignCaIds, setAssignCaIds] = useState<Set<string>>(new Set());
+
     // ── Search / page ──
     const [roleSearch, setRoleSearch] = useState(''); const [rolePage, setRolePage] = useState(1);
     const [deptSearch, setDeptSearch] = useState(''); const [deptPage, setDeptPage] = useState(1);
@@ -413,6 +455,29 @@ export default function RoleManagementTab() {
                 description: p,
             })));
         } catch (e: any) { toastError(e.message || 'Failed to load roles'); } finally { setRolesLoading(false); }
+    };
+
+    const fetchClientAccounts = async () => {
+        setCaLoading(true);
+        try {
+            const [caRes, coordRes] = await Promise.all([
+                fetch('/api/client-accounts', { headers: authHeaders() }),
+                fetch('/api/user?role=1', { headers: authHeaders() }),
+            ]);
+            if (caRes.ok) {
+                const rd = await caRes.json();
+                setClientAccounts(Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? []);
+            }
+            if (coordRes.ok) {
+                const rd = await coordRes.json();
+                const raw = Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? [];
+                setCoordinators(raw.map((u: any) => ({
+                    employeeId: u.id ?? u.userId ?? u.employeeId,
+                    fullName: u.fullName ?? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
+                })));
+            }
+        } catch { /* API endpoints not ready yet — will work when backend implements */ }
+        setCaLoading(false);
     };
 
     const fetchDepartments = async () => {
@@ -509,6 +574,7 @@ export default function RoleManagementTab() {
         }
     }, [subTab]);
     useEffect(() => {
+        if (subTab === 'client-accounts') { fetchClientAccounts(); }
         if (subTab === 'overview') {
             if (departments.length === 0) fetchDepartments();
             if (positions.length === 0) fetchPositions();
@@ -1283,6 +1349,7 @@ export default function RoleManagementTab() {
                     { key: 'roles', label: 'Roles & Permissions', icon: <Shield size={15} /> },
                     { key: 'departments', label: 'Departments', icon: <Building2 size={15} /> },
                     { key: 'positions', label: 'Job Positions', icon: <Briefcase size={15} /> },
+                    { key: 'client-accounts', label: 'Client Accounts', icon: <Building2 size={15} /> },
                     { key: 'overview', label: 'Overview & Logs', icon: <BarChart2 size={15} /> },
                 ]}
                 activeTab={subTab}
@@ -1447,40 +1514,108 @@ export default function RoleManagementTab() {
             <FormModal isOpen={!!editingRole} onClose={closeViewRole}
                 title={editingRole ? `Role: ${editingRole.name}` : ''}
                 subtitle={editingRole?.description || 'No description'}
-                size="lg">
-                {editingRole && (
-                    <div className="rm2-form-body">
-                        <div className="rm2-field">
-                            <label className="rm2-form-label">Role Type</label>
-                            <RoleTypeBadge isSystem={editingRole.isSystemDefined} />
-                        </div>
-                        <div className="rm2-field">
-                            <label className="rm2-form-label">Assigned Permissions</label>
-                            <div className="rm2-perm-viewer">
-                                {Object.entries(groupPermissions(editingRole.permissions.map((p, i) => ({
-                                    permissionId: String(i),
-                                    name: p,
-                                })))).map(([cat, perms]) => (
-                                    <div key={cat} className="rm2-perm-group">
-                                        <label className="rm2-perm-category" style={{ cursor: 'default' }}>
-                                            <span>{formatCategory(cat)} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({perms.length})</span></span>
-                                        </label>
-                                        <div className="rm2-perm-items">
-                                            {perms.map(perm => (
-                                                <div key={perm.permissionId} className="rm2-perm-item rm2-perm-item--readonly" title={perm.description}>
-                                                    <div className="rm2-perm-item__info">
-                                                        <span className="rm2-perm-item__name">{getFriendlyName(perm.name)}</span>
-                                                        {perm.description && <span className="rm2-perm-item__desc">{perm.description}</span>}
+                size="lg"
+                infoCard={editingRole ? {
+                    avatarText: editingRole.name.slice(0, 2).toUpperCase(),
+                    title: editingRole.name,
+                    subtitle: editingRole.description || 'No description provided',
+                    badgeText: editingRole.isSystemDefined ? 'System' : 'Custom',
+                    badgeStatus: editingRole.isSystemDefined ? 'System' : 'Custom',
+                } : undefined}>
+                {editingRole && (() => {
+                    const groupedPerms = groupPermissions(editingRole.permissions.map((p, i) => ({
+                        permissionId: String(i),
+                        name: p,
+                    })));
+                    const categoryEntries = Object.entries(groupedPerms);
+                    const totalPerms = editingRole.permissions.length;
+                    const totalCategories = categoryEntries.length;
+                    return (
+                        <div className="rm2-form-body">
+                            {/* ── Summary Stats ── */}
+                            <div className="rm2-role-view-stats">
+                                <div className="rm2-role-view-stat">
+                                    <div className="rm2-role-view-stat-icon" style={{ background: 'rgba(0, 169, 157, 0.1)', color: 'var(--primary)' }}>
+                                        <Key size={16} />
+                                    </div>
+                                    <div className="rm2-role-view-stat-body">
+                                        <span className="rm2-role-view-stat-value">{totalPerms}</span>
+                                        <span className="rm2-role-view-stat-label">Total Permissions</span>
+                                    </div>
+                                </div>
+                                <div className="rm2-role-view-stat">
+                                    <div className="rm2-role-view-stat-icon" style={{ background: 'rgba(67, 24, 255, 0.1)', color: '#4318FF' }}>
+                                        <Settings size={16} />
+                                    </div>
+                                    <div className="rm2-role-view-stat-body">
+                                        <span className="rm2-role-view-stat-value">{totalCategories}</span>
+                                        <span className="rm2-role-view-stat-label">Categories</span>
+                                    </div>
+                                </div>
+                                <div className="rm2-role-view-stat">
+                                    <div className="rm2-role-view-stat-icon" style={{ background: editingRole.isSystemDefined ? 'rgba(27, 37, 75, 0.1)' : 'rgba(245, 158, 11, 0.1)', color: editingRole.isSystemDefined ? 'var(--primary-dark)' : '#f59e0b' }}>
+                                        {editingRole.isSystemDefined ? <Lock size={16} /> : <Shield size={16} />}
+                                    </div>
+                                    <div className="rm2-role-view-stat-body">
+                                        <span className="rm2-role-view-stat-value">{editingRole.isSystemDefined ? 'System' : 'Custom'}</span>
+                                        <span className="rm2-role-view-stat-label">Role Type</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ── Access by Category ── */}
+                            <div className="rm2-field">
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <label className="rm2-form-label" style={{ margin: 0 }}>Access by Category</label>
+                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                        {totalPerms} permission{totalPerms !== 1 ? 's' : ''} across {totalCategories} {totalCategories === 1 ? 'category' : 'categories'}
+                                    </span>
+                                </div>
+
+                                {totalPerms === 0 ? (
+                                    <div className="rm2-overview-empty" style={{ background: 'var(--bg-input)', borderRadius: 10, border: '1px dashed var(--border)' }}>
+                                        <Lock size={28} />
+                                        <p>No permissions assigned</p>
+                                        <span className="rm2-overview-empty__hint">This role currently has no access privileges.</span>
+                                    </div>
+                                ) : (
+                                    <div className="rm2-role-view-categories">
+                                        {categoryEntries.map(([cat, perms]) => {
+                                            const isAll = perms.length === totalPerms;
+                                            return (
+                                                <div key={cat} className="rm2-role-view-category">
+                                                    <div className="rm2-role-view-category-header">
+                                                        <div className="rm2-role-view-category-title">
+                                                            <Shield size={13} />
+                                                            <span>{formatCategory(cat)}</span>
+                                                            <span className="rm2-role-view-category-count">{perms.length}</span>
+                                                        </div>
+                                                        {isAll && (
+                                                            <span className="rm2-role-view-full-access">Full Access</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="rm2-role-view-perm-list">
+                                                        {perms.map(perm => (
+                                                            <div key={perm.permissionId} className="rm2-role-view-perm" title={perm.description}>
+                                                                <CheckCircle2 size={13} className="rm2-role-view-perm-icon" />
+                                                                <div className="rm2-role-view-perm-body">
+                                                                    <span className="rm2-role-view-perm-name">{getFriendlyName(perm.name)}</span>
+                                                                    {perm.description && perm.description !== perm.name && (
+                                                                        <span className="rm2-role-view-perm-desc">{perm.description}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
             </FormModal>
 
             {/* ─── CREATE DEPT MODAL ───────────────────────────────────────── */}
@@ -1550,6 +1685,187 @@ export default function RoleManagementTab() {
             >
                 {editingPos && renderPosFormBody()}
             </FormModal>
+
+            {/* ─────────────────────── CLIENT ACCOUNTS TAB (FR-011) ─────────── */}
+            {subTab === 'client-accounts' && (
+                <>
+                    <div className="rm2-stats-grid">
+                        <StatCard icon={<Building2 size={18} />} label="Total Clients" value={clientAccounts.length} subtext="Registered client accounts" variant="primary" />
+                        <StatCard icon={<CheckCircle2 size={18} />} label="Active" value={clientAccounts.filter(c => c.isActive).length} subtext="Currently active" variant="success" />
+                        <StatCard icon={<XCircle size={18} />} label="Inactive" value={clientAccounts.filter(c => !c.isActive).length} subtext="Deactivated" variant="warning" />
+                        <StatCard icon={<Users size={18} />} label="Coordinators" value={coordinators.length} subtext="Available to assign" variant="primary" />
+                    </div>
+
+                    <DataTable
+                        title="Client Accounts" totalResults={clientAccounts.length}
+                        loading={caLoading} emptyMessage="No client accounts yet. Create one to get started."
+                        emptyIcon={<Building2 size={20} />}
+                        actionButton={{ label: 'New Client Account', icon: <Plus size={14} />, onClick: () => { setEditingCa(null); setCaForm({ name: '', code: '', description: '' }); setCaErrors({}); setCaFormOpen(true); } }}
+                        headers={['Client', 'Code', 'Description', 'Status', 'Assigned Coordinators', 'Actions']}
+                    >
+                        {clientAccounts.length === 0 ? null : clientAccounts.map(ca => (
+                            <tr key={ca.id}>
+                                <td>
+                                    <div className="rm2-role-name-cell">
+                                        <div className="rm2-role-icon rm2-role-icon--dept"><Building2 size={14} /></div>
+                                        <div>
+                                            <div className="rm2-role-name">{ca.name}</div>
+                                            {ca.createdAt && <div className="rm2-role-desc">Created {new Date(ca.createdAt).toLocaleDateString()}</div>}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{ca.code ? <StatusBadge status={ca.code} size="sm" /> : <span className="rm2-no-desc">—</span>}</td>
+                                <td>
+                                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'block', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {ca.description || <span className="rm2-no-desc">—</span>}
+                                    </span>
+                                </td>
+                                <td><ActiveStatusBadge isActive={ca.isActive} /></td>
+                                <td>
+                                    {ca.assignedCoordinators && ca.assignedCoordinators.length > 0 ? (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                            {ca.assignedCoordinators.map(c => (
+                                                <span key={c.userId} className="rm2-perm-pill" style={{ background: 'rgba(67,24,255,0.07)', color: '#4318FF' }}>
+                                                    {c.fullName}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="rm2-no-desc">Unassigned</span>
+                                    )}
+                                </td>
+                                <td>
+                                    <ActionsDropdown actions={[
+                                        { label: 'Edit', icon: <Pencil size={12} />, onClick: () => { setEditingCa(ca); setCaForm({ name: ca.name, code: ca.code, description: ca.description }); setCaErrors({}); setCaFormOpen(true); } },
+                                        {
+                                            label: ca.isActive ? 'Deactivate' : 'Activate',
+                                            icon: ca.isActive ? <ToggleLeft size={12} /> : <ToggleRight size={12} />,
+                                            onClick: () => setConfirmModal({
+                                                isOpen: true,
+                                                variant: ca.isActive ? 'warning' : 'success',
+                                                title: `${ca.isActive ? 'Deactivate' : 'Activate'} Client Account?`,
+                                                description: <>Are you sure you want to <strong>{ca.isActive ? 'deactivate' : 'activate'}</strong> the client account <strong>{ca.name}</strong>?</>,
+                                                notice: ca.isActive ? 'Deactivated client accounts will not appear in coordinator assignment lists.' : undefined,
+                                                confirmLabel: ca.isActive ? 'Deactivate' : 'Activate',
+                                                onConfirm: async () => {
+                                                    try {
+                                                        const res = await fetch(`/api/client-accounts/${ca.id}/${ca.isActive ? 'deactivate' : 'activate'}`, { method: 'PATCH', headers: authHeaders() });
+                                                        if (!res.ok) throw new Error('Failed to update');
+                                                        toastSuccess(`Client account ${ca.isActive ? 'deactivated' : 'activated'}.`);
+                                                        setConfirmModal(CONFIRM_CLOSED);
+                                                        await fetchClientAccounts();
+                                                    } catch {
+                                                        toastError('Failed to update client account.');
+                                                        setConfirmModal(CONFIRM_CLOSED);
+                                                    }
+                                                },
+                                            }),
+                                            variant: ca.isActive ? 'danger' : 'success',
+                                        },
+                                        {
+                                            label: 'Delete',
+                                            icon: <Trash2 size={12} />,
+                                            onClick: () => setConfirmModal({
+                                                isOpen: true, variant: 'danger', title: 'Delete Client Account',
+                                                description: <>Permanently delete <strong>{ca.name}</strong>? This action cannot be undone.</>,
+                                                notice: 'All coordinator assignments linked to this client will also be removed.',
+                                                confirmLabel: 'Delete',
+                                                onConfirm: async () => {
+                                                    try { const res = await fetch(`/api/client-accounts/${ca.id}`, { method: 'DELETE', headers: authHeaders() }); if (!res.ok) throw new Error('Failed to delete'); toastSuccess('Client account deleted.'); setConfirmModal(CONFIRM_CLOSED); await fetchClientAccounts(); } catch { toastError('Failed to delete client account.'); setConfirmModal(CONFIRM_CLOSED); }
+                                                },
+                                            }),
+                                            variant: 'danger',
+                                        },
+                                    ]} />
+                                </td>
+                            </tr>
+                        ))}
+                    </DataTable>
+
+                    {caFormOpen && (
+                        <FormModal isOpen onClose={() => setCaFormOpen(false)} title={editingCa ? 'Edit Client Account' : 'New Client Account'}
+                            size="sm" confirmOnCancel dirty={!!(caForm.name || caForm.code)} isSubmitting={caActionLoading}
+                            onSubmit={async () => {
+                                const errs: Record<string, string> = {};
+                                if (!caForm.name.trim()) errs.name = 'Name is required';
+                                if (!caForm.code.trim()) errs.code = 'Code is required';
+                                setCaErrors(errs); if (Object.keys(errs).length) return;
+                                setCaActionLoading(true);
+                                try {
+                                    const url = editingCa ? `/api/client-accounts/${editingCa.id}` : '/api/client-accounts';
+                                    const method = editingCa ? 'PUT' : 'POST';
+                                    const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(editingCa ? { name: caForm.name.trim(), code: caForm.code.trim(), description: caForm.description.trim() } : { name: caForm.name.trim(), code: caForm.code.trim(), description: caForm.description.trim() }) });
+                                    if (!res.ok) throw new Error('Failed to save');
+                                    toastSuccess(editingCa ? 'Client account updated.' : 'Client account created.');
+                                    setCaFormOpen(false);
+                                    await fetchClientAccounts();
+                                } catch { toastError('Failed to save client account.'); }
+                                setCaActionLoading(false);
+                            }}
+                        >
+                            <div className="fm-field">
+                                <label className="fm-label">Name <span style={{ color: 'var(--status-failed)' }}>*</span></label>
+                                <input className={`fm-input${caErrors.name ? ' input-error' : ''}`} value={caForm.name} onChange={e => setCaForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Acme Corp" />
+                                {caErrors.name && <span className="field-err-msg">{caErrors.name}</span>}
+                            </div>
+                            <div className="fm-field">
+                                <label className="fm-label">Code <span style={{ color: 'var(--status-failed)' }}>*</span></label>
+                                <input className={`fm-input${caErrors.code ? ' input-error' : ''}`} value={caForm.code} onChange={e => setCaForm(p => ({ ...p, code: e.target.value }))} placeholder="e.g. ACME" />
+                                {caErrors.code && <span className="field-err-msg">{caErrors.code}</span>}
+                            </div>
+                            <div className="fm-field">
+                                <label className="fm-label">Description</label>
+                                <textarea className="fm-input" value={caForm.description} onChange={e => setCaForm(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." rows={3} />
+                            </div>
+                        </FormModal>
+                    )}
+
+                    {assignModalOpen && (
+                        <FormModal isOpen onClose={() => setAssignModalOpen(false)} title="Assign Client Accounts to Coordinator"
+                            size="md" confirmOnCancel isSubmitting={caActionLoading}
+                            onSubmit={async () => {
+                                if (!assignCoordinator) { toastError('Select a coordinator.'); return; }
+                                setCaActionLoading(true);
+                                try {
+                                    const res = await fetch(`/api/client-accounts/coordinators/${assignCoordinator}`, {
+                                        method: 'PUT', headers: authHeaders(),
+                                        body: JSON.stringify({ clientAccountIds: Array.from(assignCaIds) }),
+                                    });
+                                    if (!res.ok) throw new Error('Failed to assign');
+                                    toastSuccess('Client accounts assigned.');
+                                    setAssignModalOpen(false);
+                                    await fetchClientAccounts();
+                                } catch { toastError('Failed to assign client accounts.'); }
+                                setCaActionLoading(false);
+                            }}
+                        >
+                            <div className="fm-field">
+                                <label className="fm-label">Coordinator</label>
+                                <select className="fm-select" value={assignCoordinator} onChange={e => setAssignCoordinator(e.target.value)}>
+                                    <option value="">Select a coordinator...</option>
+                                    {coordinators.map(c => <option key={c.employeeId} value={c.employeeId}>{c.fullName}</option>)}
+                                </select>
+                            </div>
+                            {assignCoordinator && (
+                                <div className="fm-field">
+                                    <label className="fm-label">Client Accounts</label>
+                                    <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                                        {clientAccounts.map(ca => (
+                                            <label key={ca.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', borderRadius: 4, background: assignCaIds.has(ca.id) ? 'rgba(67,24,255,0.04)' : 'transparent' }}>
+                                                <input type="checkbox" checked={assignCaIds.has(ca.id)}
+                                                    onChange={() => setAssignCaIds(prev => { const next = new Set(prev); next.has(ca.id) ? next.delete(ca.id) : next.add(ca.id); return next; })} />
+                                                <span style={{ fontWeight: 500, fontSize: 13 }}>{ca.name}</span>
+                                                <code style={{ fontSize: 11, color: '#94a3b8' }}>{ca.code}</code>
+                                            </label>
+                                        ))}
+                                        {clientAccounts.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>No client accounts available.</span>}
+                                    </div>
+                                </div>
+                            )}
+                        </FormModal>
+                    )}
+                </>
+            )}
 
             {/* ──────────────────────────── OVERVIEW TAB ────────────────────── */}
             {subTab === 'overview' && (() => {

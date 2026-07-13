@@ -76,21 +76,32 @@ interface Task {
     category?: string;
     supportingEvidenceUrl?: string;
     referenceNumber?: string;
+    isConfidential?: boolean;
 }
 
 interface TaskResponseDTO {
-    taskId: string;
-    taskTitle: string;
+    id?: string;
+    taskId?: string;
+    title?: string;
+    taskTitle?: string;
+    description?: string;
     taskDescription?: string;
+    classification?: number;
     taskCategory?: string;
-    priority: string;
-    dueAt: string;
-    taskStatus: string;
-    assignedEmployee: string;
-    createdByEmployee: string;
-    createdAt: string;
+    priorityLevel?: number;
+    priority?: string;
+    deadline?: string;
+    dueAt?: string;
+    status?: number;
+    taskStatus?: string;
+    assignees?: { userId?: string; fullName?: string; employeeNumber?: string; role?: string }[];
+    assignedEmployee?: string;
+    createdByName?: string;
+    createdByEmployee?: string;
+    createdAt?: string;
     supportingEvidenceUrl?: string;
     taskReferenceNumber?: string;
+    isConfidential?: boolean;
 }
 
 interface UserProfile {
@@ -110,30 +121,43 @@ const authHeader = (): HeadersInit => ({
     Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
 });
 
+const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+
 const dtoToTask = (dto: TaskResponseDTO): Task => {
+    const taskId = dto.id ?? dto.taskId ?? '';
+    const title = dto.title ?? dto.taskTitle ?? '';
+    const description = dto.description ?? dto.taskDescription ?? '';
+    const priorityStr = dto.priorityLevel !== undefined ? PRIORITY_LABELS[dto.priorityLevel] : (dto.priority || 'Medium');
+    const dueAt = dto.deadline ?? dto.dueAt ?? '';
+    const statusStr = dto.status !== undefined ? STATUS_LABELS[dto.status] : (dto.taskStatus || 'Assigned');
+    const assignedEmployee = dto.assignees?.length ? dto.assignees[0].fullName ?? '' : (dto.assignedEmployee ?? '');
+    const createdByEmployee = dto.createdByName ?? dto.createdByEmployee ?? '';
+
     const priorityMap: Record<string, Priority> = {
-        High: 'high', Medium: 'medium', Low: 'low',
+        High: 'high', Medium: 'medium', Low: 'low', Urgent: 'high', Critical: 'high',
     };
     const statusMap: Record<string, TaskStatus> = {
         Draft: 'pending', Pending: 'pending', Assigned: 'assigned',
         'In Progress': 'in-progress', 'Pending Admin Review': 'pending-review', Done: 'done', Completed: 'completed',
     };
-    const status: TaskStatus = statusMap[dto.taskStatus] ?? 'pending';
+    const status: TaskStatus = statusMap[statusStr] ?? 'pending';
     const defaultProgress: Record<TaskStatus, number> = {
         pending: 0, assigned: 0, 'in-progress': 50, 'pending-review': 90, done: 90, completed: 100, overdue: 0,
     };
     return {
-        id: dto.taskId,
-        name: dto.taskTitle,
-        description: dto.taskDescription ?? '',
-        deadline: dto.dueAt ? dto.dueAt.split('T')[0] : '',
-        priority: priorityMap[dto.priority] ?? 'medium',
+        id: taskId,
+        name: title,
+        description: description,
+        deadline: dueAt ? dueAt.split('T')[0] : '',
+        priority: priorityMap[priorityStr] ?? 'medium',
         status,
         progress: defaultProgress[status],
-        assignedBy: dto.createdByEmployee,
-        category: dto.taskCategory,
+        assignedBy: createdByEmployee,
+        category: '',
         supportingEvidenceUrl: dto.supportingEvidenceUrl,
         referenceNumber: dto.taskReferenceNumber,
+        isConfidential: dto.isConfidential ?? false,
     };
 };
 
@@ -152,7 +176,7 @@ const isEffectivelyOverdue = (t: Task): boolean =>
 const effectiveStatus = (t: Task): TaskStatus =>
     isEffectivelyOverdue(t) ? 'overdue' : t.status;
 
-const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier' };
+const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
 const toDisplayRole = (role: any) => {
     if (typeof role === 'number') return ROLE_MAP[role] || String(role);
     if (typeof role === 'string') {
@@ -235,7 +259,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
     const accountId = getAccountIdFromToken();
 
     return (
-        <FormModal isOpen onClose={onClose} title={task.name} subtitle={sm.label} size="md"
+        <FormModal isOpen onClose={onClose} title={task.isConfidential ? `🔒 ${task.name}` : task.name} subtitle={sm.label} size="md"
             footer={
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose}>Close</button>
@@ -463,6 +487,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onUpdate }) => {
                 <span className={`prio-strip ${pm.cls}`} />
                 <div className="tc-header">
                     <h4 className="tc-name">{task.name}</h4>
+                    {task.isConfidential && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '1px 5px', borderRadius: 3, marginLeft: 6, whiteSpace: 'nowrap' }}>CONFIDENTIAL</span>}
                     <span className={`badge ${sm.cls}`}>{sm.icon}{sm.label}</span>
                 </div>
             </div>
@@ -1377,21 +1402,26 @@ export default function EmployeeDashboard() {
         'pending-review': 'Pending Admin Review', done: 'Done', completed: 'Completed', overdue: 'In Progress',
     }[status] ?? 'Assigned');
 
+    const STATUS_TO_BACKEND: Record<string, number> = {
+        assigned: 0, 'in-progress': 1, 'pending-review': 2, done: 2, completed: 3,
+    };
+
     const handleSaveProgress = async (
         id: string, status: TaskStatus, progress: number, remarks: string
     ): Promise<void> => {
-        const formData = new FormData();
-        formData.append('TaskStatus', toBackendStatus(status));
-        if (remarks.trim()) formData.append('TaskRemarks', remarks.trim());
+        const newStatus = STATUS_TO_BACKEND[status] ?? 1;
         const res = await fetch(`/api/task/${id}/status`, {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}` },
-            body: formData,
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
+            },
+            body: JSON.stringify({ newStatus, progressNotes: remarks.trim() || undefined }),
         });
         if (res.status === 401) { handleLogout(); return; }
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error((err as any).message || 'Failed to update task progress.');
+            throw new Error((err as any).message || (err as any).Message || 'Failed to update task progress.');
         }
         setTasks(ts => ts.map(t => t.id === id ? {
             ...t,

@@ -120,7 +120,7 @@ interface ApiResponse<T> {
 
 // --- Types --------------------------------------------------------------------
 
-type Priority = 'Critical' | 'High' | 'Medium' | 'Low';  // match backend casing
+type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';  // match backend casing
 type TaskStatus = 'Draft' | 'Assigned' | 'Pending' | 'In Progress' | 'Pending Admin Review' | 'Done' | 'Completed' | 'Overdue';
 type NavTab =
     | 'dashboard'
@@ -158,30 +158,32 @@ interface Task {
     deleted?: boolean;
     Deleted?: boolean;
     supportingEvidenceUrl?: string;
+    isConfidential?: boolean;
 }
 
 // DTOs matching backend
 interface CreateTaskDTO {
-    taskTitle: string;
-    taskDescription: string;
-    priority: string;
-    dueAt: string;
-    assignedTo?: string;
-    taskCategory?: string;
-    recommendedEmployeeId?: string;
-    taskRemarks?: string;
-    supportingEvidence?: File;
-    IsDuplicateAcknowledged?: boolean;
+    title: string;
+    description: string;
+    priorityLevel: number;
+    classification: number;
+    assignmentScope: number;
+    deadline: string;
+    assignedUserIds?: string[];
+    assignedDepartmentId?: string;
+    isConfidential?: boolean;
 }
 
 interface UpdateTaskDTO {
-    taskTitle: string;
-    taskDescription: string;
-    priority: Priority;
-    dueAt: string | null;
-    assignedTo: string;
-    taskCategory?: string;
-    taskRemarks?: string;
+    title?: string;
+    description?: string;
+    priorityLevel?: number;
+    classification?: number;
+    assignmentScope?: number;
+    deadline?: string;
+    assignedUserIds?: string[];
+    assignedDepartmentId?: string;
+    isConfidential?: boolean;
 }
 
 // DTO from backend for duplicate warnings
@@ -414,7 +416,7 @@ const isTransitionValid = (from: string, to: string): boolean =>
     FSM_TRANSITIONS[from]?.includes(to) ?? false;
 
 const priorityDotClass = (p: Priority): string =>
-    ({ Critical: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
+    ({ Urgent: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
 
 const fmtDate = (d: string): string => {
     if (!d) return '—';
@@ -525,6 +527,7 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, onView, onEdit, showEditBtn = f
             </div>
             <div className="task-row-bottom">
                 <span className="task-assignee">{task.assignedEmployee || 'Unassigned'}</span>
+                {task.isConfidential && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '1px 6px', borderRadius: 4, marginRight: 8 }}>CONFIDENTIAL</span>}
                 <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 12 }}>{task.updatedAt ? fmtDateTime(task.updatedAt) : ''}</span>
                 <span className={`task-due${od ? ' overdue' : ''}`}>{task.dueAt ? fmtDate(task.dueAt) : '—'}</span>
             </div>
@@ -557,13 +560,14 @@ interface TaskModalProps {
     initial?: Partial<Task>;
     teamMembers: TeamMember[];
     tasks: Task[];
-    onSave: (data: CreateTaskDTO | UpdateTaskDTO) => void;
+    onSave: (data: CreateTaskDTO | UpdateTaskDTO) => Promise<void>;
     onClose: () => void;
     onDelete?: () => void;
     showSuccess?: (msg: string) => void;
+    onFileChange?: (file: File | null) => void;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, tasks, onSave, onClose, onDelete, showSuccess }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, tasks, onSave, onClose, onDelete, showSuccess, onFileChange }) => {
     const resolvedAssignedTo =
         initial.assignedTo ||
         teamMembers.find(m => m.employeeName === initial.assignedEmployee)?.accountId ||
@@ -577,6 +581,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         assignedTo: resolvedAssignedTo,
         taskCategory: initial.taskCategory ?? '',
         taskRemarks: initial.taskRemarks ?? '',
+        isConfidential: initial.isConfidential ?? false,
     });
     const [supportingEvidence, setSupportingEvidence] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -597,25 +602,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                 const json = await res.json();
                 if (json.isSuccess && json.data?.data) {
                     const mapped: WorkloadInfo[] = json.data.data.map((emp: any) => ({
-                        employeeName: emp.displayName.replace(/ \(\d+ tasks\)( - Recommended)?$/, ''),
-                        accountId: emp.accountId,
-                        availabilityStatus: emp.availabilityStatus || 'Active',
-                        workload: emp.activeTaskCount,
-                        role: emp.role,
-                        isRecommended: emp.isRecommended,
-                        recommendationReason: emp.recommendationReason,
+                        employeeName: emp.fullName ?? emp.FullName ?? '',
+                        accountId: emp.userId ?? emp.UserId ?? emp.id,
+                        availabilityStatus: 'Active',
+                        workload: 0,
+                        role: emp.role ?? '',
+                        isRecommended: false,
+                        recommendationReason: '',
                     }));
                     setEligibleEmployees(mapped);
-                    const recommended = mapped.find(e => e.isRecommended);
-                    if (recommended) {
-                        setRecommendation({
-                            employeeName: recommended.employeeName,
-                            accountId: recommended.accountId,
-                            availabilityStatus: recommended.availabilityStatus,
-                            workload: recommended.workload,
-                            reason: recommended.recommendationReason,
-                        });
-                    }
                 }
             } catch {
             }
@@ -680,27 +675,31 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             setErrors(prev => ({ ...prev, [key]: msg || '' }));
         };
 
-    const handleSave = () => {
+    const PRIORITY_MAP: Record<string, number> = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+
+    const handleSave = async () => {
         if (!validateAll()) return;
         setSubmitting(true);
         const payload: CreateTaskDTO = {
-            taskTitle: form.taskTitle.trim(),
-            taskDescription: form.taskDescription.trim(),
-            priority: form.priority,
-            dueAt: form.dueAt || '',
-            assignedTo: form.assignedTo || undefined,
-            taskCategory: form.taskCategory.trim() || undefined,
-            recommendedEmployeeId: recommendation?.accountId || undefined,
-            taskRemarks: form.taskRemarks.trim() || undefined,
+            title: form.taskTitle.trim(),
+            description: form.taskDescription.trim(),
+            priorityLevel: PRIORITY_MAP[form.priority] ?? 1,
+            classification: form.taskCategory ? 1 : 0,
+            assignmentScope: 0,
+            deadline: form.dueAt ? new Date(form.dueAt).toISOString() : new Date().toISOString(),
+            assignedUserIds: form.assignedTo ? [form.assignedTo] : undefined,
+            isConfidential: form.isConfidential,
         };
         if (supportingEvidence) {
-            payload.supportingEvidence = supportingEvidence;
+            onFileChange?.(supportingEvidence);
         }
-        onSave(payload);
-        if (mode === 'new' && showSuccess) {
-            showSuccess('Task created successfully.');
+        try {
+            await onSave(payload);
+        } catch {
+            // Error handled by parent
+        } finally {
+            setSubmitting(false);
         }
-        setSubmitting(false);
     };
 
     // -- Shared field error renderer ---------------------------------------
@@ -880,6 +879,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                         }
                                         setFormError('');
                                         setSupportingEvidence(file);
+                                        onFileChange?.(file);
+                                    } else {
+                                        onFileChange?.(null);
                                     }
                                 }}
                                 style={{ flex: 1, fontSize: 13 }}
@@ -907,6 +909,28 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             </span>
                         ) : null}
                     </div>
+
+                    {/* -- Confidential Task Toggle -- */}
+                    <label className={`conf-card${form.isConfidential ? ' active' : ''}`} style={{ marginBottom: 12 }}>
+                        <input type="checkbox" checked={form.isConfidential}
+                            onChange={e => setForm(prev => ({ ...prev, isConfidential: e.target.checked }))} />
+                        <div className="conf-card-body">
+                            <div className="conf-label-row">
+                                <span className="conf-icon">
+                                    <Lock size={14} color={form.isConfidential ? '#ee5d50' : 'var(--text-secondary)'} />
+                                </span>
+                                <span className="conf-title">Confidential Task</span>
+                                {form.isConfidential && <span className="conf-badge">Restricted</span>}
+                            </div>
+                            <span className="conf-desc">
+                                {form.isConfidential ? (
+                                    <>Only <strong>Coordinators</strong> &amp; <strong>Manager</strong> can view this task</>
+                                ) : (
+                                    'Restrict visibility to Coordinators and Manager only'
+                                )}
+                            </span>
+                        </div>
+                    </label>
 
                     {/* -- Smart Task Routing Recommendation -- */}
                     {recommendation && (
@@ -1120,7 +1144,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ task, onEdit, onReopen, onStatusC
                 {/* Header */}
                 <div className="view-modal-header">
                     <div>
-                        <h3 className="view-modal-title">{task.taskTitle}</h3>
+                        <h3 className="view-modal-title">{task.taskTitle} {task.isConfidential && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '2px 8px', borderRadius: 4, verticalAlign: 'middle', marginLeft: 8 }}>CONFIDENTIAL</span>}</h3>
                         <p className="view-modal-subtitle">Created by: {task.createdByEmployee}</p>
                     </div>
                 </div>
@@ -3747,6 +3771,7 @@ export default function OpsAdminDashboard() {
         progress: t.taskStatus === 'Completed' || t.taskStatus === 'Done' ? 100 : t.taskStatus === 'In Progress' ? 50 : t.taskStatus === 'Pending Admin Review' ? 80 : t.taskStatus === 'Assigned' || t.taskStatus === 'Pending' ? 10 : 0,
         isArchived: false,
         isDeleted: t.deleted || t.Deleted || false,
+        isConfidential: t.isConfidential ?? false,
     })), [tasks]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [loadingTasks, setLoadingTasks] = useState(true);
@@ -3775,6 +3800,7 @@ export default function OpsAdminDashboard() {
     // Duplicate warning state
     const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateWarningDTO[]>([]);
     const [pendingTaskData, setPendingTaskData] = useState<CreateTaskDTO | null>(null);
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
 
     // -- Dashboard Data --
     const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
@@ -3872,9 +3898,26 @@ export default function OpsAdminDashboard() {
             const jsonRes = await res.json();
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.data) ? jsonRes.data.data : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
+            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
+            const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
             const normalized: Task[] = rawList.map(t => ({
-                ...t,
-                deleted: deletedTaskIds.has(t.taskId),
+                taskId: t.id ?? t.taskId,
+                taskTitle: t.title ?? t.taskTitle ?? '',
+                taskDescription: t.description ?? t.taskDescription ?? '',
+                taskCategory: t.classification === 1 ? 'SpecialTask' : '',
+                taskReferenceNumber: t.taskReferenceNumber ?? '',
+                priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
+                dueAt: t.deadline ?? t.dueAt ?? null,
+                taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
+                taskRemarks: t.progressNotes ?? t.taskRemarks ?? '',
+                assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
+                createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
+                assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
+                createdAt: t.createdAt ?? '',
+                updatedAt: t.updatedAt ?? undefined,
+                deleted: deletedTaskIds.has(t.id ?? t.taskId),
+                supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
+                isConfidential: t.isConfidential ?? false,
             }));
 
             setAllTasks(normalized);
@@ -3979,10 +4022,10 @@ export default function OpsAdminDashboard() {
             const rawList: any[] = Array.isArray(body) ? body : (Array.isArray(body?.data?.data) ? body.data.data : (Array.isArray(body?.data) ? body.data : []));
 
             setTeamMembers(rawList.map(e => ({
-                accountId: e.accountId ?? e.AccountId ?? e.id,
-                employeeName: (e.displayName ?? e.employeeName ?? e.EmployeeName ?? e.name ?? '').replace(/\(.*?\)/g, '').replace(/-\s*Recommended\s*$/i, '').trim(),
+                accountId: e.userId ?? e.UserId ?? e.id,
+                employeeName: (e.fullName ?? e.FullName ?? e.employeeName ?? e.EmployeeName ?? '').trim(),
                 role: e.role ?? '',
-                presenceStatus: e.availabilityStatus ?? 'Active',
+                presenceStatus: 'Active',
             })));
         } catch {
             setTeamMembers([]);
@@ -4057,20 +4100,20 @@ export default function OpsAdminDashboard() {
     // -- Create Task --
     const handleNewTask = async (data: CreateTaskDTO) => {
         try {
-            const formData = new FormData();
-            formData.append('taskTitle', data.taskTitle);
-            formData.append('taskDescription', data.taskDescription);
-            formData.append('priority', data.priority);
-            formData.append('dueAt', new Date(data.dueAt).toISOString());
-            if (data.assignedTo) formData.append('assignedTo', data.assignedTo);
-            if (data.taskCategory) formData.append('taskCategory', data.taskCategory);
-            if (data.recommendedEmployeeId) formData.append('recommendedEmployeeId', data.recommendedEmployeeId);
-            if (data.supportingEvidence) formData.append('supportingEvidence', data.supportingEvidence);
-
+            if (!data.assignedDepartmentId) {
+                const meRes = await fetch('/api/auth/me', {
+                    headers: { Authorization: `Bearer ${token()}` },
+                });
+                if (meRes.ok) {
+                    const meBody = await meRes.json();
+                    const deptId = meBody?.data?.departmentId ?? meBody?.data?.DepartmentId;
+                    if (deptId) data.assignedDepartmentId = deptId;
+                }
+            }
             const res = await fetch('/api/task', {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token()}` },
-                body: formData,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+                body: JSON.stringify(data),
             });
             if (res.status === 409) {
                 const errBody = await res.json().catch(() => ({}));
@@ -4079,49 +4122,56 @@ export default function OpsAdminDashboard() {
                     setPendingTaskData(data);
                     return;
                 }
-                throw new Error(errBody.message || 'Potential duplicate task detected.');
+                throw new Error(errBody.message || errBody.Message || 'Potential duplicate task detected.');
             }
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to create task.');
+                throw new Error(err.message || err.Message || 'Failed to create task.');
             }
+            const created = await res.json();
+            const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
+
+            // Upload supporting document if provided
+            if (taskId && pendingFile) {
+                const fileFormData = new FormData();
+                fileFormData.append('file', pendingFile);
+                await fetch(`/api/tasks/${taskId}/attachments`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token()}` },
+                    body: fileFormData,
+                }).catch(() => { });
+                setPendingFile(null);
+            }
+
             await fetchTasks();
             await fetchDashboardData();
             setShowNew(false);
             success('Task created successfully.');
         } catch (err: any) {
-            error(err.message ?? 'Failed to create task.');
+            console.error('Create task error:', err);
+            error(err.message || err.Message || 'Failed to create task.');
         }
     };
 
     // -- Update Task --
     const handleEditTask = async (taskId: string, data: UpdateTaskDTO) => {
         try {
-            const formData = new FormData();
-            formData.append('TaskTitle', data.taskTitle);
-            formData.append('TaskDescription', data.taskDescription);
-            formData.append('Priority', data.priority);
-            if (data.dueAt) formData.append('DueAt', new Date(data.dueAt).toISOString());
-            if (data.assignedTo) formData.append('AssignedTo', data.assignedTo);
-            if (data.taskCategory) formData.append('TaskCategory', data.taskCategory);
-            if (data.taskRemarks) formData.append('TaskRemarks', data.taskRemarks);
-            const dto = data as any;
-            if (dto.supportingEvidence) formData.append('SupportingEvidence', dto.supportingEvidence);
             const res = await fetch(`/api/task/${taskId}`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token()}` },
-                body: formData,
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+                body: JSON.stringify(data),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to update task.');
+                throw new Error(err.message || err.Message || 'Failed to update task.');
             }
             await fetchTasks();
             await fetchDashboardData();
             setEditingTask(null);
             success('Task updated successfully.');
         } catch (err: any) {
-            error(err.message ?? 'Failed to update task.');
+            console.error('Update task error:', err);
+            error(err.message || err.Message || 'Failed to update task.');
         }
     };
 
@@ -4448,7 +4498,7 @@ export default function OpsAdminDashboard() {
                     <div className="profile-card">
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                             <div className="profile-avatar">
-{getInitials(employeeName || 'Coordinator')}
+                                {getInitials(employeeName || 'Coordinator')}
                             </div>
                             <span style={{
                                 position: 'absolute', bottom: 1, right: 1,
@@ -4570,8 +4620,9 @@ export default function OpsAdminDashboard() {
                     teamMembers={teamMembers}
                     tasks={tasks}
                     onSave={data => handleNewTask(data as CreateTaskDTO)}
-                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setPendingTaskData(null); }}
+                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setPendingTaskData(null); setPendingFile(null); }}
                     showSuccess={success}
+                    onFileChange={f => setPendingFile(f)}
                 />
             )}
             {editingTask && (
@@ -4637,7 +4688,7 @@ export default function OpsAdminDashboard() {
                         const task = pendingTaskData;
                         setDuplicateWarnings([]);
                         setPendingTaskData(null);
-                        handleNewTask({ ...task, IsDuplicateAcknowledged: true });
+                        handleNewTask(task);
                     }}
                     onCancel={() => {
                         setDuplicateWarnings([]);

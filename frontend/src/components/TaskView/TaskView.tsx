@@ -1,17 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
-    XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw,
+    XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
+    FileText, Download, Trash2, Paperclip,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
+import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
 import StatusBadge from '../ui/StatusBadge';
 import './TaskView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
-type TaskStatus = 'Draft' | 'Assigned' | 'Pending' | 'In Progress' | 'Pending Admin Review' | 'Done' | 'Completed' | 'Overdue';
+type TaskStatus = 'Not Started' | 'In Progress' | 'Done/Pending Review' | 'Completed' | 'On Hold' | 'Cancelled' | 'Overdue';
 type ReviewState = 'none' | 'pending_review' | 'approved' | 'rejected';
+
+export interface TaskAttachment {
+    id: string;
+    fileName: string;
+    fileSize: number;
+    fileType?: string;
+    description?: string;
+    uploadedByName?: string;
+    createdAt: string;
+}
 
 export interface TaskViewTask {
     taskId: string;
@@ -25,6 +37,13 @@ export interface TaskViewTask {
     createdByEmployee: string;
     assignedTo: string;
     createdAt: string;
+    isConfidential?: boolean;
+    classification?: string;
+    isSLALocked?: boolean;
+    attachmentCount?: number;
+    assignmentScope?: number;
+    assignedDepartmentId?: string;
+    assignedDepartmentName?: string;
 }
 
 export interface Comment {
@@ -50,6 +69,7 @@ interface TaskViewProps {
     onClose: () => void;
     onApprove?: (taskId: string) => void;
     onReject?: (taskId: string, reason: string) => void;
+    onDeleteAttachment?: (attachmentId: string) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -124,17 +144,73 @@ const RejectModal: React.FC<{
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TaskView: React.FC<TaskViewProps> = ({
-    task, onEdit, onReopen, onClose, onApprove, onReject,
+    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment,
 }) => {
-    const [activeTab, setActiveTab] = useState<'details' | 'comments'>('details');
     const [reopening, setReopening] = useState(false);
+    const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+    const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+    const token = localStorage.getItem('authToken');
+
+    const fetchAttachments = useCallback(async () => {
+        if (!task.taskId) return;
+        setAttachmentsLoading(true);
+        try {
+            const res = await fetch(`/api/tasks/${task.taskId}/attachments`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                const json = await res.json();
+                const raw = json?.data ?? json;
+                setAttachments(Array.isArray(raw) ? raw.map((a: any) => ({
+                    id: a.id,
+                    fileName: a.fileName,
+                    fileSize: a.fileSize,
+                    fileType: a.fileType,
+                    description: a.description,
+                    uploadedByName: a.uploadedByName,
+                    createdAt: a.createdAt,
+                })) : []);
+            }
+        } catch {
+            // silently fail
+        } finally {
+            setAttachmentsLoading(false);
+        }
+    }, [task.taskId, token]);
+
+    useEffect(() => {
+        fetchAttachments();
+    }, [fetchAttachments]);
+
+    const handleDownload = (attachmentId: string, fileName: string) => {
+        const a = document.createElement('a');
+        a.href = `/api/attachments/${attachmentId}/download`;
+        if (token) a.href += `?token=${encodeURIComponent(token)}`;
+        a.download = fileName;
+        a.click();
+    };
+
+    const handleDelete = (attachmentId: string) => {
+        onDeleteAttachment?.(attachmentId);
+        setAttachments(prev => prev.filter(a => a.id !== attachmentId));
+        setDeleteConfirmId(null);
+    };
+
+    const formatFileSize = (bytes: number): string => {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
     const [reviewState, setReviewState] = useState<ReviewState>(
         task.taskStatus === 'Completed' ? 'approved' :
-            task.taskStatus === 'Pending Admin Review' ? 'pending_review' : 'none'
+            task.taskStatus === 'Done/Pending Review' ? 'pending_review' : 'none'
     );
     const [reviewHistory, setReviewHistory] = useState<ReviewHistoryEntry[]>([]);
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [localStatus, setLocalStatus] = useState<TaskStatus>(task.taskStatus);
+    const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'recommendations'>('details');
 
     const currentUser = localStorage.getItem('employeeName') ?? 'Admin';
 
@@ -150,7 +226,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     // ── Review actions ──
     const handleRequestReview = () => {
         setReviewState('pending_review');
-        setLocalStatus('Done');
+        setLocalStatus('Done/Pending Review');
         setReviewHistory(prev => [...prev, {
             action: 'submitted', by: task.assignedEmployee,
             at: new Date().toISOString(),
@@ -276,7 +352,30 @@ const TaskView: React.FC<TaskViewProps> = ({
                     <div className="tv-header-left">
                         <span className={priorityDotClass(task.priority)} />
                         <div className="tv-header-text">
-                            <h2 className="tv-title">{task.taskTitle}</h2>
+                            <h2 className="tv-title">
+                                {task.taskTitle}
+                                {task.classification && (
+                                    <span
+                                        style={{
+                                            marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 3,
+                                            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                                            verticalAlign: 'middle', letterSpacing: '0.03em',
+                                            background: task.classification === 'special' ? 'rgba(67,24,255,0.08)' : 'rgba(5,150,105,0.08)',
+                                            color: task.classification === 'special' ? '#4318FF' : '#059669',
+                                        }}
+                                    >
+                                        {task.classification === 'special' ? 'SPECIAL TASK' : 'ROUTINE'}
+                                    </span>
+                                )}
+                                {task.isConfidential && (
+                                    <span
+                                        title="Confidential — only Coordinators and Manager can view"
+                                        style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--status-failed, #ee5d50)', background: 'rgba(238, 93, 80, 0.08)', padding: '2px 8px', borderRadius: 4, verticalAlign: 'middle', letterSpacing: '0.04em' }}
+                                    >
+                                        <Lock size={11} /> CONFIDENTIAL
+                                    </span>
+                                )}
+                            </h2>
                             <p className="tv-subtitle">
                                 Created by <strong>{task.createdByEmployee}</strong>
                                 {task.createdAt && <> · {fmtDate(task.createdAt)}</>}
@@ -304,6 +403,10 @@ const TaskView: React.FC<TaskViewProps> = ({
                         onClick={() => setActiveTab('comments')}>
                         Comments
                     </button>
+                    <button className={`tv-tab${activeTab === 'recommendations' ? ' active' : ''}`}
+                        onClick={() => setActiveTab('recommendations')}>
+                        Recommendations
+                    </button>
                 </div>
 
                 {/* ── Body ── */}
@@ -323,23 +426,58 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <PrioBadge p={task.priority} />
                             </div>
                             <div className="tv-meta-chip">
+                                <span className="tv-meta-label">Classification</span>
+                                <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 4,
+                                    background: task.classification === 'special' ? 'rgba(67,24,255,0.08)' : 'rgba(5,150,105,0.08)',
+                                    color: task.classification === 'special' ? '#4318FF' : '#059669',
+                                }}>
+                                    {task.classification === 'special' ? 'SPECIAL TASK' : 'ROUTINE'}
+                                </span>
+                            </div>
+                            <div className="tv-meta-chip">
                                 <span className="tv-meta-label">Due Date</span>
-                                <span className={`tv-meta-value${od ? ' tv-overdue' : ''}`}>
-                                    {task.dueAt ? fmtDate(task.dueAt) : '—'}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    {task.isSLALocked && (
+                                        <span title="SLA Locked — deadline enforced by system" style={{ display: 'inline-flex', alignItems: 'center', color: '#7c1d1d', background: '#fef2f2', padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700, gap: 2 }}>
+                                            <Lock size={10} /> SLA
+                                        </span>
+                                    )}
+                                    <span className={`tv-meta-value${od ? ' tv-overdue' : ''}`}>
+                                        {task.dueAt ? fmtDate(task.dueAt) : '—'}
+                                    </span>
+                                </span>
+                            </div>
+                            <div className="tv-meta-chip">
+                                <span className="tv-meta-label">Scope</span>
+                                <span style={{ fontSize: 11, fontWeight: 600 }}>
+                                    {task.assignmentScope !== undefined
+                                        ? (['Single', 'Team', 'Department'][task.assignmentScope] ?? '—')
+                                        : '—'}
                                 </span>
                             </div>
                         </div>
 
                         {/* Assigned to */}
                         <div className="tv-section">
-                            <span className="tv-section-label">Assigned To</span>
+                            <span className="tv-section-label">
+                                {task.assignmentScope === 2 ? 'Department' : 'Assigned To'}
+                            </span>
                             <div className="tv-assignee">
-                                <div className="tv-avatar tv-avatar-blue">
-                                    {(task.assignedEmployee || '?').charAt(0).toUpperCase()}
-                                </div>
-                                <span className="tv-assignee-name">
-                                    {task.assignedEmployee || 'Unassigned'}
-                                </span>
+                                {task.assignmentScope === 2 ? (
+                                    <span className="tv-assignee-name">
+                                        {task.assignedDepartmentName || '—'}
+                                    </span>
+                                ) : (
+                                    <>
+                                        <div className="tv-avatar tv-avatar-blue">
+                                            {(task.assignedEmployee || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <span className="tv-assignee-name">
+                                            {task.assignedEmployee || 'Unassigned'}
+                                        </span>
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -360,6 +498,63 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <div className="tv-text-box tv-text-box-remarks">{task.taskRemarks}</div>
                             </div>
                         )}
+
+                        {/* Attachments */}
+                        <div className="tv-section">
+                            <span className="tv-section-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Paperclip size={13} /> Attachments
+                                {(task.attachmentCount ?? 0) > 0 && (
+                                    <span className="tv-attach-count">{task.attachmentCount}</span>
+                                )}
+                            </span>
+                            {attachmentsLoading ? (
+                                <div className="tv-text-box" style={{ color: 'var(--sidebar-text)', fontSize: 12 }}>
+                                    Loading attachments…
+                                </div>
+                            ) : attachments.length === 0 ? (
+                                <div className="tv-text-box">
+                                    <span className="tv-empty-text">No attachments.</span>
+                                </div>
+                            ) : (
+                                <div className="tv-attach-list">
+                                    {attachments.map(a => (
+                                        <div key={a.id} className="tv-attach-item">
+                                            <FileText size={15} className="tv-attach-icon" />
+                                            <div className="tv-attach-info">
+                                                <span className="tv-attach-name" title={a.fileName}>{a.fileName}</span>
+                                                <span className="tv-attach-meta">
+                                                    {formatFileSize(a.fileSize)}
+                                                    {a.uploadedByName && <> · by {a.uploadedByName}</>}
+                                                </span>
+                                            </div>
+                                            <div className="tv-attach-actions">
+                                                <button className="tv-icon-btn tv-attach-btn" title="Download"
+                                                    onClick={() => handleDownload(a.id, a.fileName)}>
+                                                    <Download size={13} />
+                                                </button>
+                                                {onDeleteAttachment && (
+                                                    deleteConfirmId === a.id ? (
+                                                        <div className="tv-attach-confirm">
+                                                            <button className="tv-btn tv-btn-danger-xs" onClick={() => handleDelete(a.id)}>
+                                                                <XCircle size={11} /> Confirm
+                                                            </button>
+                                                            <button className="tv-icon-btn tv-attach-btn" onClick={() => setDeleteConfirmId(null)}>
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button className="tv-icon-btn tv-attach-btn tv-attach-delete" title="Delete"
+                                                            onClick={() => setDeleteConfirmId(a.id)}>
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    )
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Review history */}
                         {reviewHistory.length > 0 && (
@@ -405,6 +600,11 @@ const TaskView: React.FC<TaskViewProps> = ({
                     {/* ── Right: Comments ── */}
                     <div className={`tv-comments${activeTab === 'comments' ? ' tv-mobile-visible' : ''}`}>
                         <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} />
+                    </div>
+
+                    {/* ── Right: Recommendations ── */}
+                    <div className={`tv-comments${activeTab === 'recommendations' ? ' tv-mobile-visible' : ''}`}>
+                        <TaskRecommendations taskId={task.taskId} />
                     </div>
                 </div>
             </div>

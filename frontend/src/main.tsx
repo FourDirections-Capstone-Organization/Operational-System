@@ -154,8 +154,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         </Route>
                     </Route>
 
-                    {/* Coordinator routes */}
-                    <Route element={<ProtectedRoute allowedRoles={['Coordinator']} />}>
+                    {/* Coordinator & Manager routes (Manager has full access per FR-012) */}
+                    <Route element={<ProtectedRoute allowedRoles={['Manager', 'Coordinator']} />}>
                         <Route element={<PasswordChangedGuard />}>
                             <Route path="/OpAdmin_Dashboard" element={<OpAdmin_Dashboard />} />
                         </Route>

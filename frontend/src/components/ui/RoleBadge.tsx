@@ -9,6 +9,7 @@ const ROLE_COLORS: Record<string, string> = {
     DISPATCHER: '#0284C7',
     ENCODER: '#0284C7',
     COURIER: '#0284C7',
+    ACCOUNTANT: '#7C3AED',
 };
 
 export default function RoleBadge({ role, size = 'md' }: RoleBadgeProps) {
