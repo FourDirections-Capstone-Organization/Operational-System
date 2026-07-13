@@ -93,10 +93,19 @@ interface ActivityLog {
 const ROLES = [
     'Manager',
     'Coordinator',
+    'Dispatcher',
     'Encoder',
+    'Courier',
+    'Accountant',
 ];
 
-const toBackendRole = (role: string) => role;
+const toBackendRole = (role: string) => {
+    const roleMap: Record<string, number> = {
+        Manager: 0, Coordinator: 1, Dispatcher: 2,
+        Encoder: 3, Courier: 4, Accountant: 5,
+    };
+    return roleMap[role] ?? 3;
+};
 const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
 const toDisplayRole = (role: any) => {
     if (typeof role === 'number') return ROLE_MAP[role] || String(role);
@@ -258,6 +267,24 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 if (!statusRes.ok) {
                     const errData = await statusRes.json().catch(() => ({}));
                     throw new Error(errData.message || errData.Message || 'Failed to update account status.');
+                }
+            }
+
+            // 3. Update role if changed
+            const newRoleVal = toBackendRole(form.role);
+            const oldRoleVal = typeof profile.role === 'number' ? profile.role : parseInt(profile.role, 10);
+            if (newRoleVal !== oldRoleVal) {
+                const roleRes = await fetch(`/api/role/user/${userId}/role`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ newRole: newRoleVal, reason: 'Role updated via admin panel' }),
+                });
+                if (!roleRes.ok) {
+                    const errData = await roleRes.json().catch(() => ({}));
+                    throw new Error(errData.message || errData.Message || 'Failed to update role.');
                 }
             }
 

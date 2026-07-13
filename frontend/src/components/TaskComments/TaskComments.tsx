@@ -22,7 +22,6 @@ interface CommentDTO {
 interface TaskCommentsProps {
     taskId: string;
     currentEmployeeId: string;
-    apiBase?: string;
     taskReferenceNumber?: string;
 }
 
@@ -51,7 +50,6 @@ const getCurrentAccountId = (): string => {
 const TaskComments: React.FC<TaskCommentsProps> = ({
     taskId,
     currentEmployeeId: _propId,
-    apiBase = '/api/taskComment',
     taskReferenceNumber,
 }) => {
     const currentUserId = getCurrentAccountId();
@@ -72,7 +70,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`${apiBase}/task/${taskId}`, { headers: authHeader() });
+            const res = await fetch(`/api/tasks/${taskId}/comments`, { headers: authHeader() });
             if (res.status === 404) {
                 setComments([]);
                 return;
@@ -86,7 +84,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [taskId, apiBase]);
+    }, [taskId]);
 
     useEffect(() => { fetchComments(); }, [fetchComments]);
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [comments]);
@@ -113,7 +111,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             fd.append('TaskId', taskId);
             fd.append('Message', newMessage.trim());
             if (attachment) fd.append('Attachment', attachment);
-            const res = await fetch(apiBase, {
+            const res = await fetch(`/api/tasks/${taskId}/comments`, {
                 method: 'POST',
                 headers: authHeader(),
                 body: fd,
@@ -154,7 +152,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         setError('');
         setSavingEdit(true);
         try {
-            const res = await fetch(`${apiBase}/${editingId}`, {
+            const res = await fetch(`/api/tasks/${taskId}/comments/${editingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...authHeader() },
                 body: JSON.stringify({ Message: editMessage.trim() }),
@@ -176,7 +174,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     const deleteComment = async (commentId: string) => {
         if (!window.confirm('Are you sure you want to delete this comment?')) return;
         try {
-            const res = await fetch(`${apiBase}/${commentId}`, {
+            const res = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
                 method: 'DELETE',
                 headers: authHeader(),
             });

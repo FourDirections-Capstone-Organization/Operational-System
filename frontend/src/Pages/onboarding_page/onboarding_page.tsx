@@ -207,13 +207,13 @@ export default function OnboardingPage() {
                     const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '');
                     const payload = JSON.parse(atob(b64));
                     const claim = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || payload.role || '';
-                    role = ({ Manager: 'Manager', Coordinator: 'Coordinator', Dispatcher: 'Encoder', Encoder: 'Encoder', Courier: 'Encoder' } as Record<string, string>)[claim] || '';
+                    role = ({ Manager: 'Manager', Coordinator: 'Coordinator', Dispatcher: 'Dispatcher', Encoder: 'Encoder', Courier: 'Courier', Accountant: 'Accountant' } as Record<string, string>)[claim] || '';
                 }
             } catch {}
         }
         const routes: Record<string, string> = {
             Manager: '/SystemAdmin_Dashboard', Coordinator: '/OpAdmin_Dashboard',
-            Dispatcher: '/OpEmployee_Dashboard', Encoder: '/OpEmployee_Dashboard', Courier: '/OpEmployee_Dashboard',
+            Dispatcher: '/OpEmployee_Dashboard', Encoder: '/OpEmployee_Dashboard', Courier: '/OpEmployee_Dashboard', Accountant: '/OpEmployee_Dashboard',
         };
         return routes[role] || '/';
     };

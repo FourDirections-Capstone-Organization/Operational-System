@@ -15,7 +15,7 @@ function getStoredRole(): string {
         const claim = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
         const map: Record<string, string> = {
             Manager: 'Manager', Coordinator: 'Coordinator',
-            Dispatcher: 'Coordinator', Encoder: 'Encoder', Courier: 'Encoder'
+            Dispatcher: 'Dispatcher', Encoder: 'Encoder', Courier: 'Courier', Accountant: 'Accountant'
         };
         return map[claim] || claim || '';
     } catch {
