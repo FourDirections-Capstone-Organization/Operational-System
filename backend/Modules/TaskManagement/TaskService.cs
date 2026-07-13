@@ -89,6 +89,10 @@ public class TaskService : ITaskService
             CreatedAt = now
         };
 
+        // FR-038: Default task department to creator's department for Coordinators
+        if (!task.AssignedDepartmentId.HasValue && creator.Role == UserRole.Coordinator)
+            task.AssignedDepartmentId = creator.DepartmentId;
+
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
