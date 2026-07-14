@@ -36,7 +36,6 @@ public class AuditLogController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Policy = AuthorizationPolicies.CanAccessAuditLogs)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
@@ -49,6 +48,14 @@ public class AuditLogController : ControllerBase
     {
         var requestUserId = GetUserIdFromClaims();
         var ipAddress = GetIpAddress();
+        var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (userRole != UserRole.Manager.ToString())
+        {
+            if (requestUserId.HasValue)
+                await _auditLogService.LogAccessDeniedAsync(requestUserId.Value, ipAddress, "AuditLog");
+            return StatusCode(403, ApiResponseDTO<object>.Failure("Access denied. Only Managers can view audit logs."));
+        }
 
         if (requestUserId.HasValue)
             await _auditLogService.LogAccessAsync(requestUserId.Value, ipAddress);
@@ -68,11 +75,18 @@ public class AuditLogController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Policy = AuthorizationPolicies.CanAccessAuditLogs)]
     public async Task<IActionResult> GetById(Guid id)
     {
         var requestUserId = GetUserIdFromClaims();
         var ipAddress = GetIpAddress();
+        var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (userRole != UserRole.Manager.ToString())
+        {
+            if (requestUserId.HasValue)
+                await _auditLogService.LogAccessDeniedAsync(requestUserId.Value, ipAddress, "AuditLog");
+            return StatusCode(403, ApiResponseDTO<object>.Failure("Access denied. Only Managers can view audit logs."));
+        }
 
         if (requestUserId.HasValue)
             await _auditLogService.LogAccessAsync(requestUserId.Value, ipAddress);

@@ -51,13 +51,13 @@ public class AuthService : IAuthService
         if (user.IsDeactivated)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Account is deactivated. Please contact your administrator.");
 
+        // Check if email is verified (pending accounts fail here first)
+        if (!user.IsEmailVerified)
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please verify your email before logging in.");
+
         // Check if user is active
         if (!user.IsActive)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Account is inactive. Please contact your administrator.");
-
-        // Check if email is verified
-        if (!user.IsEmailVerified)
-            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please check your email.");
 
         // Verify password using PBKDF2 (PasswordHasher)
         if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))

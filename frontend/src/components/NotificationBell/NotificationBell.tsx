@@ -17,6 +17,8 @@ export interface NotificationItem {
 
 interface NotificationBellProps {
     apiEndpoint: string;
+    onViewTask?: (taskId: string) => void;
+    onViewMore?: () => void;
 }
 
 const NOTIF_ENUM_MAP: Record<number, string> = {
@@ -69,7 +71,7 @@ function timeAgo(iso: string): string {
 
 type FilterTab = 'all' | 'unread';
 
-export default function NotificationBell({ apiEndpoint }: NotificationBellProps) {
+export default function NotificationBell({ apiEndpoint, onViewTask, onViewMore }: NotificationBellProps) {
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -266,8 +268,11 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
                                 <div
                                     key={n.notificationId}
                                     className={`notif-item ${n.isRead ? 'read' : 'unread'}`}
-                                    onClick={() => !n.isRead && markAsRead(n.notificationId)}
-                                    style={{ cursor: n.isRead ? 'default' : 'pointer' }}
+                                    onClick={() => {
+                                        if (!n.isRead) markAsRead(n.notificationId);
+                                        if (n.taskId && onViewTask) onViewTask(n.taskId);
+                                    }}
+                                    style={{ cursor: n.taskId && onViewTask ? 'pointer' : n.isRead ? 'default' : 'pointer' }}
                                 >
                                     <div className={`notif-dot ${n.isRead ? 'read' : 'unread'}`} />
                                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -295,23 +300,31 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                 {notifs.filter(n => n.isRead).length} read · {notifTotalRecords} total
                             </div>
-                            {notifTotalPages > 1 && (
-                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                                    <button className="btn btn-sm" disabled={notifPage <= 1}
-                                        onClick={() => fetchNotifs(notifPage - 1)}
-                                        style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage <= 1 ? 0.4 : 1 }}>
-                                        ‹
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                {onViewMore && (
+                                    <button className="btn btn-sm btn-primary" onClick={() => { setOpen(false); onViewMore(); }}
+                                        style={{ fontSize: 11, padding: '4px 12px' }}>
+                                        View All
                                     </button>
-                                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                                        {notifPage} / {notifTotalPages}
-                                    </span>
-                                    <button className="btn btn-sm" disabled={notifPage >= notifTotalPages}
-                                        onClick={() => fetchNotifs(notifPage + 1)}
-                                        style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage >= notifTotalPages ? 0.4 : 1 }}>
-                                        ›
-                                    </button>
-                                </div>
-                            )}
+                                )}
+                                {notifTotalPages > 1 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <button className="btn btn-sm" disabled={notifPage <= 1}
+                                            onClick={() => fetchNotifs(notifPage - 1)}
+                                            style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage <= 1 ? 0.4 : 1 }}>
+                                            ‹
+                                        </button>
+                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                            {notifPage} / {notifTotalPages}
+                                        </span>
+                                        <button className="btn btn-sm" disabled={notifPage >= notifTotalPages}
+                                            onClick={() => fetchNotifs(notifPage + 1)}
+                                            style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage >= notifTotalPages ? 0.4 : 1 }}>
+                                            ›
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>,

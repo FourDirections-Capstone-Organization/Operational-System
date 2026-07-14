@@ -13,10 +13,12 @@ namespace Backend.Modules.TaskManagement;
 public class ReportService : IReportService
 {
     private readonly AppDbContext _db;
+    private readonly IAuditLogService _auditLogService;
 
-    public ReportService(AppDbContext db)
+    public ReportService(AppDbContext db, IAuditLogService auditLogService)
     {
         _db = db;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDTO<KpiTrackingDTO>> GetKpiTrackingAsync(
@@ -94,6 +96,15 @@ public class ReportService : IReportService
             OverallLateRate = totalCompleted > 0 ? Math.Round((double)totalLate / totalCompleted * 100, 1) : 0,
             EmployeeKpis = employeeKpis
         };
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Read,
+            "KpiReport",
+            null,
+            null,
+            $"KPI report accessed. Period: {dateStart:yyyy-MM-dd} to {dateEnd:yyyy-MM-dd}, Employees: {employeeKpis.Count}",
+            "Reports");
 
         return ApiResponseDTO<KpiTrackingDTO>.Success(result);
     }
@@ -197,6 +208,15 @@ public class ReportService : IReportService
             EmployeeBreakdown = employeeBreakdown
         };
 
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Read,
+            "PerformanceReport",
+            null,
+            null,
+            $"Performance report previewed. Period: {filters.Period}, {dateStart:yyyy-MM-dd} to {dateEnd:yyyy-MM-dd}, Employees: {employeeBreakdown.Count}",
+            "Reports");
+
         return ApiResponseDTO<PerformanceReportDTO>.Success(report);
     }
 
@@ -225,6 +245,15 @@ public class ReportService : IReportService
             default:
                 return ApiResponseDTO<byte[]>.Failure("Unsupported export format.");
         }
+
+        await _auditLogService.LogAsync(
+            null,
+            AuditActionType.Export,
+            "PerformanceReport",
+            null,
+            null,
+            $"Performance report exported as {format}. Period: {reportData.DateRangeStart:yyyy-MM-dd} to {reportData.DateRangeEnd:yyyy-MM-dd}",
+            "Reports");
 
         return ApiResponseDTO<byte[]>.Success(fileBytes, $"Report generated successfully|{fileName}|{contentType}");
     }

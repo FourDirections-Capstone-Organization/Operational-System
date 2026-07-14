@@ -63,6 +63,8 @@ export default function Login() {
     const [mounted, setMounted] = useState(false);
     const [employeeIdError, setEmployeeIdError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [pendingVerification, setPendingVerification] = useState(false);
+    const [resending, setResending] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -98,6 +100,8 @@ export default function Login() {
         setPasswordError(pwErr);
         if (idErr || pwErr) return;
 
+        setPendingVerification(false);
+        setResending(false);
         setIsLoading(true);
         updateStatus('Authenticating...', 'info');
 
@@ -138,7 +142,8 @@ export default function Login() {
                 }
 
                 if (msgLower.includes('verified') || msgLower.includes('unverified') || msgLower.includes('verification') || msgLower.includes('verify your email') || msgLower.includes('email not verified')) {
-                    updateStatus('Your account is not yet verified. Please check your email for the verification link.', 'error');
+                    updateStatus('Your account is not yet verified. Please check your email for the verification link, or request a new one below.', 'error');
+                    setPendingVerification(true);
                     return;
                 }
 
@@ -205,6 +210,19 @@ export default function Login() {
             updateStatus('System not available at the moment. Please try again later.', 'error');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setResending(true);
+        try {
+            await api.post('/api/email-verification/resend', { employeeID: employeeId.trim() });
+            updateStatus('A new verification link has been sent to your email.', 'success');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err.message || 'Failed to resend verification email.';
+            updateStatus(msg, 'error');
+        } finally {
+            setResending(false);
         }
     };
 
@@ -275,6 +293,23 @@ export default function Login() {
                             <StatusIcon type={statusType} />
                             {statusMessage}
                         </div>
+                    )}
+                    {pendingVerification && (
+                        <button
+                            type="button"
+                            className="resend-btn"
+                            onClick={handleResendVerification}
+                            disabled={resending}
+                            style={{
+                                display: 'block', margin: '8px auto 0', padding: '8px 20px',
+                                fontSize: 13, fontWeight: 600, borderRadius: 8,
+                                border: '1px solid var(--primary)', background: 'transparent',
+                                color: 'var(--primary)', cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                        >
+                            {resending ? <Loader2 size={14} className="spin" style={{ marginRight: 6 }} /> : null}
+                            {resending ? 'Sending...' : 'Resend Verification Email'}
+                        </button>
                     )}
 
                     {/* Form */}

@@ -10,6 +10,8 @@ interface DashboardHeaderProps {
     onSettingsClick?: () => void;
     onLogout?: () => void;
     onMenuToggle?: () => void;
+    onViewNotification?: (taskId: string) => void;
+    onViewMoreNotifications?: () => void;
     children?: React.ReactNode;
 }
 
@@ -20,6 +22,8 @@ export default function DashboardHeader({
     onSettingsClick,
     onLogout,
     onMenuToggle,
+    onViewNotification,
+    onViewMoreNotifications,
     children,
 }: DashboardHeaderProps) {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -69,7 +73,7 @@ export default function DashboardHeader({
                     <span className="dashboard-header-date">{today}</span>
                 </div>
                 {notificationApi && (
-                    <NotificationBell apiEndpoint={notificationApi} />
+                    <NotificationBell apiEndpoint={notificationApi} onViewTask={onViewNotification} onViewMore={onViewMoreNotifications} />
                 )}
                 
                 <div className="dashboard-header-profile-container" ref={dropdownRef}>

@@ -243,6 +243,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     const currentUser = localStorage.getItem('employeeName') ?? 'Admin';
     const userRole = localStorage.getItem('userRole') ?? '';
     const isCoordOrManager = userRole === 'Coordinator' || userRole === 'Manager';
+    const isCoordinator = userRole === 'Coordinator';
     const isEmployee = ['Dispatcher', 'Encoder', 'Courier', 'Accountant'].includes(userRole);
     const isAssignedToMe = task.assignedTo === localStorage.getItem('employeeId');
 
@@ -430,12 +431,12 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <RotateCcw size={13} /> Push Back
                             </button>
                         )}
-                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
+                        {isCoordinator && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
                             <button className="tv-btn tv-btn-outline" onClick={() => setShowHold(true)}>
                                 <Clock size={13} /> Hold
                             </button>
                         )}
-                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'Done/Pending Review' && effectiveStatus !== 'Pending Admin Review' && (
+                        {isCoordinator && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'Done/Pending Review' && effectiveStatus !== 'Pending Admin Review' && (
                             <button className="tv-btn tv-btn-outline-danger" onClick={() => setShowCancel(true)}>
                                 <XCircle size={13} /> Cancel
                             </button>
@@ -842,21 +843,22 @@ const TaskView: React.FC<TaskViewProps> = ({
                         />
                         <div className="tv-modal-actions">
                             <button className="tv-btn tv-btn-outline" onClick={() => { setShowCancel(false); setCancelReason(''); }} disabled={cancelling}>Keep Task</button>
-                            <button className="tv-btn tv-btn-danger"
-                                onClick={async () => {
-                                    if (!cancelReason.trim()) return;
-                                    setCancelling(true);
-                                    try {
-                                        await api.patch(`/api/Task/${task.taskId}/cancel`, { cancellationReason: cancelReason.trim(), isConfirmed: true });
-                                        setLocalStatus('Cancelled');
-                                        setShowCancel(false);
-                                        setCancelReason('');
-                                    } catch (err: any) {
-                                        console.error(err);
-                                    } finally { setCancelling(false); }
-                                }}
-                                disabled={!cancelReason.trim() || cancelling}>
-                                {cancelling ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancel Task
+                                                    <button className="tv-btn tv-btn-danger"
+                                                        onClick={async () => {
+                                                            if (!cancelReason.trim()) return;
+                                                            setCancelling(true);
+                                                            try {
+                                                                await api.patch(`/api/Task/${task.taskId}/cancel`, { cancellationReason: cancelReason.trim(), isConfirmed: true });
+                                                                setLocalStatus('Cancelled');
+                                                                setShowCancel(false);
+                                                                setCancelReason('');
+                                                            } catch (err: any) {
+                                                                const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to cancel task.';
+                                                                alert(msg);
+                                                            } finally { setCancelling(false); }
+                                                        }}
+                                                        disabled={!cancelReason.trim() || cancelling}>
+                                                        {cancelling ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancel Task
                             </button>
                         </div>
                     </div>

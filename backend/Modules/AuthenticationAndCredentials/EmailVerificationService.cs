@@ -3,7 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Models.Enums;
 using Backend.Modules.Email;
+using Backend.Modules.TaskManagement;
 
 namespace Backend.Modules.AuthenticationAndCredentials;
 
@@ -11,15 +13,18 @@ public class EmailVerificationService : IEmailVerificationService
 {
     private readonly AppDbContext _db;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
     private readonly ILogger<EmailVerificationService> _logger;
 
     public EmailVerificationService(
         AppDbContext db,
         IEmailService emailService,
+        IAuditLogService auditLogService,
         ILogger<EmailVerificationService> logger)
     {
         _db = db;
         _emailService = emailService;
+        _auditLogService = auditLogService;
         _logger = logger;
     }
 
@@ -32,14 +37,32 @@ public class EmailVerificationService : IEmailVerificationService
             .FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
 
         if (user is null)
+        {
+            await _auditLogService.LogAsync(
+                null, AuditActionType.Update, "User", null, null,
+                "Email verification FAILED: invalid or expired token provided",
+                "Authentication");
             return ApiResponseDTO<bool>.Failure("Verification link has expired or is invalid.");
+        }
 
         if (user.EmailVerificationTokenExpiry.HasValue
             && user.EmailVerificationTokenExpiry.Value < DateTime.UtcNow)
+        {
+            await _auditLogService.LogAsync(
+                user.Id, AuditActionType.Update, "User", user.Id, null,
+                $"Email verification EXPIRED for {user.Email}. Token expired at {user.EmailVerificationTokenExpiry.Value:yyyy-MM-dd HH:mm}",
+                "Authentication");
             return ApiResponseDTO<bool>.Failure("Verification link has expired or is invalid.");
+        }
 
         if (user.IsEmailVerified)
+        {
+            await _auditLogService.LogAsync(
+                user.Id, AuditActionType.Update, "User", user.Id, null,
+                $"Email verification ATTEMPTED but already verified for {user.Email}",
+                "Authentication");
             return ApiResponseDTO<bool>.Success(true, "Account is already verified. You may log in.");
+        }
 
         user.IsEmailVerified = true;
         user.EmailVerificationToken = null;
@@ -48,6 +71,13 @@ public class EmailVerificationService : IEmailVerificationService
         user.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+
+        await _auditLogService.LogAsync(
+            user.Id, AuditActionType.Update, "User", user.Id, null,
+            $"Email verification COMPLETED for {fullName} ({user.Email}). Account activated.",
+            "Authentication");
 
         _logger.LogInformation("Email verified for user {UserId} ({Email})", user.Id, user.Email);
 
@@ -86,6 +116,11 @@ public class EmailVerificationService : IEmailVerificationService
 
         var fullName = $"{user.FirstName} {user.LastName}".Trim();
         await _emailService.SendEmailVerificationAsync(user.Email, fullName, token, verificationUrl);
+
+        await _auditLogService.LogAsync(
+            user.Id, AuditActionType.Update, "User", user.Id, null,
+            $"Verification email RESENT to {fullName} ({user.Email})",
+            "Authentication");
 
         _logger.LogInformation("Verification email resent to user {UserId} ({Email})", user.Id, user.Email);
 
@@ -135,6 +170,11 @@ public class EmailVerificationService : IEmailVerificationService
 
         var fullName = $"{user.FirstName} {user.LastName}".Trim();
         await _emailService.SendEmailVerificationAsync(user.Email, fullName, token, verificationUrl);
+
+        await _auditLogService.LogAsync(
+            userId, AuditActionType.Update, "User", userId, null,
+            $"Verification email SENT to {fullName} ({user.Email})",
+            "Authentication");
 
         _logger.LogInformation("Verification email sent to new user {UserId} ({Email})", user.Id, user.Email);
     }

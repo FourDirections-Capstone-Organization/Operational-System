@@ -35,6 +35,7 @@ import {
     Download,
     RefreshCw,
     GitBranch,
+    Bell,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
@@ -74,6 +75,7 @@ type NavTab =
     | 'settings'
     | 'roles'
     | 'reports'
+    | 'notifications'
     | 'activity_logs'
     | 'tasks'
     | 'profile'
@@ -235,6 +237,7 @@ const NAV_GROUPS = [
             { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
             { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
             { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
+            { tab: 'notifications' as NavTab, icon: Bell, label: 'Notifications' },
             { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
         ],
     },
@@ -2305,6 +2308,47 @@ export default function Dashboard() {
     const [activityLogLoading, setActivityLogLoading] = useState(false);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
     const [activityLogSearch, setActivityLogSearch] = useState('');
+
+    // ── Notifications Tab ──
+    const NOTIF_TYPE_MAP: Record<number, string> = { 0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning', 4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold', 8: 'TaskCompleted', 9: 'TemplateTaskUnassigned' };
+    const [allNotifications, setAllNotifications] = useState<any[]>([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [notifPage, setNotifPage] = useState(1);
+    const [notifTotalPages, setNotifTotalPages] = useState(1);
+    const NOTIF_PAGE_SIZE = 20;
+
+    const fetchAllNotifications = async (page: number) => {
+        setNotifLoading(true);
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setAllNotifications(d.items.map((n: any) => ({
+                    notificationId: n.id ?? n.notificationId,
+                    taskId: n.relatedTaskId ?? n.taskId ?? null,
+                    notificationType: typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '',
+                    message: n.message ?? n.title ?? '',
+                    isRead: n.isRead ?? false,
+                    createdAt: n.createdAt ?? '',
+                })));
+                setNotifPage(d.pageNumber || page);
+                setNotifTotalPages(d.totalPages || 1);
+            } else {
+                setAllNotifications([]);
+            }
+        } catch {
+            setAllNotifications([]);
+        } finally {
+            setNotifLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'notifications') {
+            fetchAllNotifications(1);
+        }
+    }, [activeTab]);
     const [activityLogEmployee, setActivityLogEmployee] = useState('');
     const [activityLogType, setActivityLogType] = useState('');
     const [activityLogDateFrom, setActivityLogDateFrom] = useState('');
@@ -2468,7 +2512,7 @@ export default function Dashboard() {
     const pageTitles: Record<NavTab, string> = {
         dashboard: 'Dashboard', employees: 'Manage Employee',
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
-        roles: 'Role Management', reports: 'Reports', activity_logs: 'Activity Logs', profile: 'My Profile',
+        roles: 'Role Management', reports: 'Reports', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
         tasks: 'Task Manager',
         'org-structure': 'Organizational Structure'
     };
@@ -2508,6 +2552,11 @@ export default function Dashboard() {
                         onSettingsClick={() => setActiveTab('settings')}
                         onLogout={handleLogout}
                         onMenuToggle={() => setSidebarOpen(v => !v)}
+                        onViewNotification={(taskId) => {
+                            const found = tmTasks.find(t => t.id === taskId);
+                            if (found) setTmDetailTask(mapManagerTaskToView(found));
+                        }}
+                        onViewMoreNotifications={() => setActiveTab('notifications')}
                     />
                 )}
 
@@ -2561,6 +2610,61 @@ export default function Dashboard() {
                 {activeTab === 'roles' && <RoleManagementTab />}
 
                 {activeTab === 'org-structure' && <OrgStructureTab />}
+
+                {activeTab === 'notifications' && (
+                    <div className="dashboard-content">
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3><Bell size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Notifications</h3>
+                            </div>
+                            {notifLoading ? (
+                                <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
+                            ) : allNotifications.length === 0 ? (
+                                <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
+                            ) : (
+                                <DataTable
+                                    headers={['Date', 'Type', 'Message', 'Status']}
+                                    loading={false}
+                                    emptyMessage="No notifications"
+                                    currentPage={notifPage}
+                                    totalPages={notifTotalPages}
+                                    onPageChange={p => fetchAllNotifications(p)}
+                                    totalRecords={allNotifications.length}
+                                >
+                                    {allNotifications.map(n => {
+                                        const badge = (() => {
+                                            const type = typeof n.notificationType === 'number' ? NOTIF_TYPE_MAP[n.notificationType] || 'Unknown' : n.notificationType || 'Unknown';
+                                            switch (type) {
+                                                case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
+                                                case 'TaskUpdated': return { label: 'Updated', cls: 'task-assigned' };
+                                                case 'TaskOverdue': return { label: 'Overdue', cls: 'deadline' };
+                                                case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
+                                                case 'PushBack': return { label: 'Pushed back', cls: 'default' };
+                                                case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                default: return { label: type, cls: 'default' };
+                                            }
+                                        })();
+                                        return (
+                                            <tr key={n.notificationId} onClick={() => {
+                                                if (n.taskId) {
+                                                    const found = tmTasks.find(t => t.id === n.taskId);
+                                                    if (found) setTmDetailTask(mapManagerTaskToView(found));
+                                                }
+                                            }} style={{ cursor: n.taskId ? 'pointer' : 'default' }}>
+                                                <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                    {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td><span className={`badge ${badge.cls}`} style={{ fontSize: 11 }}>{badge.label}</span></td>
+                                                <td style={{ fontSize: 13, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</td>
+                                                <td>{n.isRead ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Read</span> : <span className="badge badge-blue" style={{ fontSize: 11 }}>New</span>}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </DataTable>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {activeTab === 'tasks' && (
                     <div className="dashboard-content">

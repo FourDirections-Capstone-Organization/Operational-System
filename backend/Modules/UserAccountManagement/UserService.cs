@@ -84,7 +84,7 @@ public class UserService : IUserService
             Role = dto.Role,
             DepartmentId = dto.DepartmentId,
             JobPositionId = dto.JobPositionId,
-            IsActive = true,
+            IsActive = false,
             IsDeactivated = false,
             IsEmailVerified = false,
             IsPasswordChanged = false,
