@@ -67,10 +67,10 @@ public class AuditLogService : IAuditLogService
         if (filters != null)
         {
             if (filters.DateRangeStart.HasValue)
-                query = query.Where(a => a.Timestamp >= filters.DateRangeStart.Value.ToUniversalTime());
+                query = query.Where(a => a.Timestamp >= DateTime.SpecifyKind(filters.DateRangeStart.Value, DateTimeKind.Utc));
 
             if (filters.DateRangeEnd.HasValue)
-                query = query.Where(a => a.Timestamp <= filters.DateRangeEnd.Value.ToUniversalTime().Date.AddDays(1));
+                query = query.Where(a => a.Timestamp <= DateTime.SpecifyKind(filters.DateRangeEnd.Value, DateTimeKind.Utc).Date.AddDays(1));
 
             if (filters.UserId.HasValue)
                 query = query.Where(a => a.UserId == filters.UserId.Value);

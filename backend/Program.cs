@@ -155,6 +155,7 @@ else
 var sessionSettings = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionSettings>>().Value;
 
 app.UseAuthentication();
+app.UseAuditLogAccessLogging();
 app.UseAuthorization();
 app.UseSessionTimeout(sessionSettings);
 app.MapControllers();
