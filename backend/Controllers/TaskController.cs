@@ -34,7 +34,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var creatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _taskService.CreateAsync(dto, creatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _taskService.CreateAsync(dto, creatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -104,7 +105,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _taskService.UpdateAsync(id, dto, requestUserId);
+        var ipAddress = GetIpAddress();
+        var result = await _taskService.UpdateAsync(id, dto, requestUserId, ipAddress);
         if (!result.IsSuccess)
         {
             if (result.Message.Contains("not found"))
@@ -130,7 +132,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var parsedUserId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.UpdateStatusAsync(id, dto, parsedUserId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.UpdateStatusAsync(id, dto, parsedUserId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -145,7 +148,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.PushBackAsync(id, dto, coordinatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.PushBackAsync(id, dto, coordinatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -160,7 +164,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var reviewerId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.ReviewTaskAsync(id, dto, reviewerId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.ReviewTaskAsync(id, dto, reviewerId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -175,7 +180,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.PlaceOnHoldAsync(id, dto, coordinatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.PlaceOnHoldAsync(id, dto, coordinatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -190,7 +196,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.ResumeTaskAsync(id, dto, coordinatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.ResumeTaskAsync(id, dto, coordinatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -205,10 +212,20 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var coordinatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _workflowService.CancelTaskAsync(id, dto, coordinatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.CancelTaskAsync(id, dto, coordinatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
         return Ok(result);
+    }
+
+    private string? GetIpAddress()
+    {
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+            return forwardedFor.Split(',').First().Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 }

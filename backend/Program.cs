@@ -105,6 +105,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 
 // Hosted Services
@@ -154,6 +155,7 @@ else
 var sessionSettings = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SessionSettings>>().Value;
 
 app.UseAuthentication();
+app.UseAuditLogAccessLogging();
 app.UseAuthorization();
 app.UseSessionTimeout(sessionSettings);
 app.MapControllers();

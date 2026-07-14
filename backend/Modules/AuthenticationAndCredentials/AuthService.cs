@@ -12,6 +12,7 @@ using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.AuthenticationAndCredentials.Jwt;
 using Backend.Modules.Email;
+using Backend.Modules.TaskManagement;
 using Backend.Modules.Utilities;
 
 namespace Backend.Modules.AuthenticationAndCredentials;
@@ -22,21 +23,24 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
     private readonly ILogger<AuthService> _logger;
+    private readonly IAuditLogService _auditLogService;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
     public AuthService(
         AppDbContext db,
         IOptions<JwtSettings> jwtSettings,
         IEmailService emailService,
+        IAuditLogService auditLogService,
         ILogger<AuthService> logger)
     {
         _db = db;
         _jwtSettings = jwtSettings.Value;
         _emailService = emailService;
+        _auditLogService = auditLogService;
         _logger = logger;
     }
 
-    public async Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto)
+    public async Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto, string? ipAddress = null)
     {     
         var user = await FindUserByIdentifier(dto.Identifier);
 
@@ -72,6 +76,15 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
 
         var fullName = GetFullName(user);
+
+        await _auditLogService.LogAsync(
+            user.Id,
+            AuditActionType.Login,
+            "User",
+            user.Id,
+            ipAddress,
+            $"User {fullName} logged in",
+            "Authentication");
 
         var response = new AuthResponseDTO
         {

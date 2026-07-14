@@ -2,7 +2,9 @@
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Models.Enums;
 using Microsoft.Extensions.Options;
+using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.TaskManagement;
 
@@ -17,20 +19,23 @@ public class AttachmentService : IAttachmentService
 {
     private readonly AppDbContext _db;
     private readonly FileStorageSettings _fileSettings;
+    private readonly IAuditLogService _auditLogService;
     private readonly ILogger<AttachmentService> _logger;
 
     public AttachmentService(
         AppDbContext db,
         IOptions<FileStorageSettings> fileSettings,
+        IAuditLogService auditLogService,
         ILogger<AttachmentService> logger)
     {
         _db = db;
         _fileSettings = fileSettings.Value;
+        _auditLogService = auditLogService;
         _logger = logger;
     }
 
     public async Task<ApiResponseDTO<TaskAttachmentResponseDTO>> UploadAsync(
-        Guid taskId, IFormFile file, string? description, Guid uploaderId)
+        Guid taskId, IFormFile file, string? description, Guid uploaderId, string? ipAddress = null)
     {
         var taskExists = await _db.Tasks.AnyAsync(t => t.Id == taskId);
         if (!taskExists)
@@ -68,6 +73,15 @@ public class AttachmentService : IAttachmentService
         _db.TaskAttachments.Add(attachment);
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            uploaderId,
+            AuditActionType.Upload,
+            "TaskAttachment",
+            attachment.Id,
+            ipAddress,
+            $"File '{attachment.FileName}' uploaded to task {taskId}",
+            "TaskManagement");
+
         await _db.Entry(attachment).Reference(a => a.UploadedBy).LoadAsync();
 
         var response = MapToResponseDTO(attachment);
@@ -86,7 +100,7 @@ public class AttachmentService : IAttachmentService
         return ApiResponseDTO<List<TaskAttachmentResponseDTO>>.Success(response);
     }
 
-    public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id)
+    public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id, Guid? userId = null, string? ipAddress = null)
     {
         var attachment = await _db.TaskAttachments.FindAsync(id);
         if (attachment is null)
@@ -102,8 +116,23 @@ public class AttachmentService : IAttachmentService
             _logger.LogWarning(ex, "Failed to delete file at {FilePath}", attachment.FilePath);
         }
 
+        var fileName = attachment.FileName;
+        var taskId = attachment.TaskId;
+
         _db.TaskAttachments.Remove(attachment);
         await _db.SaveChangesAsync();
+
+        if (userId.HasValue)
+        {
+            await _auditLogService.LogAsync(
+                userId.Value,
+                AuditActionType.Delete,
+                "TaskAttachment",
+                id,
+                ipAddress,
+                $"File '{fileName}' deleted from task {taskId}",
+                "TaskManagement");
+        }
 
         return ApiResponseDTO<bool>.Success(true, "Attachment deleted successfully");
     }

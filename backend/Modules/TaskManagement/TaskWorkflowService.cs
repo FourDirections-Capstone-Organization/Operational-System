@@ -4,6 +4,7 @@ using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.Notifications;
+using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.TaskManagement;
 
@@ -11,15 +12,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 {
     private readonly AppDbContext _db;
     private readonly INotificationService _notificationService;
+    private readonly IAuditLogService _auditLogService;
 
-    public TaskWorkflowService(AppDbContext db, INotificationService notificationService)
+    public TaskWorkflowService(AppDbContext db, INotificationService notificationService, IAuditLogService auditLogService)
     {
         _db = db;
         _notificationService = notificationService;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateStatusAsync(
-        Guid taskId, TaskStatusUpdateDTO dto, Guid userId)
+        Guid taskId, TaskStatusUpdateDTO dto, Guid userId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -48,6 +51,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            userId,
+            AuditActionType.StatusChange,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task status changed from {currentStatus} to {newStatus}",
+            "TaskManagement",
+            oldValue: currentStatus.ToString(),
+            newValue: newStatus.ToString());
+
         var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (assigneeIds.Count > 0)
         {
@@ -66,7 +80,7 @@ public class TaskWorkflowService : ITaskWorkflowService
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> PushBackAsync(
-        Guid taskId, PushBackDTO dto, Guid coordinatorId)
+        Guid taskId, PushBackDTO dto, Guid coordinatorId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -98,6 +112,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            coordinatorId,
+            AuditActionType.StatusChange,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task status changed from DonePendingReview to InProgress (pushed back)",
+            "TaskManagement",
+            oldValue: "DonePendingReview",
+            newValue: "InProgress");
+
         var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (assigneeIds.Count > 0)
         {
@@ -116,7 +141,7 @@ public class TaskWorkflowService : ITaskWorkflowService
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> ReviewTaskAsync(
-        Guid taskId, ReviewTaskDTO dto, Guid reviewerId)
+        Guid taskId, ReviewTaskDTO dto, Guid reviewerId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -149,6 +174,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
             await _db.SaveChangesAsync();
 
+            await _auditLogService.LogAsync(
+                reviewerId,
+                AuditActionType.StatusChange,
+                "Task",
+                taskId,
+                ipAddress,
+                $"Task status changed from DonePendingReview to Completed (approved)",
+                "TaskManagement",
+                oldValue: "DonePendingReview",
+                newValue: "Completed");
+
             var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
             if (assigneeIds.Count > 0)
             {
@@ -178,6 +214,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
             await _db.SaveChangesAsync();
 
+            await _auditLogService.LogAsync(
+                reviewerId,
+                AuditActionType.StatusChange,
+                "Task",
+                taskId,
+                ipAddress,
+                $"Task status changed from DonePendingReview to InProgress (returned for rework)",
+                "TaskManagement",
+                oldValue: "DonePendingReview",
+                newValue: "InProgress");
+
             var reworkAssigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
             if (reworkAssigneeIds.Count > 0)
             {
@@ -197,7 +244,7 @@ public class TaskWorkflowService : ITaskWorkflowService
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> PlaceOnHoldAsync(
-        Guid taskId, PlaceOnHoldDTO dto, Guid coordinatorId)
+        Guid taskId, PlaceOnHoldDTO dto, Guid coordinatorId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -230,6 +277,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            coordinatorId,
+            AuditActionType.StatusChange,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task placed on hold. Reason: {dto.HoldReason}",
+            "TaskManagement",
+            oldValue: task.PreviousStatus?.ToString(),
+            newValue: "OnHold");
+
         var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (assigneeIds.Count > 0)
         {
@@ -248,7 +306,7 @@ public class TaskWorkflowService : ITaskWorkflowService
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> ResumeTaskAsync(
-        Guid taskId, ResumeTaskDTO dto, Guid coordinatorId)
+        Guid taskId, ResumeTaskDTO dto, Guid coordinatorId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -288,6 +346,17 @@ public class TaskWorkflowService : ITaskWorkflowService
 
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            coordinatorId,
+            AuditActionType.StatusChange,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task resumed from OnHold to {task.Status}",
+            "TaskManagement",
+            oldValue: "OnHold",
+            newValue: task.Status.ToString());
+
         var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (assigneeIds.Count > 0)
         {
@@ -306,7 +375,7 @@ public class TaskWorkflowService : ITaskWorkflowService
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> CancelTaskAsync(
-        Guid taskId, CancelTaskDTO dto, Guid coordinatorId)
+        Guid taskId, CancelTaskDTO dto, Guid coordinatorId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -346,6 +415,17 @@ public class TaskWorkflowService : ITaskWorkflowService
         task.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            coordinatorId,
+            AuditActionType.StatusChange,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task cancelled. Reason: {dto.CancellationReason}",
+            "TaskManagement",
+            oldValue: task.PreviousStatus?.ToString() ?? "Unknown",
+            newValue: "Cancelled");
 
         var cancelRecipientIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (task.CreatedById != Guid.Empty)

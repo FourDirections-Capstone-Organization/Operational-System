@@ -24,7 +24,8 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDTO dto)
     {
-        var result = await _authService.LoginAsync(dto);
+        var ipAddress = GetIpAddress();
+        var result = await _authService.LoginAsync(dto, ipAddress);
         if (!result.IsSuccess)
             return Unauthorized(result);
 
@@ -108,5 +109,14 @@ public class AuthController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userIdGuid))
             return null;
         return userIdGuid;
+    }
+
+    private string? GetIpAddress()
+    {
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+            return forwardedFor.Split(',').First().Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 }

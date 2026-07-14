@@ -31,7 +31,8 @@ public class AttachmentController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var uploaderId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _attachmentService.UploadAsync(taskId, file, description, uploaderId);
+        var ipAddress = GetIpAddress();
+        var result = await _attachmentService.UploadAsync(taskId, file, description, uploaderId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -66,10 +67,24 @@ public class AttachmentController : ControllerBase
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var result = await _attachmentService.DeleteAsync(id);
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var parsedUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var ipAddress = GetIpAddress();
+        var result = await _attachmentService.DeleteAsync(id, parsedUserId, ipAddress);
         if (!result.IsSuccess)
             return NotFound(result);
 
         return Ok(result);
+    }
+
+    private string? GetIpAddress()
+    {
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+            return forwardedFor.Split(',').First().Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 }

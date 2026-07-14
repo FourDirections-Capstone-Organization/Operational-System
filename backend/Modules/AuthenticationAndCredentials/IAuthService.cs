@@ -5,7 +5,7 @@ namespace Backend.Modules.AuthenticationAndCredentials;
 
 public interface IAuthService
 {
-    Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto);
+    Task<ApiResponseDTO<AuthResponseDTO>> LoginAsync(LoginDTO dto, string? ipAddress = null);
     Task<ApiResponseDTO<bool>> ForgotPasswordAsync(ForgotPasswordDTO dto, string resetUrl);
     Task<ApiResponseDTO<bool>> ResetPasswordAsync(ResetPasswordDTO dto);
     Task<ApiResponseDTO<bool>> ChangePasswordAsync(Guid userId, ChangePasswordDTO dto);

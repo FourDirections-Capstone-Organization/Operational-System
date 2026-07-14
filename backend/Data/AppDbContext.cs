@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -223,6 +224,27 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.TaskId, e.IsDeleted });
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // AuditLog Configuration
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TargetEntity).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Description).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Module).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+
+            entity.HasOne(a => a.User)
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.Timestamp);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.ActionType);
+            entity.HasIndex(e => e.Module);
+            entity.HasIndex(e => new { e.TargetEntity, e.TargetEntityId });
         });
     }
 }
