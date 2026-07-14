@@ -19,9 +19,11 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _departmentService.GetAllAsync();
+        var result = await _departmentService.GetAllAsync(pageNumber, pageSize);
         return Ok(result);
     }
 

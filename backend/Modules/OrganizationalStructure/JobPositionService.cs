@@ -14,13 +14,22 @@ public class JobPositionService : IJobPositionService
         _db = db;
     }
 
-    public async Task<ApiResponseDTO<List<JobPositionResponseDTO>>> GetAllAsync()
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<JobPositionResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10)
     {
-        var positions = await _db.JobPositions
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.JobPositions
             .Where(jp => jp.IsActive)
             .Include(jp => jp.Department)
-            .Include(jp => jp.Users)
+            .Include(jp => jp.Users);
+
+        var totalCount = await query.CountAsync();
+
+        var positions = await query
             .OrderBy(jp => jp.Name)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(jp => new JobPositionResponseDTO
             {
                 Id = jp.Id,
@@ -33,16 +42,33 @@ public class JobPositionService : IJobPositionService
             })
             .ToListAsync();
 
-        return ApiResponseDTO<List<JobPositionResponseDTO>>.Success(positions);
+        var paginatedResult = new PaginatedResponseDTO<JobPositionResponseDTO>
+        {
+            Items = positions,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<JobPositionResponseDTO>>.Success(paginatedResult);
     }
 
-    public async Task<ApiResponseDTO<List<JobPositionResponseDTO>>> GetByDepartmentAsync(Guid departmentId)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<JobPositionResponseDTO>>> GetByDepartmentAsync(Guid departmentId, int pageNumber = 1, int pageSize = 10)
     {
-        var positions = await _db.JobPositions
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.JobPositions
             .Where(jp => jp.DepartmentId == departmentId && jp.IsActive)
             .Include(jp => jp.Department)
-            .Include(jp => jp.Users)
+            .Include(jp => jp.Users);
+
+        var totalCount = await query.CountAsync();
+
+        var positions = await query
             .OrderBy(jp => jp.Name)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(jp => new JobPositionResponseDTO
             {
                 Id = jp.Id,
@@ -55,7 +81,15 @@ public class JobPositionService : IJobPositionService
             })
             .ToListAsync();
 
-        return ApiResponseDTO<List<JobPositionResponseDTO>>.Success(positions);
+        var paginatedResult = new PaginatedResponseDTO<JobPositionResponseDTO>
+        {
+            Items = positions,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<JobPositionResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<JobPositionResponseDTO>> GetByIdAsync(Guid id)

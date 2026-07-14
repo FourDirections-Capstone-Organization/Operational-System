@@ -58,8 +58,11 @@ public class AuditLogService : IAuditLogService
         }
     }
 
-    public async Task<ApiResponseDTO<List<AuditLogResponseDTO>>> GetAllAsync(AuditLogFilterDTO? filters = null)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<AuditLogResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10, AuditLogFilterDTO? filters = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _db.AuditLogs
             .Include(a => a.User)
             .AsQueryable();
@@ -85,12 +88,25 @@ public class AuditLogService : IAuditLogService
                 query = query.Where(a => a.TargetEntity == filters.TargetEntity);
         }
 
+        var totalCount = await query.CountAsync();
+
         var entries = await query
             .OrderByDescending(a => a.Timestamp)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = entries.Select(MapToResponseDTO).ToList();
-        return ApiResponseDTO<List<AuditLogResponseDTO>>.Success(response);
+
+        var paginatedResult = new PaginatedResponseDTO<AuditLogResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<AuditLogResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<AuditLogResponseDTO>> GetByIdAsync(Guid id)

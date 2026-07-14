@@ -6,7 +6,7 @@ namespace Backend.Modules.TaskManagement;
 public interface ITaskTemplateService
 {
     Task<ApiResponseDTO<TaskTemplateResponseDTO>> CreateAsync(CreateTaskTemplateDTO dto, Guid creatorId);
-    Task<ApiResponseDTO<List<TaskTemplateResponseDTO>>> GetAllAsync();
+    Task<ApiResponseDTO<PaginatedResponseDTO<TaskTemplateResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10);
     Task<ApiResponseDTO<TaskTemplateResponseDTO>> GetByIdAsync(Guid id);
     Task<ApiResponseDTO<TaskTemplateResponseDTO>> UpdateAsync(Guid id, UpdateTaskTemplateDTO dto);
     Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id);

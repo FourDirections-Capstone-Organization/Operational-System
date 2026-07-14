@@ -40,9 +40,12 @@ public class AttachmentController : ControllerBase
     }
 
     [HttpGet("tasks/{taskId:guid}/attachments")]
-    public async Task<IActionResult> GetByTask(Guid taskId)
+    public async Task<IActionResult> GetByTask(
+        Guid taskId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _attachmentService.GetByTaskIdAsync(taskId);
+        var result = await _attachmentService.GetByTaskIdAsync(taskId, pageNumber, pageSize);
         return Ok(result);
     }
 

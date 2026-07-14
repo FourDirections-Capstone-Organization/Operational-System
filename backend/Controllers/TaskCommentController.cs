@@ -36,9 +36,12 @@ public class TaskCommentController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetByTask(Guid taskId)
+    public async Task<IActionResult> GetByTask(
+        Guid taskId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _commentService.GetByTaskIdAsync(taskId);
+        var result = await _commentService.GetByTaskIdAsync(taskId, pageNumber, pageSize);
         if (!result.IsSuccess)
             return NotFound(result);
 

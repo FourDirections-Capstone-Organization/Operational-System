@@ -71,11 +71,20 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task<ApiResponseDTO<List<NotificationResponseDTO>>> GetByRecipientAsync(Guid recipientId)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>> GetByRecipientAsync(Guid recipientId, int pageNumber = 1, int pageSize = 10)
     {
-        var notifications = await _db.Notifications
-            .Where(n => n.RecipientId == recipientId)
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.Notifications
+            .Where(n => n.RecipientId == recipientId);
+
+        var totalCount = await query.CountAsync();
+
+        var notifications = await query
             .OrderByDescending(n => n.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(n => new NotificationResponseDTO
             {
                 Id = n.Id,
@@ -88,7 +97,15 @@ public class NotificationService : INotificationService
             })
             .ToListAsync();
 
-        return ApiResponseDTO<List<NotificationResponseDTO>>.Success(notifications);
+        var paginatedResult = new PaginatedResponseDTO<NotificationResponseDTO>
+        {
+            Items = notifications,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<int>> GetUnreadCountAsync(Guid recipientId)

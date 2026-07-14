@@ -5,7 +5,7 @@ namespace Backend.Modules.OrganizationalStructure;
 
 public interface IDepartmentService
 {
-    Task<ApiResponseDTO<List<DepartmentResponseDTO>>> GetAllAsync();
+    Task<ApiResponseDTO<PaginatedResponseDTO<DepartmentResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10);
     Task<ApiResponseDTO<DepartmentResponseDTO>> GetByIdAsync(Guid id);
     Task<ApiResponseDTO<DepartmentResponseDTO>> CreateAsync(CreateDepartmentDTO dto);
     Task<ApiResponseDTO<DepartmentResponseDTO>> UpdateAsync(Guid id, UpdateDepartmentDTO dto);

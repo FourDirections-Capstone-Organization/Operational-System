@@ -6,7 +6,7 @@ namespace Backend.Modules.UserAccountManagement;
 public interface IUserService
 {
     Task<ApiResponseDTO<UserResponseDTO>> RegisterAsync(RegisterUserDTO dto);
-    Task<ApiResponseDTO<List<UserResponseDTO>>> GetAllAsync(string? search = null, string? role = null, Guid? departmentId = null);
+    Task<ApiResponseDTO<PaginatedResponseDTO<UserResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10, string? search = null, string? role = null, Guid? departmentId = null);
     Task<ApiResponseDTO<UserResponseDTO>> GetByIdAsync(Guid id);
     Task<ApiResponseDTO<UserResponseDTO>> GetByEmployeeNumberAsync(string employeeNumber);
     Task<ApiResponseDTO<UserResponseDTO>> UpdateAsync(Guid id, UpdateUserDTO dto, Guid? requestUserId = null);

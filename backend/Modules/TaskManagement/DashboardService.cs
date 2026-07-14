@@ -128,12 +128,17 @@ public class DashboardService : IDashboardService
         return ApiResponseDTO<DashboardMetricsDTO>.Success(metrics);
     }
 
-    public async Task<ApiResponseDTO<List<DepartmentWorkloadDTO>>> GetWorkloadByDepartmentAsync(
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<DepartmentWorkloadDTO>>> GetWorkloadByDepartmentAsync(
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId,
+        int pageNumber = 1,
+        int pageSize = 10,
         DashboardFilterDTO? filters = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var activeStatuses = new HashSet<Models.Enums.TaskStatus>
         {
             Models.Enums.TaskStatus.NotStarted,
@@ -182,12 +187,29 @@ public class DashboardService : IDashboardService
             .OrderByDescending(d => d.TotalActiveTasks)
             .ToList();
 
-        return ApiResponseDTO<List<DepartmentWorkloadDTO>>.Success(departmentWorkload);
+        var totalCount = departmentWorkload.Count;
+        var pagedItems = departmentWorkload
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var paginatedResult = new PaginatedResponseDTO<DepartmentWorkloadDTO>
+        {
+            Items = pagedItems,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<DepartmentWorkloadDTO>>.Success(paginatedResult);
     }
 
-    public async Task<ApiResponseDTO<List<EmployeeAvailabilityResponseDTO>>> GetEmployeeAvailabilityAsync(
-        Guid? departmentId = null)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<EmployeeAvailabilityResponseDTO>>> GetEmployeeAvailabilityAsync(
+        int pageNumber = 1, int pageSize = 10, Guid? departmentId = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _db.Users
             .Include(u => u.Department)
             .Where(u => u.IsActive && !u.IsDeactivated)
@@ -196,9 +218,13 @@ public class DashboardService : IDashboardService
         if (departmentId.HasValue)
             query = query.Where(u => u.DepartmentId == departmentId.Value);
 
+        var totalCount = await query.CountAsync();
+
         var users = await query
             .OrderBy(u => u.LastName)
             .ThenBy(u => u.FirstName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var result = users.Select(u => new EmployeeAvailabilityResponseDTO
@@ -213,7 +239,15 @@ public class DashboardService : IDashboardService
             IsAvailable = u.AvailabilityStatus == AvailabilityStatus.Active
         }).ToList();
 
-        return ApiResponseDTO<List<EmployeeAvailabilityResponseDTO>>.Success(result);
+        var paginatedResult = new PaginatedResponseDTO<EmployeeAvailabilityResponseDTO>
+        {
+            Items = result,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<EmployeeAvailabilityResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<bool>> ValidateAssigneeAvailabilityAsync(Guid userId)

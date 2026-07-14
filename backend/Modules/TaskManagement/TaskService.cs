@@ -139,10 +139,12 @@ public class TaskService : ITaskService
             "Task created and assigned successfully");
     }
 
-    public async Task<ApiResponseDTO<List<TaskResponseDTO>>> GetAllAsync(
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>> GetAllAsync(
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId,
+        int pageNumber = 1,
+        int pageSize = 10,
         Models.Enums.TaskStatus? status = null,
         PriorityLevel? priority = null,
         TaskClassification? classification = null,
@@ -150,6 +152,9 @@ public class TaskService : ITaskService
         Guid? departmentId = null,
         string? search = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _db.Tasks
             .Include(t => t.CreatedBy)
             .Include(t => t.AssignedDepartment)
@@ -201,8 +206,12 @@ public class TaskService : ITaskService
                 t.Description.ToLower().Contains(searchLower));
         }
 
+        var totalCount = await query.CountAsync();
+
         var tasks = await query
             .OrderByDescending(t => t.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = new List<TaskResponseDTO>();
@@ -211,7 +220,15 @@ public class TaskService : ITaskService
             response.Add(await MapToResponseDTOAsync(task));
         }
 
-        return ApiResponseDTO<List<TaskResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<TaskResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> GetByIdAsync(Guid id, Guid requestUserId, UserRole requestUserRole)
@@ -381,15 +398,24 @@ public class TaskService : ITaskService
             "Task updated successfully");
     }
 
-    public async Task<ApiResponseDTO<List<TaskAssigneeDTO>>> GetAssignableUsersAsync()
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskAssigneeDTO>>> GetAssignableUsersAsync(int pageNumber = 1, int pageSize = 10)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var assignableRoles = new[] { UserRole.Dispatcher, UserRole.Encoder, UserRole.Courier, UserRole.Accountant };
 
-        var users = await _db.Users
+        var query = _db.Users
             .Include(u => u.Department)
-            .Where(u => assignableRoles.Contains(u.Role) && u.IsActive && !u.IsDeactivated)
+            .Where(u => assignableRoles.Contains(u.Role) && u.IsActive && !u.IsDeactivated);
+
+        var totalCount = await query.CountAsync();
+
+        var users = await query
             .OrderBy(u => u.LastName)
             .ThenBy(u => u.FirstName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var result = users.Select(u => new TaskAssigneeDTO
@@ -404,7 +430,15 @@ public class TaskService : ITaskService
             Department = u.Department?.Name ?? ""
         }).ToList();
 
-        return ApiResponseDTO<List<TaskAssigneeDTO>>.Success(result);
+        var paginatedResult = new PaginatedResponseDTO<TaskAssigneeDTO>
+        {
+            Items = result,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<TaskAssigneeDTO>>.Success(paginatedResult);
     }
 
 

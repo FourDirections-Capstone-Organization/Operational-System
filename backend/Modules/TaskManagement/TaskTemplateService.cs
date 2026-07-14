@@ -77,13 +77,22 @@ public class TaskTemplateService : ITaskTemplateService
             "Task template created successfully");
     }
 
-    public async Task<ApiResponseDTO<List<TaskTemplateResponseDTO>>> GetAllAsync()
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskTemplateResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10)
     {
-        var templates = await _db.TaskTemplates
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.TaskTemplates
             .Include(t => t.DefaultAssignee)
             .Include(t => t.DefaultDepartment)
-            .Include(t => t.CreatedBy)
+            .Include(t => t.CreatedBy);
+
+        var totalCount = await query.CountAsync();
+
+        var templates = await query
             .OrderByDescending(t => t.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = new List<TaskTemplateResponseDTO>();
@@ -92,7 +101,15 @@ public class TaskTemplateService : ITaskTemplateService
             response.Add(await MapToResponseDTOAsync(template));
         }
 
-        return ApiResponseDTO<List<TaskTemplateResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<TaskTemplateResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<TaskTemplateResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<TaskTemplateResponseDTO>> GetByIdAsync(Guid id)

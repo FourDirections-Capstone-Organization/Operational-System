@@ -88,16 +88,34 @@ public class AttachmentService : IAttachmentService
         return ApiResponseDTO<TaskAttachmentResponseDTO>.Success(response, "Attachment uploaded successfully");
     }
 
-    public async Task<ApiResponseDTO<List<TaskAttachmentResponseDTO>>> GetByTaskIdAsync(Guid taskId)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskAttachmentResponseDTO>>> GetByTaskIdAsync(Guid taskId, int pageNumber = 1, int pageSize = 10)
     {
-        var attachments = await _db.TaskAttachments
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.TaskAttachments
             .Include(a => a.UploadedBy)
-            .Where(a => a.TaskId == taskId)
+            .Where(a => a.TaskId == taskId);
+
+        var totalCount = await query.CountAsync();
+
+        var attachments = await query
             .OrderByDescending(a => a.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = attachments.Select(MapToResponseDTO).ToList();
-        return ApiResponseDTO<List<TaskAttachmentResponseDTO>>.Success(response);
+
+        var paginatedResult = new PaginatedResponseDTO<TaskAttachmentResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<TaskAttachmentResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id, Guid? userId = null, string? ipAddress = null)
