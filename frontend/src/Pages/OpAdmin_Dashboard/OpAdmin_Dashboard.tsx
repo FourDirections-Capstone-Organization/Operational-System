@@ -647,8 +647,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             try {
                 const res = await api.get('/api/Department');
                 const json = res.data;
-                if (json.isSuccess && json.data) {
-                    setDepartments(json.data.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
+                if (json.isSuccess && json.data?.items) {
+                    setDepartments(json.data.items.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
                 }
             } catch {
             }

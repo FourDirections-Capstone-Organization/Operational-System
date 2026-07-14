@@ -191,6 +191,7 @@
     overflow-y: visible;
     flex: 1;
     width: 100%;
+    min-height: 280px;
 }
 
 .table-card-data-table {

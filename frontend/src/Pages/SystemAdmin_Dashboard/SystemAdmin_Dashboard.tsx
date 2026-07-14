@@ -2087,8 +2087,9 @@ export default function Dashboard() {
         api.get('/api/Department')
             .then(res => {
                 const json = res.data;
-                if (json?.isSuccess && Array.isArray(json.data)) {
-                    setDepartments(json.data.map((d: any) => ({ id: d.id, name: d.name })));
+                const items = json?.data?.items ?? (Array.isArray(json.data) ? json.data : []);
+                if (json?.isSuccess && items.length > 0) {
+                    setDepartments(items.map((d: any) => ({ id: d.id, name: d.name })));
                 }
             })
             .catch(() => {});

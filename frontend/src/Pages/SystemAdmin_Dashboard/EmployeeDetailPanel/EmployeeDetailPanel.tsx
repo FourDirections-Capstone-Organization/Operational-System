@@ -18,6 +18,13 @@ import {
     Eye,
     EyeOff,
     Lock,
+    Mail,
+    Download,
+    FileText,
+    Clock,
+    Package,
+    Truck,
+    Activity,
 } from 'lucide-react';
 import './EmployeeDetailPanel.css';
 import { useToast } from '../../../components/Toast/Toast';
@@ -424,6 +431,8 @@ export default function EmployeeDetailPanel({
     const [showEdit, setShowEdit] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [activeSection, setActiveSection] = useState<'overview' | 'activity'>(initialSection);
+    const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
+    const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
