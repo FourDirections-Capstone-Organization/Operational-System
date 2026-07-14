@@ -77,7 +77,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             }
             if (!res.ok) throw new Error('Failed to load comments.');
             const json = await res.json();
-            const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             setComments(list.map((c: any) => ({
                 taskCommentId: c.id ?? c.taskCommentId,
                 taskId: c.taskId ?? taskId,

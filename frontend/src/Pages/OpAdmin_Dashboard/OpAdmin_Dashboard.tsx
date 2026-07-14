@@ -314,6 +314,7 @@ const TASK_STATUSES_FILTER = [
     'Overdue',
 ];
 
+const PER_PAGE = 10;
 const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 
 // --- Task Template Types -------------------------------------------------------
@@ -627,7 +628,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const json = await res.json();
-                const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []);
+                const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
                 if (list.length > 0) {
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
                         employeeName: emp.fullName ?? emp.FullName ?? '',
@@ -1886,6 +1887,7 @@ const TasksTab: React.FC<{
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [subTab, setSubTab] = useState<'active' | 'bin'>('active');
     const [searchError, setSearchError] = useState('');
+    const [taskPage, setTaskPage] = useState(1);
 
     const deletedTasks = binTasks;
 
@@ -1925,6 +1927,11 @@ const TasksTab: React.FC<{
             }
         });
 
+    const taskTotalPages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+    const pagedTasks = subTab === 'active'
+        ? sorted.slice((taskPage - 1) * PER_PAGE, taskPage * PER_PAGE)
+        : [];
+
     return (
         <div className="dashboard-content">
             <DataTable
@@ -1933,35 +1940,35 @@ const TasksTab: React.FC<{
                     { key: 'bin', label: 'Bin', icon: <Trash2 size={14} />, badge: deletedTasks.length },
                 ]}
                 activeTab={subTab}
-                onTabChange={key => setSubTab(key as 'active' | 'bin')}
+                onTabChange={key => { setSubTab(key as 'active' | 'bin'); setTaskPage(1); }}
                 searchQuery={subTab === 'active' ? searchQuery : undefined}
-                setSearchQuery={subTab === 'active' ? handleSearchChange : undefined}
+                setSearchQuery={subTab === 'active' ? (val => { handleSearchChange(val); setTaskPage(1); }) : undefined}
                 searchPlaceholder="Search tasks..."
                 filterElements={subTab === 'active' ? (
                     <>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                        <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setTaskPage(1); }}>
                             <option value="">All Statuses</option>
                             {TASK_STATUS_FILTERS.map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
-                        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+                        <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value); setTaskPage(1); }}>
                             <option value="">All Priorities</option>
                             <option value="Critical">Critical</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
                         </select>
-                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}>
+                        <select value={filterEmployee} onChange={e => { setFilterEmployee(e.target.value); setTaskPage(1); }}>
                             <option value="">All Employees</option>
                             {teamMembers.map(m => (
                                 <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
                             ))}
                         </select>
                         <input type="date" value={filterDeadline}
-                            onChange={e => setFilterDeadline(e.target.value)}
+                            onChange={e => { setFilterDeadline(e.target.value); setTaskPage(1); }}
                             style={{ height: 38, borderRadius: 8, border: '1.5px solid var(--border, #e8ecf4)', padding: '0 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'white', color: 'var(--text-primary)', outline: 'none' }} />
-                        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setTaskPage(1); }}
                             style={{ borderLeft: '2px solid var(--border, #e8ecf4)', paddingLeft: 12, borderRadius: 0 }}>
                             <option value="">Sort By</option>
                             <option value="taskTitle">Task Title</option>
@@ -1970,7 +1977,7 @@ const TasksTab: React.FC<{
                             <option value="status">Status</option>
                             <option value="assignedEmployee">Assigned Employee</option>
                         </select>
-                        <select value={sortOrder} onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}>
+                        <select value={sortOrder} onChange={e => { setSortOrder(e.target.value as 'asc' | 'desc'); setTaskPage(1); }}>
                             <option value="asc">Ascending</option>
                             <option value="desc">Descending</option>
                         </select>
@@ -1998,13 +2005,14 @@ const TasksTab: React.FC<{
                 loading={loading}
                 emptyIcon={subTab === 'bin' ? <Trash2 size={24} /> : <Package size={20} />}
                 emptyMessage={subTab === 'bin' ? 'Bin is empty' : 'No matching task records found.'}
+                currentPage={taskPage} totalPages={taskTotalPages} onPageChange={setTaskPage}
             >
                 {searchError && (
                     <tr><td colSpan={subTab === 'bin' ? 5 : 4} style={{ padding: '8px 20px 0', border: 'none' }}>
                         <span style={{ fontSize: 12, color: 'var(--status-failed)' }}>{searchError}</span>
                     </td></tr>
                 )}
-                {subTab === 'active' && sorted.length > 0 && sorted.map(t => {
+                {subTab === 'active' && pagedTasks.length > 0 && pagedTasks.map(t => {
                     const od = isEffectivelyOverdue(t);
                     const effectiveStatus = od ? 'Overdue' : t.taskStatus;
                     const refDisplay = t.taskReferenceNumber || t.taskId.slice(0, 8).toUpperCase();
@@ -2081,6 +2089,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<TaskTemplateDTO | null>(null);
+    const [templatePage, setTemplatePage] = useState(1);
 
     const fetchTemplates = async () => {
         setLoading(true);
@@ -2090,7 +2099,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
             });
             if (!res.ok) throw new Error('Failed to fetch templates.');
             const body = await res.json();
-            const list: any[] = body.isSuccess && Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []);
+            const list: any[] = body.isSuccess && Array.isArray(body.data?.items) ? body.data.items : (Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []));
             setTemplates(list.map((t: any) => ({
                 templateId: t.id ?? t.templateId,
                 templateName: t.templateName ?? '',
@@ -2190,6 +2199,9 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const fmtTemplateDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '�';
 
+    const tmplTotalPages = Math.max(1, Math.ceil(templates.length / PER_PAGE));
+    const pagedTemplates = templates.slice((templatePage - 1) * PER_PAGE, templatePage * PER_PAGE);
+
     return (
         <div className="dashboard-content">
             <DataTable
@@ -2200,8 +2212,9 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                 emptyMessage="No task templates found."
                 emptyIcon={<Copy size={20} />}
                 headers={['TEMPLATE NAME', 'PRIORITY', 'RECURRENCE', 'NEXT GENERATION', 'ASSIGNEE', 'STATUS', 'ACTIONS']}
+                currentPage={templatePage} totalPages={tmplTotalPages} onPageChange={setTemplatePage}
             >
-                {templates.map(t => (
+                {pagedTemplates.map(t => (
                     <tr key={t.templateId}>
                         <td>
                             <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.templateName}</div>
@@ -3811,6 +3824,12 @@ const ReopenTab: React.FC<{
 }> = ({ requests, onReview }) => {
     const pending = requests.filter(r => r.status === 'Pending');
     const history = requests.filter(r => r.status !== 'Pending');
+    const [pendingPage, setPendingPage] = useState(1);
+    const [historyPage, setHistoryPage] = useState(1);
+    const pendingTotalPages = Math.max(1, Math.ceil(pending.length / PER_PAGE));
+    const historyTotalPages = Math.max(1, Math.ceil(history.length / PER_PAGE));
+    const pagedPending = pending.slice((pendingPage - 1) * PER_PAGE, pendingPage * PER_PAGE);
+    const pagedHistory = history.slice((historyPage - 1) * PER_PAGE, historyPage * PER_PAGE);
 
     return (
         <div className="dashboard-content">
@@ -3838,8 +3857,9 @@ const ReopenTab: React.FC<{
                     emptyMessage="No pending reopen requests."
                     emptyIcon={<RotateCcw size={24} />}
                     totalRecords={pending.length}
+                    currentPage={pendingPage} totalPages={pendingTotalPages} onPageChange={setPendingPage}
                 >
-                    {pending.map(r => (
+                    {pagedPending.map(r => (
                         <tr key={r.requestId}>
                             <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.referenceNumber || r.requestId.slice(0, 8).toUpperCase()}</td>
                             <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.taskTitle}</div></td>
@@ -3864,8 +3884,9 @@ const ReopenTab: React.FC<{
                         headers={['REQUEST ID', 'TASK', 'EMPLOYEE', 'DECISION', 'REMARKS', 'REVIEWED']}
                         loading={false}
                         totalRecords={history.length}
+                        currentPage={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage}
                     >
-                        {history.map(r => (
+                        {pagedHistory.map(r => (
                             <tr key={r.requestId}>
                                 <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.referenceNumber || r.requestId.slice(0, 8).toUpperCase()}</td>
                                 <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.taskTitle}</div></td>
@@ -4047,12 +4068,12 @@ export default function OpsAdminDashboard() {
             ]);
             if (empRes.ok) {
                 const json = await empRes.json();
-                const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+                const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardEmployees(list.map((e: any) => ({ employeeId: e.userId ?? e.UserId ?? e.employeeId, employeeName: e.fullName ?? e.FullName ?? e.employeeName })));
             }
             if (deptRes.ok) {
                 const json = await deptRes.json();
-                const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+                const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardDepartments(depts.map((d: any) => ({ departmentId: d.id ?? d.departmentId, departmentName: d.name ?? d.departmentName })));
             }
         } catch { /* non-fatal */ }
@@ -4092,12 +4113,12 @@ export default function OpsAdminDashboard() {
         setLoadingTasks(true);
         setDashboardLoading(true);
         try {
-            const res = await fetch('/api/task', {
+            const res = await fetch('/api/task?pageNumber=1&pageSize=500', {
                 headers: { Authorization: `Bearer ${token()}` },
             });
             if (!res.ok) throw new Error();
             const jsonRes = await res.json();
-            const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.data) ? jsonRes.data.data : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
+            const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };

@@ -63,12 +63,12 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         try {
             const p = page ?? notifPage;
             const token = localStorage.getItem('authToken');
-            const res = await fetch(apiEndpoint, {
+            const res = await fetch(`${apiEndpoint}?pageNumber=${p}&pageSize=20`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error();
             const json = await res.json();
-            const rawList: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            const rawList: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             const list: NotificationItem[] = rawList.map((n: any) => ({
                 notificationId: n.id ?? n.notificationId,
                 taskId: n.relatedTaskId ?? n.taskId ?? null,
@@ -77,9 +77,9 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
                 isRead: n.isRead ?? false,
                 createdAt: n.createdAt ?? '',
             }));
-            const totalRecords = list.length;
+            const totalRecords = json.data?.totalCount ?? list.length;
             const totalUnread = list.filter(n => !n.isRead).length;
-            setNotifTotalPages(1);
+            setNotifTotalPages(json.data?.totalPages ?? 1);
             setNotifTotalRecords(totalRecords);
             setNotifTotalUnread(totalUnread);
             setNotifPage(p);

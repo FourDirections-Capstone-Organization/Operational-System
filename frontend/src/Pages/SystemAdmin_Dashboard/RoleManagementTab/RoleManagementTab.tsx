@@ -364,6 +364,7 @@ export default function RoleManagementTab() {
 
     // ── Client Accounts (FR-011) ──
     const [clientAccounts, setClientAccounts] = useState<ClientAccountDTO[]>([]);
+    const [caPage, setCaPage] = useState(1);
     const [coordinators, setCoordinators] = useState<EmployeeSummaryDTO[]>([]);
     const [caLoading, setCaLoading] = useState(false);
     const [caFormOpen, setCaFormOpen] = useState(false);
@@ -466,11 +467,11 @@ export default function RoleManagementTab() {
             ]);
             if (caRes.ok) {
                 const rd = await caRes.json();
-                setClientAccounts(Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? []);
+                setClientAccounts(Array.isArray(rd) ? rd : (rd.data?.items ?? (Array.isArray(rd.data) ? rd.data : rd.$values ?? [])));
             }
             if (coordRes.ok) {
                 const rd = await coordRes.json();
-                const raw = Array.isArray(rd) ? rd : rd.data ?? rd.$values ?? [];
+                const raw = Array.isArray(rd) ? rd : (rd.data?.items ?? (Array.isArray(rd.data) ? rd.data : rd.$values ?? []));
                 setCoordinators(raw.map((u: any) => ({
                     employeeId: u.id ?? u.userId ?? u.employeeId,
                     fullName: u.fullName ?? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
@@ -499,7 +500,8 @@ export default function RoleManagementTab() {
                 effectiveDate: d.effectiveDate ?? d.EffectiveDate ?? '',
                 createdAt: d.createdAt ?? d.CreatedAt,
             });
-            setDepartments((Array.isArray(data) ? data : data.data ?? data.$values ?? []).map(normalize));
+            const rawDepts = data?.data?.items ?? (Array.isArray(data?.data) ? data.data : []);
+            setDepartments(Array.isArray(rawDepts) ? rawDepts.map(normalize) : []);
         } catch (e: any) { toastError(e.message || 'Failed to load departments'); } finally { setDeptsLoading(false); }
     };
 
@@ -526,7 +528,8 @@ export default function RoleManagementTab() {
                 effectiveDate: p.effectiveDate ?? p.EffectiveDate ?? '',
                 createdAt: p.createdAt ?? p.CreatedAt,
             });
-            setPositions((Array.isArray(data) ? data : data.data ?? data.$values ?? []).map(normalize));
+            const rawPos = data?.data?.items ?? (Array.isArray(data?.data) ? data.data : []);
+            setPositions(Array.isArray(rawPos) ? rawPos.map(normalize) : []);
         } catch (e: any) { toastError(e.message || 'Failed to load job positions'); } finally { setPosLoading(false); }
     };
 
@@ -537,7 +540,7 @@ export default function RoleManagementTab() {
             const res = await fetch('/api/user', { headers: authHeaders() });
             if (!res.ok) { setEmployees([]); return; }
             const data = await res.json();
-            const raw: any[] = Array.isArray(data) ? data : data.data ?? data.$values ?? data.items ?? [];
+            const raw: any[] = Array.isArray(data) ? data : (data.data?.items ?? (Array.isArray(data.data) ? data.data : data.$values ?? []));
             setEmployees(raw.map((e: any): EmployeeSummaryDTO => ({
                 employeeId: e.employeeId ?? e.EmployeeId ?? e.id,
                 fullName: e.fullName ?? e.FullName ?? `${e.firstName ?? ''} ${e.lastName ?? ''}`.trim(),
@@ -552,7 +555,7 @@ export default function RoleManagementTab() {
             const res = await fetch('/api/activity-logs?module=organization&limit=20', { headers: authHeaders() });
             if (!res.ok) { setAuditEntries([]); return; }
             const data = await res.json();
-            const raw: any[] = Array.isArray(data) ? data : data.data ?? data.$values ?? data.items ?? [];
+            const raw: any[] = Array.isArray(data) ? data : (data.data?.items ?? (Array.isArray(data.data) ? data.data : data.$values ?? []));
             setAuditEntries(raw.map((e: any): OrgAuditEntry => ({
                 id: e.id ?? e.activityLogId ?? e.ActivityLogId ?? String(Math.random()),
                 action: e.action ?? e.Action ?? e.description ?? e.Description ?? 'Activity',
@@ -608,6 +611,9 @@ export default function RoleManagementTab() {
         p.departmentName.toLowerCase().includes(posSearch.toLowerCase()));
     const posTotalPages = Math.max(1, Math.ceil(filteredPos.length / PER_PAGE));
     const pagedPos = filteredPos.slice((posPage - 1) * PER_PAGE, posPage * PER_PAGE);
+
+    const caTotalPages = Math.max(1, Math.ceil(clientAccounts.length / PER_PAGE));
+    const pagedClientAccounts = clientAccounts.slice((caPage - 1) * PER_PAGE, caPage * PER_PAGE);
 
     // ─── Role Actions ─────────────────────────────────────────────────────────
 
@@ -1702,8 +1708,9 @@ export default function RoleManagementTab() {
                         emptyIcon={<Building2 size={20} />}
                         actionButton={{ label: 'New Client Account', icon: <Plus size={14} />, onClick: () => { setEditingCa(null); setCaForm({ name: '', code: '', description: '' }); setCaErrors({}); setCaFormOpen(true); } }}
                         headers={['Client', 'Code', 'Description', 'Status', 'Assigned Coordinators', 'Actions']}
+                        currentPage={caPage} totalPages={caTotalPages} onPageChange={setCaPage}
                     >
-                        {clientAccounts.length === 0 ? null : clientAccounts.map(ca => (
+                        {pagedClientAccounts.length === 0 ? null : pagedClientAccounts.map(ca => (
                             <tr key={ca.id}>
                                 <td>
                                     <div className="rm2-role-name-cell">

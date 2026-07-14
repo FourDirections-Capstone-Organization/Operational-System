@@ -53,7 +53,7 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
             if (res.status === 404) { setRecommendations([]); return; }
             if (!res.ok) throw new Error('Failed to load recommendations.');
             const json = await res.json();
-            const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []);
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
             setRecommendations(list.map((r: any) => ({
                 recommendationId: r.id ?? r.recommendationId,
                 category: r.category ?? '',

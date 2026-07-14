@@ -1339,14 +1339,14 @@ export default function EmployeeDashboard() {
         setTasksLoading(true);
         setTasksError('');
         try {
-            const res = await fetch('/api/task', { headers: authHeader() });
+            const res = await fetch('/api/task?pageNumber=1&pageSize=500', { headers: authHeader() });
             if (res.status === 401) { handleLogout(); return; }
             if (!res.ok) {
                 setTasks([]);
                 return;
             }
             const json = await res.json();
-            const rawList: TaskResponseDTO[] = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+            const rawList: TaskResponseDTO[] = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             setTasks(rawList.map(dtoToTask));
         } catch {
             setTasks([]);

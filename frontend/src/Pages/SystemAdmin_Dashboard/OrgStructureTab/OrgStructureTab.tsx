@@ -103,7 +103,8 @@ const apiGet = async <T,>(url: string): Promise<T | null> => {
         const res = await fetch(url, { headers: getAuthHeaders() });
         if (!res.ok) return null;
         const json = await res.json();
-        return (json?.data ?? json ?? null) as T;
+        const d = json?.data ?? json;
+        return (d?.items ?? d ?? null) as T;
     } catch { return null; }
 };
 

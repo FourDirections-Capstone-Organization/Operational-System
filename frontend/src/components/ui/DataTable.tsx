@@ -186,7 +186,7 @@ export default function DataTable<T extends Record<string, any>>({
     };
 
     const renderPagination = () => {
-        if (loading || totalPages <= 1 || !onPageChange) return null;
+        if (loading || !onPageChange) return null;
         return (
             <div className="table-card-pagination-bar">
                 <span className="table-card-pagination-info">Page {currentPage} of {totalPages}</span>

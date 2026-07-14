@@ -175,7 +175,7 @@ const TaskView: React.FC<TaskViewProps> = ({
             });
             if (res.ok) {
                 const json = await res.json();
-                const raw = json?.data ?? json;
+                const raw = json?.data?.items ?? json?.data ?? json;
                 setAttachments(Array.isArray(raw) ? raw.map((a: any) => ({
                     id: a.id,
                     fileName: a.fileName,

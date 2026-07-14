@@ -436,9 +436,9 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                     const posData = await pRes.json();
                     const rolesData = await rRes.json();
 
-                    const rawDepts = Array.isArray(deptsData) ? deptsData : deptsData.data ?? deptsData.$values ?? [];
-                    const rawPos = Array.isArray(posData) ? posData : posData.data ?? posData.$values ?? [];
-                    const rawRoles = Array.isArray(rolesData) ? rolesData : rolesData.data ?? rolesData.$values ?? [];
+                    const rawDepts = Array.isArray(deptsData) ? deptsData : (deptsData.data?.items ?? (Array.isArray(deptsData.data) ? deptsData.data : deptsData.$values ?? []));
+                    const rawPos = Array.isArray(posData) ? posData : (posData.data?.items ?? (Array.isArray(posData.data) ? posData.data : posData.$values ?? []));
+                    const rawRoles = Array.isArray(rolesData) ? rolesData : (rolesData.data?.items ?? (Array.isArray(rolesData.data) ? rolesData.data : rolesData.$values ?? []));
 
                     setDepartments(rawDepts.map((d: any) => ({
                         departmentId: d.id ?? d.departmentId ?? d.DepartmentId,
@@ -2166,7 +2166,7 @@ const GovernmentRecordsTab: React.FC = () => {
                 });
                 if (res.ok) {
                     const body = await res.json();
-                    const list = body.data?.data ?? body.data ?? body ?? [];
+                    const list = body.data?.items ?? body.data?.data ?? body.data ?? body ?? [];
                     setEmployees(list);
                 }
             } catch (e) { console.error('GovRecords fetch employees error:', e); }
@@ -2636,10 +2636,10 @@ export default function Dashboard() {
         setTmLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            const res = await fetch('/api/task', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch('/api/task?pageNumber=1&pageSize=500', { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) { setTmTasks([]); return; }
             const json = await res.json();
-            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.data) ? json.data.data : (Array.isArray(json?.data) ? json.data : []));
+            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             setTmTasks(raw.map((t: any) => ({
                 id: t.id ?? t.taskId,
                 name: t.title ?? t.taskTitle ?? '',
@@ -2986,7 +2986,7 @@ export default function Dashboard() {
             .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
             .then(result => {
                 if (!result.isSuccess) throw new Error(result.message ?? 'Failed to fetch');
-                const raw: any[] = Array.isArray(result.data) ? result.data : [];
+                const raw: any[] = Array.isArray(result.data?.items) ? result.data.items : (Array.isArray(result.data) ? result.data : []);
                 const list: RecentEmployee[] = raw.map((e: any) => ({
                     employeeNumber: e.employeeNumber,
                     firstName: e.firstName ?? '',
@@ -3003,7 +3003,7 @@ export default function Dashboard() {
                 })).filter((e: RecentEmployee) => e.accountStatus !== 'Deleted' && e.employeeNumber !== currentEmployeeId);
                 setEmployees(list);
                 setRecentEmployees(list);
-                setEmpTotalPages(result.totalPages ?? 1);
+                setEmpTotalPages(result.data?.totalPages ?? 1);
                 setEmpPage(page);
             })
             .catch((err) => {

@@ -121,6 +121,13 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // Only recreate in development to pick up model changes
+    // (tables added after the DB was first created, e.g. AuditLogs)
+    if (app.Environment.IsDevelopment())
+    {
+        db.Database.EnsureDeleted();
+    }
     db.Database.EnsureCreated();
 
     // Seed default departments and positions
