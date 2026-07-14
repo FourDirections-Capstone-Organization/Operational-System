@@ -5,6 +5,7 @@ using Backend.Modules.OrganizationalStructure;
 using Backend.Modules.Email;
 using Backend.Modules.UserAccountManagement;
 using Backend.Modules.AuthenticationAndCredentials.Jwt;
+using Backend.Modules.Utilities;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -102,6 +103,8 @@ builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<ITaskCommentService, TaskCommentService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService>();
+builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 
 
 // Hosted Services

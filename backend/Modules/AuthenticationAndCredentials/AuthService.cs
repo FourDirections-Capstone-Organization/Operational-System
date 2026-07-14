@@ -53,7 +53,7 @@ public class AuthService : IAuthService
 
         // Check if email is verified
         if (!user.IsEmailVerified)
-            return ApiResponseDTO<AuthResponseDTO>.Failure("Please verify your email before logging in.");
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please check your email.");
 
         // Verify password using PBKDF2 (PasswordHasher)
         if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))
@@ -277,37 +277,6 @@ public class AuthService : IAuthService
             return ApiResponseDTO<bool>.Failure("Incorrect password");
 
         return ApiResponseDTO<bool>.Success(true, "Password verified");
-    }
-
-    public async Task<ApiResponseDTO<bool>> VerifyEmailAsync(string token)
-    {
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.EmailVerificationToken == token);
-
-        if (user is null)
-            return ApiResponseDTO<bool>.Failure("Invalid or expired verification token");
-
-        if (user.EmailVerificationTokenExpiry < DateTime.UtcNow)
-            return ApiResponseDTO<bool>.Failure("Verification token has expired");
-
-        user.IsEmailVerified = true;
-        user.EmailVerificationToken = null;
-        user.EmailVerificationTokenExpiry = null;
-        user.UpdatedAt = DateTime.UtcNow;
-
-        // Generate temporary password and send credentials after verification
-        var tempPassword = GenerateTempPassword();
-        user.PasswordHash = _passwordHasher.HashPassword(user, tempPassword);
-
-        await _db.SaveChangesAsync();
-
-        // Send welcome email with credentials
-        var fullName = GetFullName(user);
-        await _emailService.SendWelcomeEmailAsync(user.Email, fullName, user.EmployeeNumber, tempPassword);
-
-        _logger.LogInformation("Email verified for user: {EmployeeNumber}", user.EmployeeNumber);
-
-        return ApiResponseDTO<bool>.Success(true, "Email verified successfully. Login credentials sent to your email.");
     }
 
     private string GenerateJwtToken(User user)
