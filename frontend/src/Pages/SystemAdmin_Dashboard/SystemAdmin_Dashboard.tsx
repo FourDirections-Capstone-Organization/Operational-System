@@ -36,6 +36,7 @@ import {
     RefreshCw,
     GitBranch,
     Bell,
+    Megaphone,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
@@ -62,6 +63,7 @@ import SubTabNav from '../../components/ui/SubTabNav';
 import OrgStructureTab from './OrgStructureTab/OrgStructureTab';
 import { ReportsTab } from '../OpAdmin_Dashboard/OpAdmin_Dashboard';
 import TaskManager from '../../components/TaskManager/TaskManager';
+import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
 
@@ -75,6 +77,7 @@ type NavTab =
     | 'settings'
     | 'roles'
     | 'reports'
+    | 'announcements'
     | 'notifications'
     | 'activity_logs'
     | 'tasks'
@@ -234,6 +237,7 @@ const NAV_GROUPS = [
     {
         label: 'SYSTEM',
         items: [
+            { tab: 'announcements' as NavTab, icon: Megaphone, label: 'Announcements' },
             { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
             { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
             { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
@@ -2512,7 +2516,7 @@ export default function Dashboard() {
     const pageTitles: Record<NavTab, string> = {
         dashboard: 'Dashboard', employees: 'Manage Employee',
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
-        roles: 'Role Management', reports: 'Reports', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
+        roles: 'Role Management', reports: 'Reports', announcements: 'Announcements', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
         tasks: 'Task Manager',
         'org-structure': 'Organizational Structure'
     };
@@ -2610,6 +2614,8 @@ export default function Dashboard() {
                 {activeTab === 'roles' && <RoleManagementTab />}
 
                 {activeTab === 'org-structure' && <OrgStructureTab />}
+
+                {activeTab === 'announcements' && <AnnouncementsTab canCreate={true} />}
 
                 {activeTab === 'notifications' && (
                     <div className="dashboard-content">
