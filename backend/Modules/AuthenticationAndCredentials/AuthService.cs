@@ -53,7 +53,7 @@ public class AuthService : IAuthService
 
         // Check if email is verified
         if (!user.IsEmailVerified)
-            return ApiResponseDTO<AuthResponseDTO>.Failure("Please verify your email before logging in.");
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please check your email.");
 
         // Verify password using PBKDF2 (PasswordHasher)
         if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))
