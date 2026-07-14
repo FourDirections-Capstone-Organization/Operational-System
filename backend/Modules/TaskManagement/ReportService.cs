@@ -25,8 +25,8 @@ public class ReportService : IReportService
         Guid? requestUserDepartmentId,
         KpiFilterDTO? filters = null)
     {
-        var dateStart = filters?.DateRangeStart ?? DateTime.UtcNow.AddMonths(-1);
-        var dateEnd = filters?.DateRangeEnd ?? DateTime.UtcNow;
+        var dateStart = filters?.DateRangeStart is DateTime ds ? DateTime.SpecifyKind(ds, DateTimeKind.Utc) : DateTime.UtcNow.AddMonths(-1);
+        var dateEnd = filters?.DateRangeEnd is DateTime de ? DateTime.SpecifyKind(de, DateTimeKind.Utc) : DateTime.UtcNow;
 
         var query = _db.Tasks
             .Include(t => t.Assignments)
@@ -243,8 +243,8 @@ public class ReportService : IReportService
         if (employee is null)
             return ApiResponseDTO<EmployeePerformanceSummaryDTO>.Failure("Employee not found.");
 
-        var dateStart = filters?.DateRangeStart ?? DateTime.UtcNow.AddMonths(-1);
-        var dateEnd = filters?.DateRangeEnd ?? DateTime.UtcNow;
+        var dateStart = filters?.DateRangeStart is DateTime ds3 ? DateTime.SpecifyKind(ds3, DateTimeKind.Utc) : DateTime.UtcNow.AddMonths(-1);
+        var dateEnd = filters?.DateRangeEnd is DateTime de3 ? DateTime.SpecifyKind(de3, DateTimeKind.Utc) : DateTime.UtcNow;
 
         var completedTasks = await _db.Tasks
             .Include(t => t.Assignments)
@@ -304,7 +304,8 @@ public class ReportService : IReportService
         ReportPeriod period, DateTime? explicitStart, DateTime? explicitEnd)
     {
         if (explicitStart.HasValue && explicitEnd.HasValue)
-            return (explicitStart.Value, explicitEnd.Value);
+            return (DateTime.SpecifyKind(explicitStart.Value, DateTimeKind.Utc),
+                    DateTime.SpecifyKind(explicitEnd.Value, DateTimeKind.Utc));
 
         var now = DateTime.UtcNow;
 
@@ -317,13 +318,12 @@ public class ReportService : IReportService
                 return (weekStart, weekEnd);
 
             case ReportPeriod.Monthly:
-                var monthStart = new DateTime(now.Year, now.Month, 1);
-                var monthEnd = monthStart.AddMonths(1).AddSeconds(-1);
+                var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+                var monthEnd = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59, DateTimeKind.Utc);
                 return (monthStart, monthEnd);
 
             default:
-                var defaultStart = now.AddMonths(-1);
-                return (defaultStart, now);
+                return (now.AddMonths(-1), now);
         }
     }
 

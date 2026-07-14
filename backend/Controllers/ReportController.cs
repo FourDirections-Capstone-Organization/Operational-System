@@ -11,7 +11,7 @@ using Backend.Modules.RoleBasedAccessControl;
 namespace Backend.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/reports")]
 [Authorize]
 public class ReportController : ControllerBase
 {
