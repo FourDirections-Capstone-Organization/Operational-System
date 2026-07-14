@@ -91,17 +91,6 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    [AllowAnonymous]
-    [HttpGet("verify-email")]
-    public async Task<IActionResult> VerifyEmail([FromQuery] string token)
-    {
-        var result = await _authService.VerifyEmailAsync(token);
-        if (!result.IsSuccess)
-            return BadRequest(result);
-
-        return Ok(result);
-    }
-
     [Authorize]
     [HttpPost("verify-password")]
     public async Task<IActionResult> VerifyPassword(VerifyPasswordDTO dto)

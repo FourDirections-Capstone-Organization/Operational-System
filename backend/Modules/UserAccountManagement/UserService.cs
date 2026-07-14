@@ -82,14 +82,6 @@ public class UserService : IUserService
         var passwordHasher = new PasswordHasher<User>();
         user.PasswordHash = passwordHasher.HashPassword(user, tempPassword);
 
-        // Generate email verification token
-        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-        var tokenBytes = new byte[32];
-        rng.GetBytes(tokenBytes);
-        user.EmailVerificationToken = Convert.ToBase64String(tokenBytes)
-            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
-        user.EmailVerificationTokenExpiry = DateTime.UtcNow.AddDays(1);
-
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
@@ -97,15 +89,10 @@ public class UserService : IUserService
         await _db.Entry(user).Reference(u => u.Department).LoadAsync();
         await _db.Entry(user).Reference(u => u.JobPosition).LoadAsync();
 
-        // Send verification email (credentials will be sent after verification)
-        var fullName = $"{user.FirstName} {user.LastName}".Trim();
-        var verificationUrl = $"http://localhost:5173/verify-email";
-        await _emailService.SendEmailVerificationAsync(user.Email, fullName, user.EmailVerificationToken, verificationUrl);
-
         _logger.LogInformation("New user registered: {EmployeeNumber} - {Email}", user.EmployeeNumber, user.Email);
 
         var response = MapToResponseDTO(user);
-        return ApiResponseDTO<UserResponseDTO>.Success(response, "User registered successfully. Welcome email sent.");
+        return ApiResponseDTO<UserResponseDTO>.Success(response, "User registered successfully.");
     }
 
     public async Task<ApiResponseDTO<List<UserResponseDTO>>> GetAllAsync(string? search = null, string? role = null, Guid? departmentId = null)
