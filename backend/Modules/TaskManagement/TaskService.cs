@@ -428,6 +428,14 @@ public class TaskService : ITaskService
                 if (!deptExists)
                     return (false, "Selected department is inactive or does not exist");
 
+                var deptUserCount = await _db.Users
+                    .CountAsync(u => u.DepartmentId == departmentId.Value
+                        && u.IsActive
+                        && !u.IsDeactivated);
+
+                if (deptUserCount == 0)
+                    return (false, "Selected department has no active users to assign the task to");
+
                 return (true, null);
 
             default:

@@ -49,11 +49,19 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`/api/recommendations/task/${taskId}`, { headers: authHeader() });
+            const res = await fetch(`/api/tasks/${taskId}/recommendations`, { headers: authHeader() });
             if (res.status === 404) { setRecommendations([]); return; }
             if (!res.ok) throw new Error('Failed to load recommendations.');
             const json = await res.json();
-            setRecommendations(json.data ?? []);
+            const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []);
+            setRecommendations(list.map((r: any) => ({
+                recommendationId: r.id ?? r.recommendationId,
+                category: r.category ?? '',
+                notes: r.notes ?? '',
+                recommendedBy: r.coordinatorId ?? r.recommendedBy ?? '',
+                recommendedByName: r.coordinatorName ?? r.recommendedByName ?? '',
+                createdAt: r.createdAt ?? '',
+            })));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load recommendations.');
             setRecommendations([]);
@@ -69,10 +77,10 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
         setError('');
         setSubmitting(true);
         try {
-            const res = await fetch('/api/recommendations', {
+            const res = await fetch(`/api/tasks/${taskId}/recommendations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeader() },
-                body: JSON.stringify({ taskId, category, notes: notes.trim() }),
+                body: JSON.stringify({ category, notes: notes.trim() }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));

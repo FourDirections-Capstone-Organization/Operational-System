@@ -15,6 +15,7 @@ import {
     Hash,
     Eye,
     EyeOff,
+    Lightbulb,
     Shield,
     Phone,
     Lock,
@@ -37,8 +38,9 @@ import {
     Repeat,
     ToggleLeft,
     Copy,
-    Clock,
     Activity,
+    Building,
+    Clock,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
@@ -85,21 +87,32 @@ const CONFIRM_CLOSED: ConfirmModalState = {
 interface DashboardEmployeeWorkload {
     employeeId: string;
     employeeName: string;
-    totalAssigned: number;
-    activeTasks: number;
-    completedTasks: number;
-    overdueTasks: number;
+    employeeNumber: string;
+    role: string;
+    department: string;
+    activeTaskCount: number;
+    overdueTaskCount: number;
+    availabilityStatus: { status: string; isAvailable: boolean };
+}
+
+interface DepartmentWorkloadItem {
+    departmentId: string;
+    departmentName: string;
+    totalActiveTasks: number;
+    totalOverdueTasks: number;
+    employeeCount: number;
 }
 
 interface DashboardResponse {
-    totalTasksAssigned: number;
     totalActiveTasks: number;
-    totalCompletedTasks: number;
-    totalOverdueTasks: number;
-    averageTasksPerEmployee: number;
-    employeeWorkloadDistribution: DashboardEmployeeWorkload[];
-    taskAssignmentDistribution: Record<string, number>;
-    workflowTrackers: any[];
+    overdueTaskCount: number;
+    notStartedCount: number;
+    inProgressCount: number;
+    donePendingReviewCount: number;
+    onHoldCount: number;
+    completedTodayCount: number;
+    employeeWorkload: DashboardEmployeeWorkload[];
+    departmentWorkload: DepartmentWorkloadItem[];
 }
 
 interface EmployeeFilterOption {
@@ -147,6 +160,7 @@ interface Task {
     taskCategory?: string;
     taskReferenceNumber?: string;
     priority: Priority;
+    classification: number;
     dueAt: string | null;
     taskStatus: TaskStatus;
     taskRemarks?: string;
@@ -159,6 +173,8 @@ interface Task {
     Deleted?: boolean;
     supportingEvidenceUrl?: string;
     isConfidential?: boolean;
+    isSLALocked?: boolean;
+    attachmentCount?: number;
 }
 
 // DTOs matching backend
@@ -573,16 +589,27 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         teamMembers.find(m => m.employeeName === initial.assignedEmployee)?.accountId ||
         '';
 
+    const CLASSIFICATION_OPTIONS: { label: string; value: number }[] = [
+        { label: 'Routine Daily Task', value: 0 },
+        { label: 'Special Task', value: 1 },
+    ];
+
+    const isSLAEditLock = mode === 'edit' && initial.isSLALocked;
     const [form, setForm] = useState({
         taskTitle: initial.taskTitle ?? '',
         taskDescription: initial.taskDescription ?? '',
-        dueAt: initial.dueAt ? initial.dueAt.substring(0, 16) : '',
+        dueAt: (initial.isSLALocked && initial.dueAt) ? initial.dueAt.substring(0, 16) : (initial.dueAt ?? ''),
         priority: initial.priority ?? '' as Priority,
         assignedTo: resolvedAssignedTo,
+        classification: initial.classification ?? -1,
         taskCategory: initial.taskCategory ?? '',
         taskRemarks: initial.taskRemarks ?? '',
         isConfidential: initial.isConfidential ?? false,
+        assignmentScope: 'SingleEmployee' as 'SingleEmployee' | 'Team' | 'Department',
+        assignedDepartmentId: '',
     });
+    const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+    const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [supportingEvidence, setSupportingEvidence] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -593,29 +620,53 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
 
     useEffect(() => {
+        const token = localStorage.getItem('authToken');
         const fetchRecommendations = async () => {
             try {
-                const token = localStorage.getItem('authToken');
                 const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=50', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const json = await res.json();
-                if (json.isSuccess && json.data?.data) {
-                    const mapped: WorkloadInfo[] = json.data.data.map((emp: any) => ({
+                const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []);
+                if (list.length > 0) {
+                    const mapped: WorkloadInfo[] = list.map((emp: any) => ({
                         employeeName: emp.fullName ?? emp.FullName ?? '',
                         accountId: emp.userId ?? emp.UserId ?? emp.id,
                         availabilityStatus: 'Active',
                         workload: 0,
                         role: emp.role ?? '',
-                        isRecommended: false,
-                        recommendationReason: '',
+                        isRecommended: true,
+                        recommendationReason: 'Available for assignment',
                     }));
                     setEligibleEmployees(mapped);
+                    if (mapped.length > 0) {
+                        const best = mapped.reduce((a, b) => a.workload <= b.workload ? a : b);
+                        setRecommendation({
+                            employeeName: best.employeeName,
+                            accountId: best.accountId,
+                            availabilityStatus: 'Active',
+                            workload: best.workload,
+                            reason: 'Available for assignment',
+                        });
+                    }
+                }
+            } catch {
+            }
+        };
+        const fetchDepartments = async () => {
+            try {
+                const res = await fetch('/api/departments', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const json = await res.json();
+                if (json.isSuccess && json.data) {
+                    setDepartments(json.data.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
                 }
             } catch {
             }
         };
         fetchRecommendations();
+        fetchDepartments();
     }, []);
 
     // -- Per-field live validator ------------------------------------------
@@ -635,13 +686,28 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                 return '';
             }
             case 'dueAt': {
+                if (slaLocked) return '';
                 if (!value) return 'Deadline is required.';
                 const selected = new Date(value);
-                const now = new Date();
-                if (selected < now) return 'Deadline must be a future date and time.';
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (selected < today) return 'Deadline must not be in the past.';
                 return '';
             }
             case 'assignedTo': {
+                return '';
+            }
+            case 'assignmentScope': {
+                if (!value) return 'Assignment scope is required.';
+                return '';
+            }
+            case 'assignedDepartmentId': {
+                if (form.assignmentScope === 'Department' && !value) return 'Department is required for Department scope.';
+                return '';
+            }
+            case 'classification': {
+                const v = Number(value);
+                if (v !== 0 && v !== 1) return 'Classification is required.';
                 return '';
             }
             case 'priority': {
@@ -657,10 +723,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     // -- Validate all fields on submit -------------------------------------
     const validateAll = (): boolean => {
         const newErrors: Record<string, string> = {};
-        (['taskTitle', 'taskDescription', 'dueAt', 'priority'] as const).forEach(key => {
-            const msg = validateField(key, form[key] ?? '');
+        (['taskTitle', 'taskDescription', 'dueAt', 'priority', 'classification'] as const).forEach(key => {
+            const msg = validateField(key, String(form[key] ?? ''));
             if (msg) newErrors[key] = msg;
         });
+        if (form.assignmentScope === 'SingleEmployee' && !form.assignedTo) {
+            newErrors.assignedTo = 'Task must be assigned to at least one employee.';
+        }
+        if (form.assignmentScope === 'Team' && selectedTeamIds.length === 0) {
+            newErrors.assignedTo = 'Select at least one team member.';
+        }
+        if (form.assignmentScope === 'Department' && !form.assignedDepartmentId) {
+            newErrors.assignedDepartmentId = 'Select a department.';
+        }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -675,19 +750,47 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             setErrors(prev => ({ ...prev, [key]: msg || '' }));
         };
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const minDateTime = todayStart.toISOString().slice(0, 16);
+
     const PRIORITY_MAP: Record<string, number> = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+    const SCOPE_MAP: Record<string, number> = { SingleEmployee: 0, Team: 1, Department: 2 };
+    const isUrgent = form.priority === 'Critical';
+    const slaLocked = isUrgent || isSLAEditLock;
+    const slaDeadline = React.useMemo(() => {
+        if (isUrgent) {
+            const d = new Date();
+            d.setHours(d.getHours() + 24);
+            return d;
+        }
+        return null;
+    }, [isUrgent]);
 
     const handleSave = async () => {
         if (!validateAll()) return;
         setSubmitting(true);
+        const scopeNum = SCOPE_MAP[form.assignmentScope] ?? 0;
+        let assignedUserIds: string[] | undefined;
+        let assignedDepartmentId: string | undefined;
+
+        if (form.assignmentScope === 'SingleEmployee') {
+            assignedUserIds = form.assignedTo ? [form.assignedTo] : undefined;
+        } else if (form.assignmentScope === 'Team') {
+            assignedUserIds = selectedTeamIds.length > 0 ? selectedTeamIds : undefined;
+        } else if (form.assignmentScope === 'Department') {
+            assignedDepartmentId = form.assignedDepartmentId || undefined;
+        }
+
         const payload: CreateTaskDTO = {
             title: form.taskTitle.trim(),
             description: form.taskDescription.trim(),
             priorityLevel: PRIORITY_MAP[form.priority] ?? 1,
-            classification: form.taskCategory ? 1 : 0,
-            assignmentScope: 0,
+            classification: form.classification,
+            assignmentScope: scopeNum,
             deadline: form.dueAt ? new Date(form.dueAt).toISOString() : new Date().toISOString(),
-            assignedUserIds: form.assignedTo ? [form.assignedTo] : undefined,
+            assignedUserIds,
+            assignedDepartmentId,
             isConfidential: form.isConfidential,
         };
         if (supportingEvidence) {
@@ -780,16 +883,24 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             <input
                                 type="datetime-local"
                                 value={form.dueAt}
-                                onChange={set('dueAt')}
-                                className={errors.dueAt ? 'input-error' : form.dueAt ? 'input-success' : ''}
+                                onChange={slaLocked ? undefined : set('dueAt')}
+                                min={minDateTime}
+                                readOnly={slaLocked}
+                                className={`${errors.dueAt ? 'input-error' : form.dueAt ? 'input-success' : ''}${slaLocked ? ' input-sla-locked' : ''}`}
+                                style={slaLocked ? { background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 } : {}}
                             />
                             <FieldErr name="dueAt" />
-                            {!errors.dueAt && form.dueAt && (
+                            {slaLocked && (
+                                <span style={{ fontSize: 11, color: '#7c1d1d', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Lock size={11} /> SLA enforced — deadline locked to 24 hours from creation
+                                </span>
+                            )}
+                            {!slaLocked && !errors.dueAt && form.dueAt && (
                                 <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
                                     ✓ {new Date(form.dueAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             )}
-                            {!form.dueAt && !errors.dueAt && (
+                            {!slaLocked && !form.dueAt && !errors.dueAt && (
                                 <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, display: 'block' }}>
                                     Cannot be in the past.
                                 </span>
@@ -801,7 +912,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             </label>
                             <select
                                 value={form.priority}
-                                onChange={set('priority')}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(prev => ({ ...prev, priority: val as Priority, dueAt: val === 'Critical' ? slaDeadline?.toISOString().slice(0, 16) ?? prev.dueAt : prev.dueAt }));
+                                    setFormError('');
+                                    const msg = validateField('priority', val);
+                                    setErrors(prev => ({ ...prev, priority: msg || '' }));
+                                }}
                                 className={errors.priority ? 'input-error' : ''}
                             >
                                 <option value="">Select priority</option>
@@ -823,6 +940,33 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                 </span>
                             )}
                         </div>
+                    </div>
+
+                    {/* -- Classification -- */}
+                    <div className="field">
+                        <label>Classification <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            {CLASSIFICATION_OPTIONS.map(opt => (
+                                <label
+                                    key={opt.value}
+                                    onClick={() => { setForm(prev => ({ ...prev, classification: opt.value })); setErrors(prev => ({ ...prev, classification: '' })); }}
+                                    style={{
+                                        flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                                        fontSize: 12, fontWeight: 600,
+                                        border: `2px solid ${form.classification === opt.value ? 'var(--primary)' : 'var(--border)'}`,
+                                        background: form.classification === opt.value ? 'rgba(0,169,157,0.06)' : 'var(--bg-card)',
+                                        color: form.classification === opt.value ? 'var(--primary)' : 'var(--text-secondary)',
+                                        transition: 'all 0.15s ease',
+                                    }}
+                                >
+                                    <input type="radio" name="classification" value={opt.value}
+                                        checked={form.classification === opt.value}
+                                        onChange={() => { }} style={{ display: 'none' }} />
+                                    {opt.label}
+                                </label>
+                            ))}
+                        </div>
+                        <FieldErr name="classification" />
                     </div>
 
                     {/* -- Task Category -- */}
@@ -932,142 +1076,157 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         </div>
                     </label>
 
-                    {/* -- Smart Task Routing Recommendation -- */}
-                    {recommendation && (
-                        <div className="sr-section">
-                            <div className="sr-header">
-                                <div className="sr-title-row">
-                                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                                        Smart Task Routing
-                                    </span>
-                                    <span className="sr-badge">Recommendation Ready</span>
-                                </div>
-                            </div>
-
-                            <div className="sr-recommendation">
-                                <div className="sr-rec-avatar">
-                                    {recommendation.employeeName.charAt(0).toUpperCase()}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div className="sr-rec-name">{recommendation.employeeName}</div>
-                                    <div className="sr-rec-meta">
-                                        <span>Workload: <strong>{recommendation.workload} active tasks</strong></span>
-                                        <span className={`sr-status-dot ${recommendation.availabilityStatus === 'Active' || recommendation.availabilityStatus === 'Online' ? 'online' : ''}`} />
-                                        <span>Status: <strong>{recommendation.availabilityStatus}</strong></span>
-                                    </div>
-                                    <div className="sr-rec-reason">{recommendation.reason}</div>
-                                </div>
-                            </div>
-
-                            {eligibleEmployees.length > 0 && (
-                                <div className="sr-eligible-list">
-                                    <div className="sr-eligible-title">Employee Availability & Workload</div>
-                                    <div className="sr-eligible-header">
-                                        <span>Employee</span>
-                                        <span>Status</span>
-                                        <span>Workload</span>
-                                        <span />
-                                    </div>
-                                    {eligibleEmployees.map(e => (
-                                        <div key={e.accountId} className={`sr-eligible-row${e.accountId === recommendation.accountId ? ' recommended' : ''}`}>
-                                            <span className="sr-emp-name">{e.employeeName}</span>
-                                            <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                {e.availabilityStatus}
-                                            </span>
-                                            <span className="sr-workload">{e.workload} tasks</span>
-                                            {e.accountId === recommendation.accountId && (
-                                                <span className="sr-rec-tag">Recommended</span>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {teamMembers.filter(m => m.presenceStatus === 'Offline' || m.presenceStatus === 'On Leave').map(m => (
-                                        <div key={m.accountId} className="sr-eligible-row excluded">
-                                            <span className="sr-emp-name">{m.employeeName}</span>
-                                            <span className={`sr-status-tag ${m.presenceStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                {m.presenceStatus}
-                                            </span>
-                                            <span className="sr-workload">—</span>
-                                            <span className="sr-excluded-tag">Excluded</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="sr-note">
-                                The system recommended <strong>{recommendation.employeeName}</strong> based on lowest workload.
-                                You can accept this recommendation or select a different employee below.
+                    {/* -- Assignment Scope -- */}
+                    <div className="sr-section">
+                        <div className="sr-header">
+                            <div className="sr-title-row">
+                                <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                                    Assignment
+                                </span>
                             </div>
                         </div>
-                    )}
 
-                    {/* -- Assign To -- */}
-                    <div className="field">
-                        <label>
-                            {mode === 'new' ? 'Final Assigned Employee' : 'Assign To'}
-                        </label>
-                        <div
-                            className={`assignee-select${errors.assignedTo ? ' input-error' : ''}`}
-                            tabIndex={0}
-                            onBlur={e => {
-                                if (!e.currentTarget.contains(e.relatedTarget))
-                                    e.currentTarget.querySelector<HTMLElement>('.assignee-options')?.style.setProperty('display', 'none');
-                            }}
-                        >
-                            <div
-                                className="assignee-trigger"
-                                onClick={e => {
-                                    const opts = e.currentTarget.nextElementSibling as HTMLElement;
-                                    opts.style.display = opts.style.display === 'block' ? 'none' : 'block';
-                                }}
-                            >
-                                <span className={form.assignedTo ? 'assignee-trigger-value' : 'assignee-trigger-placeholder'}>
-                                    {form.assignedTo
-                                        ? teamMembers.find(m => m.accountId === form.assignedTo)?.employeeName ?? 'Select employee'
-                                        : 'Select employee'}
-                                </span>
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                                </svg>
-                            </div>
-                            <div className="assignee-options" style={{ display: 'none' }}>
-                                <div
-                                    className="assignee-option placeholder-opt"
-                                    onClick={e => {
-                                        setForm(prev => ({ ...prev, assignedTo: '' }));
-                                        setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                        setRecommendationAccepted(false);
-                                        (e.currentTarget.closest('.assignee-options') as HTMLElement).style.display = 'none';
+                        <div className="scope-selector">
+                            {(['SingleEmployee', 'Team', 'Department'] as const).map(scope => (
+                                <label
+                                    key={scope}
+                                    className={`scope-option${form.assignmentScope === scope ? ' active' : ''}`}
+                                    onClick={() => {
+                                        setForm(prev => ({ ...prev, assignmentScope: scope, assignedDepartmentId: '' }));
+                                        setErrors(prev => ({ ...prev, assignmentScope: '', assignedTo: '', assignedDepartmentId: '' }));
+                                        setSelectedTeamIds([]);
                                     }}
                                 >
-                                    Select employee
-                                </div>
-                                {teamMembers.map(m => (
-                                    <div
-                                        key={m.accountId}
-                                        className={`assignee-option${form.assignedTo === m.accountId ? ' selected' : ''}`}
-                                        onClick={e => {
-                                            setForm(prev => ({ ...prev, assignedTo: m.accountId }));
-                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                            if (recommendation && m.accountId !== recommendation.accountId) {
-                                                setRecommendationAccepted(false);
-                                            }
-                                            (e.currentTarget.closest('.assignee-options') as HTMLElement).style.display = 'none';
-                                        }}
-                                    >
-                                        <span className="assignee-opt-name">{m.employeeName}</span>
-                                        <span className="assignee-opt-role">{m.role}</span>
-                                        {recommendation && m.accountId === recommendation.accountId && (
-                                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--primary)', background: 'rgba(67,24,255,0.08)', padding: '2px 6px', borderRadius: 4, marginLeft: 8 }}>Recommended</span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                                    <input type="radio" name="scope" value={scope}
+                                        checked={form.assignmentScope === scope}
+                                        onChange={() => { }} />
+                                    {scope === 'SingleEmployee' ? <UserCircle2 className="scope-icon" /> : scope === 'Team' ? <Users className="scope-icon" /> : <Building className="scope-icon" />}
+                                    {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                </label>
+                            ))}
                         </div>
-                        <FieldErr name="assignedTo" />
-                        {!errors.assignedTo && form.assignedTo && (
-                            <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
-                                ✓ {teamMembers.find(m => m.accountId === form.assignedTo)?.employeeName} assigned
-                            </span>
+
+                        {/* -- SingleEmployee: pick one user -- */}
+                        {form.assignmentScope === 'SingleEmployee' && (
+                            <>
+                                {recommendation && (
+                                    <div className="rec-banner">
+                                        <Lightbulb size={14} />
+                                        <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
+                                    </div>
+                                )}
+
+                                {eligibleEmployees.length > 0 && (
+                                    <div className="sr-eligible-list">
+                                        <div className="sr-eligible-title">Available Employees</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 200, overflowY: 'auto' }}>
+                                            {eligibleEmployees.map(e => {
+                                                const isSelected = form.assignedTo === e.accountId;
+                                                const isRecommended = recommendation?.accountId === e.accountId;
+                                                return (
+                                                    <div
+                                                        key={e.accountId}
+                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}`}
+                                                        onClick={() => { setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                                    >
+                                                        <span className="sr-emp-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            {isSelected && <CheckCircle2 size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
+                                                            {e.employeeName}
+                                                        </span>
+                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                            {e.availabilityStatus}
+                                                        </span>
+                                                        <span className="sr-workload">{e.workload} tasks</span>
+                                                        {isRecommended && <span className="sr-rec-tag">Best pick</span>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {eligibleEmployees.length === 0 && (
+                                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
+                                        No eligible employees found for assignment.
+                                    </div>
+                                )}
+
+                                <FieldErr name="assignedTo" />
+                                {!errors.assignedTo && form.assignedTo && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <CheckCircle2 size={11} /> {eligibleEmployees.find(e => e.accountId === form.assignedTo)?.employeeName ?? 'Employee'} assigned
+                                    </span>
+                                )}
+                            </>
+                        )}
+
+                        {/* -- Team: pick multiple users -- */}
+                        {form.assignmentScope === 'Team' && (
+                            <>
+                                <div className="sr-eligible-list">
+                                    <div className="sr-eligible-title">
+                                        Select Team Members {selectedTeamIds.length > 0 && <strong style={{ color: 'var(--primary)', marginLeft: 4 }}>({selectedTeamIds.length})</strong>}
+                                    </div>
+                                    {eligibleEmployees.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
+                                            {eligibleEmployees.map(e => {
+                                                const selected = selectedTeamIds.includes(e.accountId);
+                                                return (
+                                                    <div
+                                                        key={e.accountId}
+                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}`}
+                                                        onClick={() => {
+                                                            setSelectedTeamIds(prev =>
+                                                                prev.includes(e.accountId)
+                                                                    ? prev.filter(id => id !== e.accountId)
+                                                                    : [...prev, e.accountId]
+                                                            );
+                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                                        }}
+                                                    >
+                                                        <input type="checkbox" checked={selected}
+                                                            onChange={() => { }}
+                                                            onClick={e => e.stopPropagation()} />
+                                                        <span className="sr-emp-name">{e.employeeName}</span>
+                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                            {e.availabilityStatus}
+                                                        </span>
+                                                        <span className="sr-workload">{e.workload} tasks</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
+                                            No eligible employees found.
+                                        </div>
+                                    )}
+                                </div>
+                                <FieldErr name="assignedTo" />
+                                {!errors.assignedTo && selectedTeamIds.length > 0 && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <CheckCircle2 size={11} /> {selectedTeamIds.length} team member(s) selected
+                                    </span>
+                                )}
+                            </>
+                        )}
+
+                        {/* -- Department: pick a department -- */}
+                        {form.assignmentScope === 'Department' && (
+                            <div className="field" style={{ marginBottom: 0 }}>
+                                <label>Target Department <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select
+                                    value={form.assignedDepartmentId}
+                                    onChange={e => { setForm(prev => ({ ...prev, assignedDepartmentId: e.target.value })); setErrors(prev => ({ ...prev, assignedDepartmentId: '' })); }}
+                                    className={errors.assignedDepartmentId ? 'input-error' : ''}
+                                >
+                                    <option value="">Select department</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                </select>
+                                <FieldErr name="assignedDepartmentId" />
+                            </div>
                         )}
                     </div>
 
@@ -1441,33 +1600,33 @@ const DashboardTab: React.FC<{
     const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus;
     const td = dashboardData;
 
-    const total = td?.totalTasksAssigned ?? 0;
-    const active = td?.totalActiveTasks ?? 0;
-    const completed = td?.totalCompletedTasks ?? 0;
-    const overdue = td?.totalOverdueTasks ?? 0;
-    const avgPerEmployee = td?.averageTasksPerEmployee?.toFixed(1) ?? '0';
-    const pct = total > 0 ? Math.round(completed / total * 100) : 0;
-    const completionColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
-    const workloads = td?.employeeWorkloadDistribution ?? [];
+    const totalActive = td?.totalActiveTasks ?? 0;
+    const notStarted = td?.notStartedCount ?? 0;
+    const inProgress = td?.inProgressCount ?? 0;
+    const pendingReview = td?.donePendingReviewCount ?? 0;
+    const onHold = td?.onHoldCount ?? 0;
+    const completedToday = td?.completedTodayCount ?? 0;
+    const overdue = td?.overdueTaskCount ?? 0;
+    const total = notStarted + inProgress + pendingReview + onHold + completedToday;
+    const workloads = td?.employeeWorkload ?? [];
     const filteredWorkloads = searchQuery
         ? workloads.filter(w => w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()))
         : workloads;
-    const taskDist = td?.taskAssignmentDistribution ?? {};
-    const pendingReview = taskDist['Pending Admin Review'] ?? 0;
-    const done = taskDist['Done'] ?? 0;
+    const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
 
     const statusChartData = [
-        { name: 'Active', value: active, color: 'var(--status-pending)' },
+        { name: 'Not Started', value: notStarted, color: 'var(--text-secondary)' },
+        { name: 'In Progress', value: inProgress, color: 'var(--status-pending)' },
         { name: 'Pending Review', value: pendingReview, color: 'var(--primary)' },
-        { name: 'Completed', value: completed, color: 'var(--status-active)' },
+        { name: 'Completed Today', value: completedToday, color: 'var(--status-active)' },
         { name: 'Overdue', value: overdue, color: 'var(--status-failed)' },
     ].filter(d => d.value > 0);
 
     const workloadChartData = workloads.map(w => ({
         name: w.employeeName.split(' ')[0],
-        Total: w.totalAssigned,
-        Completed: w.completedTasks,
-        Overdue: w.overdueTasks,
+        Total: w.activeTaskCount + w.overdueTaskCount,
+        Completed: 0,
+        Overdue: w.overdueTaskCount,
     }));
 
     const donutColors = statusChartData.map(d => d.color);
@@ -1493,10 +1652,10 @@ const DashboardTab: React.FC<{
                     <div className="stats-row">
                         {[
                             { label: 'TOTAL', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: `${total} task${total !== 1 ? 's' : ''}` },
-                            { label: 'ACTIVE', value: active, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning' as const, subtext: 'In Progress / Assigned' },
-                            { label: 'DONE', value: done, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Awaiting completion' },
-                            { label: 'COMPLETED', value: completed, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success' as const, subtext: `${pct}% completion rate` },
+                            { label: 'ACTIVE', value: totalActive, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning' as const, subtext: 'In Progress / Assigned' },
                             { label: 'PENDING REVIEW', value: pendingReview, icon: <Eye size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Awaiting admin' },
+                            { label: 'COMPLETED TODAY', value: completedToday, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success' as const, subtext: 'Today' },
+                            { label: 'ON HOLD', value: onHold, icon: <Clock size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Paused' },
                             { label: 'OVERDUE', value: overdue, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger' as const, subtext: 'Past deadline' },
                         ].map(s => (
                             <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
@@ -1508,21 +1667,21 @@ const DashboardTab: React.FC<{
                             <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
                                 <svg viewBox="0 0 80 80" style={{ transform: 'rotate(-90deg)' }}>
                                     <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border)" strokeWidth="6" />
-                                    <circle cx="40" cy="40" r="34" fill="none" stroke={completionColor} strokeWidth="6"
+                                    <circle cx="40" cy="40" r="34" fill="none" stroke={total > 0 ? 'var(--status-active)' : 'var(--border)'} strokeWidth="6"
                                         strokeDasharray={`${2 * Math.PI * 34}`}
-                                        strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct / 100)}`}
+                                        strokeDashoffset={`${2 * Math.PI * 34 * (1 - (total > 0 ? Math.round(completedToday / total * 100) : 0) / 100)}`}
                                         strokeLinecap="round"
                                         style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
                                 </svg>
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{pct}%</span>
+                                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{total > 0 ? Math.round(completedToday / total * 100) : 0}%</span>
                                     <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>done</span>
                                 </div>
                             </div>
                             <div>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>COMPLETION RATE</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>TODAY'S COMPLETION RATE</span>
                                 <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '4px 0 0', fontWeight: 500 }}>
-                                    {completed} of {total} tasks completed
+                                    {completedToday} of {total} tasks completed today
                                 </p>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                     {overdue > 0 ? `${overdue} overdue — ` : ''}
@@ -1540,9 +1699,9 @@ const DashboardTab: React.FC<{
                                     { label: 'Total Tasks', value: total },
                                     { label: 'Employees', value: workloads.length },
                                     { label: 'Avg/Employee', value: avgPerEmployee },
-                                    { label: 'Active %', value: total > 0 ? `${Math.round(active / total * 100)}%` : '0%' },
-                                    { label: 'Overdue %', value: total > 0 ? `${Math.round(overdue / total * 100)}%` : '0%' },
-                                    { label: 'Review %', value: total > 0 ? `${Math.round(pendingReview / total * 100)}%` : '0%' },
+                                    { label: 'In Progress', value: inProgress },
+                                    { label: 'Not Started', value: notStarted },
+                                    { label: 'On Hold', value: onHold },
                                 ].map(s => (
                                     <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
                                         <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{s.label}</span>
@@ -1668,25 +1827,27 @@ const DashboardTab: React.FC<{
                         totalRecords={filteredWorkloads.length}
                     >
                         {filteredWorkloads.map((w, idx) => {
-                            const compPct = w.totalAssigned > 0 ? Math.round(w.completedTasks / w.totalAssigned * 100) : 0;
+                            const empTotal = w.activeTaskCount + w.overdueTaskCount;
+                            const pct = w.overdueTaskCount > 0 ? Math.round((1 - w.overdueTaskCount / empTotal) * 100) : 100;
+                            const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
                             return (
                                 <tr key={w.employeeId}>
                                     <td style={{ fontWeight: 600 }}>{w.employeeName}</td>
-                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{w.totalAssigned}</td>
-                                    <td style={{ textAlign: 'center', color: 'var(--status-pending)', fontWeight: 700 }}>{w.activeTasks}</td>
-                                    <td style={{ textAlign: 'center', color: 'var(--status-active)', fontWeight: 700 }}>{w.completedTasks}</td>
-                                    <td style={{ textAlign: 'center', color: w.overdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 700 }}>
-                                        {w.overdueTasks || '�'}
+                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{empTotal}</td>
+                                    <td style={{ textAlign: 'center', color: 'var(--status-pending)', fontWeight: 700 }}>{w.activeTaskCount}</td>
+                                    <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontWeight: 700 }}>&mdash;</td>
+                                    <td style={{ textAlign: 'center', color: w.overdueTaskCount > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 700 }}>
+                                        {w.overdueTaskCount || '0'}
                                     </td>
                                     <td>
-                                        {w.totalAssigned > 0 ? (
+                                        {empTotal > 0 ? (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                 <div style={{ flex: 1, maxWidth: 100, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                                                    <div style={{ width: `${compPct}%`, height: '100%', background: compPct >= 80 ? 'var(--status-active)' : compPct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)', borderRadius: 3 }} />
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
                                                 </div>
-                                                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{compPct}%</span>
+                                                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{pct}%</span>
                                             </div>
-                                        ) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>�</span>}
+                                        ) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>&mdash;</span>}
                                     </td>
                                 </tr>
                             );
@@ -1924,13 +2085,28 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
     const fetchTemplates = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/taskTemplate?pageNumber=1&pageSize=50', {
+            const res = await fetch('/api/TaskTemplate', {
                 headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
             });
             if (!res.ok) throw new Error('Failed to fetch templates.');
             const body = await res.json();
-            const paginated = body.data;
-            setTemplates(paginated?.data ?? []);
+            const list: any[] = body.isSuccess && Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []);
+            setTemplates(list.map((t: any) => ({
+                templateId: t.id ?? t.templateId,
+                templateName: t.templateName ?? '',
+                templateDescription: t.defaultDescription ?? '',
+                priorityLevel: String(t.defaultPriorityLevel ?? t.priorityLevel ?? 'Medium'),
+                recurrenceType: String(t.recurrenceRule ?? t.recurrenceType ?? 'Daily'),
+                recurrenceStartDate: t.recurrenceStartDate ?? '',
+                assignedEmployeeId: t.defaultAssigneeId ?? t.assignedEmployeeId ?? null,
+                assignedEmployeeName: t.assignedEmployeeName ?? null,
+                templateStatus: t.isActive ? 'Active' : 'Inactive',
+                nextGenerationDate: t.nextGenerationDate ?? null,
+                lastGeneratedDate: t.lastGeneratedDate ?? null,
+                createdBy: t.createdBy ?? '',
+                createdByName: t.createdByName ?? null,
+                createdAt: t.createdAt ?? '',
+            })));
         } catch {
         } finally {
             setLoading(false);
@@ -1943,47 +2119,61 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const handleDeleteTemplate = async (templateId: string) => {
         try {
-            const res = await fetch(`/api/taskTemplate/${templateId}`, {
+            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
             });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete template.'); }
-            success('Task template deleted successfully.');
+            success('Task template deactivated successfully.');
             setDeleteConfirm(null);
             await fetchTemplates();
         } catch (err: any) {
-            error(err.message ?? 'Failed to delete template.');
+            error(err.message ?? 'Failed to deactivate template.');
         }
     };
 
-    const handleToggle = async (templateId: string) => {
+    const handleToggle = async (templateId: string, currentStatus: string) => {
         try {
-            const res = await fetch(`/api/taskTemplate/${templateId}/toggle-status`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+                body: JSON.stringify({ isActive: currentStatus !== 'Active' }),
             });
             if (!res.ok) throw new Error('Failed to toggle template status.');
-            success('Template status toggled successfully.');
+            success('Template status updated successfully.');
             await fetchTemplates();
         } catch (err: any) {
             error(err.message ?? 'Failed to toggle template status.');
         }
     };
 
+    const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3, Critical: 3 };
+    const RECUR_TO_BACKEND: Record<string, number> = { Daily: 0, Weekly: 1, Monthly: 2 };
     const handleSave = async (data: CreateTemplateDTO, templateId?: string) => {
+        const backendPayload = {
+            templateName: data.templateName,
+            defaultTitle: data.templateName,
+            defaultDescription: data.templateDescription,
+            defaultPriorityLevel: PRIO_TO_BACKEND[data.priorityLevel] ?? 1,
+            defaultClassification: 0,
+            recurrenceRule: RECUR_TO_BACKEND[data.recurrenceType] ?? 0,
+            recurrenceStartDate: data.recurrenceStartDate,
+            defaultAssigneeId: data.assignedEmployee || null,
+            isActive: data.templateStatus === 'Active',
+        };
         if (templateId) {
-            const res = await fetch(`/api/taskTemplate/${templateId}`, {
+            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(data),
+                body: JSON.stringify(backendPayload),
             });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update template.'); }
             success('Task template updated successfully.');
         } else {
-            const res = await fetch('/api/taskTemplate', {
+            const res = await fetch('/api/TaskTemplate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(data),
+                body: JSON.stringify(backendPayload),
             });
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create template.'); }
             success('Task template created successfully.');
@@ -2035,7 +2225,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                                     {
                                         label: t.templateStatus === 'Active' ? 'Deactivate' : 'Activate',
                                         icon: <ToggleLeft size={12} />,
-                                        onClick: () => handleToggle(t.templateId),
+                                        onClick: () => handleToggle(t.templateId, t.templateStatus),
                                         variant: 'default' as const,
                                     },
                                     {
@@ -3759,10 +3949,12 @@ export default function OpsAdminDashboard() {
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
     const [tasks, setTasks] = useState<Task[]>([]);
+    const CLASSIFICATION_MAP: Record<number, string> = { 0: 'routine', 1: 'special' };
     const tmTasks = useMemo(() => tasks.map(t => ({
         id: t.taskId,
         name: t.taskTitle,
         referenceNumber: t.taskReferenceNumber,
+        classification: CLASSIFICATION_MAP[t.classification] ?? '',
         project: t.taskCategory,
         assignee: t.assignedTo ? { id: t.assignedTo, name: t.assignedEmployee || 'Unassigned' } : undefined,
         priority: t.priority as TMTask['priority'],
@@ -3804,11 +3996,73 @@ export default function OpsAdminDashboard() {
 
     // -- Dashboard Data --
     const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-    const [dashboardLoading, setDashboardLoading] = useState(false);
+    const [dashboardLoading, setDashboardLoading] = useState(true);
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [dashboardEmployees, setDashboardEmployees] = useState<EmployeeFilterOption[]>([]);
     const [dashboardDepartments, setDashboardDepartments] = useState<DepartmentFilterOption[]>([]);
     const [dashboardFilters, setDashboardFilters] = useState({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+
+    const parseDateParam = (dateStr: string): string | undefined => dateStr || undefined;
+
+    const fetchDashboardData = useCallback(async () => {
+        setDashboardLoading(true);
+        setDashboardError(null);
+        try {
+            const params = new URLSearchParams();
+            const ds = parseDateParam(dashboardFilters.dateStart);
+            if (ds) params.append('dateRangeStart', ds);
+            const de = parseDateParam(dashboardFilters.dateEnd);
+            if (de) params.append('dateRangeEnd', de);
+            if (dashboardFilters.employeeId) params.append('employeeId', dashboardFilters.employeeId);
+            if (dashboardFilters.departmentId) params.append('departmentId', dashboardFilters.departmentId);
+            if (dashboardFilters.taskStatus) {
+                const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
+                params.append('status', statusMap[dashboardFilters.taskStatus] || dashboardFilters.taskStatus);
+            }
+            const res = await fetch(`/api/Dashboard/metrics?${params}`, {
+                headers: { Authorization: `Bearer ${token()}` },
+            });
+            if (!res.ok) throw new Error('Failed to load dashboard data');
+            const body = await res.json();
+            if (!body.isSuccess) {
+                setDashboardError(body.message || 'No workload data available.');
+                setDashboardData(null);
+            } else {
+                setDashboardData(body.data);
+                setDashboardError(null);
+            }
+        } catch (err: any) {
+            setDashboardError(err.message || 'No workload data available.');
+            setDashboardData(null);
+        } finally {
+            setDashboardLoading(false);
+        }
+    }, [dashboardFilters]);
+
+    const fetchDashboardFilterOptions = useCallback(async () => {
+        try {
+            const [empRes, deptRes] = await Promise.all([
+                fetch('/api/Dashboard/employee-availability', { headers: { Authorization: `Bearer ${token()}` } }),
+                fetch('/api/departments', { headers: { Authorization: `Bearer ${token()}` } }),
+            ]);
+            if (empRes.ok) {
+                const json = await empRes.json();
+                const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+                setDashboardEmployees(list.map((e: any) => ({ employeeId: e.userId ?? e.UserId ?? e.employeeId, employeeName: e.fullName ?? e.FullName ?? e.employeeName })));
+            }
+            if (deptRes.ok) {
+                const json = await deptRes.json();
+                const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+                setDashboardDepartments(depts.map((d: any) => ({ departmentId: d.id ?? d.departmentId, departmentName: d.name ?? d.departmentName })));
+            }
+        } catch { /* non-fatal */ }
+    }, []);
+
+    const handleDashboardClearFilters = useCallback(() => {
+        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+    }, []);
+
+    // -- Activity Logs --
 
     // -- Activity Logs --
     const [activityLogs, setActivityLogs] = useState<any[]>([]);
@@ -3833,63 +4087,10 @@ export default function OpsAdminDashboard() {
             .catch(() => setActivityLogs([]));
     };
 
-    const fetchDashboardData = useCallback(async () => {
-        setDashboardLoading(true);
-        setDashboardError(null);
-        try {
-            const params = new URLSearchParams();
-            if (dashboardFilters.dateStart) params.append('dateRangeStart', dashboardFilters.dateStart);
-            if (dashboardFilters.dateEnd) params.append('dateRangeEnd', dashboardFilters.dateEnd);
-            if (dashboardFilters.employeeId) params.append('employeeId', dashboardFilters.employeeId);
-            if (dashboardFilters.departmentId) params.append('departmentId', dashboardFilters.departmentId);
-            if (dashboardFilters.taskStatus) params.append('taskStatus', dashboardFilters.taskStatus);
-            const res = await fetch(`/api/dashboard/workload?${params}`, {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) {
-                const errBody = await res.json().catch(() => null);
-                throw new Error(errBody?.message || 'Failed to load dashboard data');
-            }
-            const body: ApiResponse<DashboardResponse> = await res.json();
-            if (!body.isSuccess) {
-                setDashboardError(body.message || 'No workload data available.');
-                setDashboardData(null);
-            } else {
-                setDashboardData(body.data);
-                setDashboardError(null);
-            }
-        } catch (err: any) {
-            setDashboardError(err.message || 'No workload data available.');
-            setDashboardData(null);
-        } finally {
-            setDashboardLoading(false);
-        }
-    }, [dashboardFilters]);
-
-    const fetchDashboardFilterOptions = useCallback(async () => {
-        try {
-            const [empRes, deptRes] = await Promise.all([
-                fetch('/api/dashboard/filter-employees', { headers: { Authorization: `Bearer ${token()}` } }),
-                fetch('/api/dashboard/filter-departments', { headers: { Authorization: `Bearer ${token()}` } }),
-            ]);
-            if (empRes.ok) {
-                const empBody: ApiResponse<EmployeeFilterOption[]> = await empRes.json();
-                if (empBody.isSuccess && empBody.data) setDashboardEmployees(empBody.data);
-            }
-            if (deptRes.ok) {
-                const deptBody: ApiResponse<DepartmentFilterOption[]> = await deptRes.json();
-                if (deptBody.isSuccess && deptBody.data) setDashboardDepartments(deptBody.data);
-            }
-        } catch { /* non-fatal */ }
-    }, []);
-
-    const handleDashboardClearFilters = useCallback(() => {
-        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
-    }, []);
-
     // -- Update fetchTasks --
     const fetchTasks = async () => {
         setLoadingTasks(true);
+        setDashboardLoading(true);
         try {
             const res = await fetch('/api/task', {
                 headers: { Authorization: `Bearer ${token()}` },
@@ -3904,8 +4105,9 @@ export default function OpsAdminDashboard() {
                 taskId: t.id ?? t.taskId,
                 taskTitle: t.title ?? t.taskTitle ?? '',
                 taskDescription: t.description ?? t.taskDescription ?? '',
-                taskCategory: t.classification === 1 ? 'SpecialTask' : '',
+                taskCategory: t.taskCategory ?? '',
                 taskReferenceNumber: t.taskReferenceNumber ?? '',
+                classification: t.classification ?? t.Classification ?? 0,
                 priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
                 dueAt: t.deadline ?? t.dueAt ?? null,
                 taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
@@ -3918,6 +4120,8 @@ export default function OpsAdminDashboard() {
                 deleted: deletedTaskIds.has(t.id ?? t.taskId),
                 supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
                 isConfidential: t.isConfidential ?? false,
+                isSLALocked: t.isSLALocked ?? false,
+                attachmentCount: t.attachmentCount ?? 0,
             }));
 
             setAllTasks(normalized);
@@ -4100,16 +4304,6 @@ export default function OpsAdminDashboard() {
     // -- Create Task --
     const handleNewTask = async (data: CreateTaskDTO) => {
         try {
-            if (!data.assignedDepartmentId) {
-                const meRes = await fetch('/api/auth/me', {
-                    headers: { Authorization: `Bearer ${token()}` },
-                });
-                if (meRes.ok) {
-                    const meBody = await meRes.json();
-                    const deptId = meBody?.data?.departmentId ?? meBody?.data?.DepartmentId;
-                    if (deptId) data.assignedDepartmentId = deptId;
-                }
-            }
             const res = await fetch('/api/task', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
@@ -4199,20 +4393,18 @@ export default function OpsAdminDashboard() {
     };
 
     // -- FSM Status Transition --
+    const STATUS_TO_BACKEND: Record<string, string> = {
+        'Not Started': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview',
+        'Done/Pending Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled',
+    };
     const handleStatusTransition = async (taskId: string, newStatus: TaskStatus) => {
         const task = tasks.find(t => t.taskId === taskId);
         if (!task) { error('Task not found.'); return; }
-        if (!isTransitionValid(task.taskStatus, newStatus)) {
-            error(`Invalid task status transition: ${task.taskStatus} ? ${newStatus}. Status sequence violation detected.`);
-            return;
-        }
         try {
-            const formData = new FormData();
-            formData.append('TaskStatus', newStatus);
             const res = await fetch(`/api/task/${taskId}/status`, {
                 method: 'PATCH',
-                headers: { Authorization: `Bearer ${token()}` },
-                body: formData,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+                body: JSON.stringify({ newStatus: STATUS_TO_BACKEND[newStatus] || newStatus }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -4231,14 +4423,14 @@ export default function OpsAdminDashboard() {
     const handleReviewTask = async (taskId: string, adminDecision: 'Approve & Close' | 'Return for Rework', reviewerRemarks: string) => {
         try {
             const res = await fetch(`/api/task/${taskId}/review`, {
-                method: 'POST',
+                method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token()}`,
                 },
                 body: JSON.stringify({
-                    AdminDecision: adminDecision,
-                    ReviewerRemarks: reviewerRemarks.length > 0 ? reviewerRemarks : undefined,
+                    isApproved: adminDecision === 'Approve & Close',
+                    remarks: reviewerRemarks || undefined,
                 }),
             });
             if (!res.ok) {
@@ -4523,7 +4715,7 @@ export default function OpsAdminDashboard() {
             <main className="main-viewport">
                 <DashboardHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/notification/my-notifications"
+                    notificationApi="/api/Notification"
                     userInitials={getInitials(employeeName || 'Operation Admin')}
                     onSettingsClick={() => setActiveTab('profile')}
                     onLogout={handleLogout}
@@ -4657,6 +4849,22 @@ export default function OpsAdminDashboard() {
                     onClose={() => setDetailTask(null)}
                     onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via TaskView.')}
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
+                    onPushBack={async (id, comment) => {
+                        try {
+                            const res = await fetch(`/api/task/${id}/push-back`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+                                body: JSON.stringify({ comment }),
+                            });
+                            if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Push back failed.'); }
+                            await fetchTasks();
+                            await fetchDashboardData();
+                            setDetailTask(null);
+                            success('Task pushed back to In Progress.');
+                        } catch (err: any) {
+                            error(err.message ?? 'Push back failed.');
+                        }
+                    }}
                 />
             )}
             {overrideTask && (
