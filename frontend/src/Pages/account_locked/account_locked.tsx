@@ -1,6 +1,6 @@
-﻿import React, { useState } from 'react';
+﻿import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Lock, Mail, ArrowLeft, Package, AlertCircle, UserX, Clock, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { Lock, ArrowLeft, Package, AlertCircle, UserX, Clock } from 'lucide-react';
 import './account_locked.css';
 
 function FeatureItem({ title, description }: { title: string; description: string }) {
@@ -50,125 +50,6 @@ function getReasonMeta(reason: string): {
     };
 }
 
-// ─── Contact Admin Modal ───────────────────────────────────────────────────────
-
-function ContactAdminModal({
-    employeeNumber,
-    employeeName,
-    onClose,
-}: {
-    employeeNumber: string;
-    employeeName: string;
-    onClose: () => void;
-}) {
-    const [message, setMessage] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleSubmit = async () => {
-        if (!message.trim()) { setError('Please enter a message.'); return; }
-        setSubmitting(true);
-        setError('');
-        try {
-            const res = await fetch('/api/contact/activation-request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    employeeNumber,
-                    employeeName,
-                    message: message.trim(),
-                }),
-            });
-            if (!res.ok) throw new Error('Failed to send request.');
-            setSubmitted(true);
-        } catch (err: any) {
-            setError(err.message ?? 'Something went wrong.');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    return (
-        <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-            onClick={onClose}
-        >
-            <div
-                style={{ background: 'white', borderRadius: 16, padding: '2rem', width: 420, maxWidth: '90vw' }}
-                onClick={e => e.stopPropagation()}
-            >
-                {submitted ? (
-                    <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(5,205,153,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <CheckCircle2 size={28} color="#05cd99" />
-                        </div>
-                        <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Request Sent</h3>
-                        <p style={{ color: '#666', fontSize: 14, margin: '0 0 20px' }}>
-                            Your activation request has been sent to a Manager.
-                        </p>
-                        <button onClick={onClose} style={{ width: '100%', padding: '10px', borderRadius: 10, border: '1px solid #ddd', cursor: 'pointer', fontSize: 14 }}>
-                            Close
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: 18 }}>Request Account Activation</h3>
-                                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#666' }}>Send a message to a Manager.</p>
-                            </div>
-                            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666' }}>
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div style={{ background: 'var(--bg-input)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#666' }}>Employee Number</span>
-                                <strong>{employeeNumber}</strong>
-                            </div>
-                            <div style={{ height: 1, background: '#eee', margin: '8px 0' }} />
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#666' }}>Name</span>
-                                <strong>{employeeName !== 'Employee' ? employeeName : '—'}</strong>
-                            </div>
-                        </div>
-
-                        {error && (
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--status-failed-bg)', border: '1px solid rgba(238,93,80,0.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 13, color: 'var(--status-failed)' }}>
-                                <AlertCircle size={14} />{error}
-                            </div>
-                        )}
-
-                        <div style={{ marginBottom: 16 }}>
-                            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>Message to Administrator</label>
-                            <textarea
-                                rows={4}
-                                maxLength={500}
-                                placeholder="Explain why you need your account reactivated..."
-                                value={message}
-                                onChange={e => { setMessage(e.target.value); setError(''); }}
-                                style={{ width: '100%', borderRadius: 8, border: '1px solid #ddd', padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
-                            />
-                            <div style={{ fontSize: 11, color: '#999', textAlign: 'right', marginTop: 3 }}>{message.length} / 500</div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 10 }}>
-                            <button onClick={onClose} disabled={submitting} style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid #ddd', cursor: 'pointer', fontSize: 14, background: 'white' }}>
-                                Cancel
-                            </button>
-                            <button onClick={handleSubmit} disabled={submitting} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 14, background: 'var(--primary)', color: 'white', fontWeight: 500 }}>
-                                {submitting ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={14} /> Sending…</span> : 'Send Request'}
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
-    );
-}
-
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function AccountLocked() {
@@ -186,8 +67,6 @@ export default function AccountLocked() {
     const employeeName = state?.employeeName || `Employee #${employeeNumber}`;
     const reason = state?.reason || '';
     const meta = getReasonMeta(reason);
-
-    const [showContactModal, setShowContactModal] = useState(false);
 
     const initials = employeeName
         .split(' ')
@@ -260,17 +139,6 @@ export default function AccountLocked() {
                         </span>
                     </div>
 
-                    {/* ACTION BUTTONS */}
-                    {meta.type !== 'leave' && (
-                        <button
-                            className="locked-contact-btn"
-                            onClick={() => setShowContactModal(true)}
-                        >
-                            <Mail size={18} />
-                            CONTACT ADMINISTRATOR
-                        </button>
-                    )}
-
                     <button
                         type="button"
                         className="locked-back-link"
@@ -288,14 +156,6 @@ export default function AccountLocked() {
                 </div>
             </div>
 
-            {/* MODALS */}
-            {showContactModal && (
-                <ContactAdminModal
-                    employeeNumber={employeeNumber}
-                    employeeName={employeeName}
-                    onClose={() => setShowContactModal(false)}
-                />
-            )}
         </div>
     );
 }

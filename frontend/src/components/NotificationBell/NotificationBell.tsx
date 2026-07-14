@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import StatusBadge from '../ui/StatusBadge';
 import EmptyState from '../ui/EmptyState';
+import api from '../../api';
 import './NotificationBell.css';
 
 export interface NotificationItem {
@@ -62,12 +63,8 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
     const fetchNotifs = async (page?: number) => {
         try {
             const p = page ?? notifPage;
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`${apiEndpoint}?pageNumber=${p}&pageSize=20`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error();
-            const json = await res.json();
+            const res = await api.get<any>(`${apiEndpoint}?pageNumber=${p}&pageSize=20`);
+            const json = res.data;
             const rawList: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             const list: NotificationItem[] = rawList.map((n: any) => ({
                 notificationId: n.id ?? n.notificationId,
@@ -134,19 +131,7 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
             n.notificationId === id ? { ...n, isRead: true } : n
         ));
         try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`${apiEndpoint}/${id}/read`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-            if (!res.ok) {
-                setNotifs(prev => prev.map(n =>
-                    n.notificationId === id ? { ...n, isRead: false } : n
-                ));
-            }
+            await api.patch(`${apiEndpoint}/${id}/read`);
         } catch {
             setNotifs(prev => prev.map(n =>
                 n.notificationId === id ? { ...n, isRead: false } : n
@@ -160,19 +145,7 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
 
         setNotifs(prev => prev.map(n => ({ ...n, isRead: true })));
 
-        const token = localStorage.getItem('authToken');
-
-        const res = await fetch(`${apiEndpoint}/read-all`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        });
-
-        if (!res.ok) {
-            setNotifs(prev => prev.map(n => ({ ...n, isRead: false })));
-        }
+        await api.patch(`${apiEndpoint}/read-all`);
     };
 
     return (

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import * as signalR from '@microsoft/signalr';
 import {
     ClipboardList,
     CheckCircle2,
@@ -48,9 +47,7 @@ import { useNavigate } from 'react-router-dom';
 import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
-import ApprovalTracker, { TrackerData } from '../../components/ApprovalTracker/ApprovalTracker';
-import PendingApprovalsTab from './PendingApprovalsTab';
-import RoutingManagementTab from './RoutingManagementTab';
+
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
 import StatCard from '../../components/StatCard/StatCard';
@@ -62,6 +59,8 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import SubTabNav from '../../components/ui/SubTabNav';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
+import api from '../../api';
+import axios from 'axios';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -379,13 +378,6 @@ const NAV_GROUPS = [
         ],
     },
     {
-        label: 'REQUESTS',
-        items: [
-            { tab: 'approvals' as NavTab, icon: Shield, label: 'Approvals' },
-            { tab: 'reopen' as NavTab, icon: RotateCcw, label: 'Reopen Requests' },
-        ],
-    },
-    {
         label: 'ACCOUNT',
         items: [
             { tab: 'profile' as NavTab, icon: UserCircle2, label: 'Profile' },
@@ -621,13 +613,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
         const fetchRecommendations = async () => {
             try {
-                const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=50', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const json = await res.json();
+                const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=50');
+                const json = res.data;
                 const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
                 if (list.length > 0) {
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
@@ -656,10 +645,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         };
         const fetchDepartments = async () => {
             try {
-                const res = await fetch('/api/departments', {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const json = await res.json();
+                const res = await api.get('/api/Department');
+                const json = res.data;
                 if (json.isSuccess && json.data) {
                     setDepartments(json.data.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
                 }
@@ -2094,11 +2081,8 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
     const fetchTemplates = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/TaskTemplate', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (!res.ok) throw new Error('Failed to fetch templates.');
-            const body = await res.json();
+            const res = await api.get('/api/TaskTemplate');
+            const body = res.data;
             const list: any[] = body.isSuccess && Array.isArray(body.data?.items) ? body.data.items : (Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []));
             setTemplates(list.map((t: any) => ({
                 templateId: t.id ?? t.templateId,
@@ -2128,11 +2112,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const handleDeleteTemplate = async (templateId: string) => {
         try {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete template.'); }
+            await api.delete(`/api/TaskTemplate/${templateId}`);
             success('Task template deactivated successfully.');
             setDeleteConfirm(null);
             await fetchTemplates();
@@ -2143,12 +2123,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const handleToggle = async (templateId: string, currentStatus: string) => {
         try {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify({ isActive: currentStatus !== 'Active' }),
-            });
-            if (!res.ok) throw new Error('Failed to toggle template status.');
+            await api.put(`/api/TaskTemplate/${templateId}`, { isActive: currentStatus !== 'Active' });
             success('Template status updated successfully.');
             await fetchTemplates();
         } catch (err: any) {
@@ -2171,20 +2146,10 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
             isActive: data.templateStatus === 'Active',
         };
         if (templateId) {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(backendPayload),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update template.'); }
+            await api.put(`/api/TaskTemplate/${templateId}`, backendPayload);
             success('Task template updated successfully.');
         } else {
-            const res = await fetch('/api/TaskTemplate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(backendPayload),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create template.'); }
+            await api.post('/api/TaskTemplate', backendPayload);
             success('Task template created successfully.');
         }
         await fetchTemplates();
@@ -2505,7 +2470,6 @@ const ApprovalsWrapper: React.FC = () => {
                     <RotateCcw size={14} /> Routing Config
                 </button>
             </div>
-            {subTab === 'pending' ? <PendingApprovalsTab /> : <RoutingManagementTab />}
         </div>
     );
 };
@@ -2560,14 +2524,14 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (tcFilter.taskStatus) params.set('TaskStatus', tcFilter.taskStatus);
             if (tcFilter.taskCategory) params.set('TaskCategory', tcFilter.taskCategory);
 
-            const res = await fetch(`/api/reporting/task-completion?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (res.status === 400) { setTcError('Invalid date range selected.'); setTcLoading(false); return; }
-            if (!res.ok) { setTcError('Failed to generate report. Please try again.'); setTcLoading(false); return; }
-
-            const data = await res.json();
+            let data;
+            try {
+                const res = await api.get(`/api/reports/task-completion?${params}`);
+                data = res.data;
+            } catch (err: any) {
+                if (err.response?.status === 400) { setTcError('Invalid date range selected.'); setTcLoading(false); return; }
+                setTcError('Failed to generate report. Please try again.'); setTcLoading(false); return;
+            }
             if (data.isSuccess && data.data) { setTcReport(data.data); setTcGeneratedAt(new Date().toLocaleString()); }
             else { setTcNoRecords(true); }
         } catch { setTcError('Failed to generate report. Please try again.'); }
@@ -2629,16 +2593,14 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
     useEffect(() => {
         const fetchOptions = async () => {
             try {
-                const res = await fetch('/api/reporting/filter-options', {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                });
-                if (res.ok) {
-                    const data = await res.json();
+                try {
+                    const res = await api.get('/api/reports/filter-options');
+                    const data = res.data;
                     if (data.isSuccess && data.data) {
                         setDepartments(data.data.departments || []);
                         setEmployees(data.data.employees || []);
                     }
-                }
+                } catch { }
             } catch { }
         };
         fetchOptions();
@@ -2668,15 +2630,15 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (opFilter.departmentId) params.set('DepartmentId', opFilter.departmentId);
             if (opFilter.employeeId) params.set('EmployeeId', opFilter.employeeId);
 
-            const res = await fetch(`/api/reporting/operational-summary?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (res.status === 400) { setOpError('Invalid date range selected.'); setOpLoading(false); return; }
-            if (res.status === 404) { setOpNoRecords(true); setOpLoading(false); return; }
-            if (!res.ok) { setOpError('Failed to generate report. Please try again.'); setOpLoading(false); return; }
-
-            const data = await res.json();
+            let data;
+            try {
+                const res = await api.get(`/api/reports/operational-summary?${params}`);
+                data = res.data;
+            } catch (err: any) {
+                if (err.response?.status === 400) { setOpError('Invalid date range selected.'); setOpLoading(false); return; }
+                if (err.response?.status === 404) { setOpNoRecords(true); setOpLoading(false); return; }
+                setOpError('Failed to generate report. Please try again.'); setOpLoading(false); return;
+            }
             if (data.isSuccess && data.data) { setOpReport(data.data); setOpGeneratedAt(new Date().toLocaleString()); }
             else { setOpNoRecords(true); }
         } catch { setOpError('Failed to generate report. Please try again.'); }
@@ -2699,18 +2661,15 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (opFilter.employeeId) params.set('EmployeeId', opFilter.employeeId);
             params.set('ReportFormat', opFilter.reportFormat);
 
-            const res = await fetch(`/api/reporting/operational-summary/download?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => null);
-                error(errData?.message || 'Failed to download report.');
+            let blob;
+            try {
+                const res = await axios.get(`/api/reports/operational-summary/download?${params}`, { responseType: 'blob' });
+                blob = res.data;
+            } catch (err: any) {
+                error('Failed to download report.');
                 setOpLoading(false);
                 return;
             }
-
-            const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const ext = opFilter.reportFormat === 'EXCEL' ? 'xlsx' : 'pdf';
@@ -3079,10 +3038,9 @@ function ProfileTab() {
     useEffect(() => {
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${t}` },
-        })
-            .then(res => res.ok ? res.json() : null)
+        api.get('/api/Auth/me')
+            .then(res => res.data)
+            .catch(() => null)
             .then(resJson => {
                 if (!resJson || !resJson.isSuccess || !resJson.data) return;
                 const data = resJson.data;
@@ -3111,11 +3069,6 @@ function ProfileTab() {
             })
             .catch(() => { });
     }, []);
-
-    const authHeader = () => ({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-    });
 
     // -- "Save Changes" clicked: validate first, then open gate ---------------
     const requestSave = () => {
@@ -3152,15 +3105,11 @@ function ProfileTab() {
         setGateLoading(true);
         setGateError('');
         try {
-            const verifyRes = await fetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: authHeader(),
-                body: JSON.stringify({
-                    employeeID: employeeId,
-                    password: gatePassword,
-                }),
+            const verifyRes = await api.post('/api/Auth/verify-password', {
+                employeeID: employeeId,
+                password: gatePassword,
             });
-            const verifyData = await verifyRes.json().catch(() => ({}));
+            const verifyData = verifyRes.data;
             if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
             setPasswordGate(false);
             setGatePassword('');
@@ -3176,22 +3125,13 @@ function ProfileTab() {
     const performSave = async () => {
         setProfileSaving(true);
         try {
-            const token = localStorage.getItem('authToken') ?? '';
             const fd = new FormData();
             fd.append('firstName', profileForm.firstName.trim());
             fd.append('middleName', profileForm.middleName.trim());
             fd.append('lastName', profileForm.lastName.trim());
             fd.append('contactNumber', profileForm.contactNumber.trim());
             fd.append('email', profileForm.email.trim());
-            const res = await fetch('/api/profile/update-profile', {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}` },
-                body: fd,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Profile update failed.');
-            }
+            await api.uploadPut('/api/Profile/update-profile', fd);
             localStorage.setItem('firstName', profileForm.firstName.trim());
             localStorage.setItem('middleName', profileForm.middleName.trim());
             localStorage.setItem('lastName', profileForm.lastName.trim());
@@ -3239,19 +3179,11 @@ function ProfileTab() {
 
     const handlePwSave = async () => {
         if (!pwForm.current) { setPwError('Current password is required.'); return; }
-        if (pwForm.next.length < 6) { setPwError('New password must be at least 6 characters.'); return; }
+        if (pwForm.next.length < 8) { setPwError('New password must be at least 8 characters.'); return; }
         if (pwForm.next !== pwForm.confirm) { setPwError('Passwords do not match.'); return; }
         setPwSaving(true);
         try {
-            const res = await fetch('/api/auth/change-password', {
-                method: 'PATCH',
-                headers: authHeader(),
-                body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Password update failed.');
-            }
+            await api.patch('/api/Auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next });
             success('Password changed successfully!');
             setEditingPassword(false);
             setPwForm({ current: '', next: '', confirm: '' });
@@ -3998,8 +3930,6 @@ export default function OpsAdminDashboard() {
     const [overrideTask, setOverrideTask] = useState<Task | null>(null);
     const [reviewTask, setReviewTask] = useState<Task | null>(null);
 
-    const token = () => localStorage.getItem('authToken');
-
     // -- Fetch Tasks --
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
@@ -4040,11 +3970,8 @@ export default function OpsAdminDashboard() {
                 const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
                 params.append('status', statusMap[dashboardFilters.taskStatus] || dashboardFilters.taskStatus);
             }
-            const res = await fetch(`/api/Dashboard/metrics?${params}`, {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error('Failed to load dashboard data');
-            const body = await res.json();
+            const res = await api.get(`/api/Dashboard/metrics?${params}`);
+            const body = res.data;
             if (!body.isSuccess) {
                 setDashboardError(body.message || 'No workload data available.');
                 setDashboardData(null);
@@ -4063,16 +3990,16 @@ export default function OpsAdminDashboard() {
     const fetchDashboardFilterOptions = useCallback(async () => {
         try {
             const [empRes, deptRes] = await Promise.all([
-                fetch('/api/Dashboard/employee-availability', { headers: { Authorization: `Bearer ${token()}` } }),
-                fetch('/api/departments', { headers: { Authorization: `Bearer ${token()}` } }),
+                api.get('/api/Dashboard/employee-availability').catch(() => ({ data: null })),
+                api.get('/api/Department').catch(() => ({ data: null })),
             ]);
-            if (empRes.ok) {
-                const json = await empRes.json();
+            if (empRes.data) {
+                const json = empRes.data;
                 const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardEmployees(list.map((e: any) => ({ employeeId: e.userId ?? e.UserId ?? e.employeeId, employeeName: e.fullName ?? e.FullName ?? e.employeeName })));
             }
-            if (deptRes.ok) {
-                const json = await deptRes.json();
+            if (deptRes.data) {
+                const json = deptRes.data;
                 const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardDepartments(depts.map((d: any) => ({ departmentId: d.id ?? d.departmentId, departmentName: d.name ?? d.departmentName })));
             }
@@ -4092,10 +4019,9 @@ export default function OpsAdminDashboard() {
     const ACTIVITY_LOG_PAGE_SIZE = 15;
 
     const fetchActivityLogs = (page: number) => {
-        const t = token();
-        if (!t) return;
-        fetch(`/api/activity-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' })
-            .then(res => { if (!res.ok) return null; return res.json(); })
+        api.get(`/api/audit-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`)
+            .then(res => res.data)
+            .catch(() => null)
             .then(data => {
                 if (data && Array.isArray(data.data)) {
                     setActivityLogs(data.data);
@@ -4113,11 +4039,8 @@ export default function OpsAdminDashboard() {
         setLoadingTasks(true);
         setDashboardLoading(true);
         try {
-            const res = await fetch('/api/task?pageNumber=1&pageSize=500', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const jsonRes = await res.json();
+            const res = await api.get('/api/Task?pageNumber=1&pageSize=200');
+            const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
@@ -4155,18 +4078,8 @@ export default function OpsAdminDashboard() {
 
     const fetchBinRecords = async () => {
         try {
-            const res = await fetch(
-                `/api/task/bin-records/${employeeId}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token()}`,
-                    },
-                }
-            );
-
-            if (!res.ok) throw new Error();
-
-            const data = await res.json();
+            const res = await api.get(`/api/Task/bin-records/${employeeId}`);
+            const data = res.data;
 
             setBinTasks(data);
         } catch {
@@ -4177,14 +4090,7 @@ export default function OpsAdminDashboard() {
     // -- Restore task --
     const handleRestoreTask = async (taskId: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/restore-task`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to restore task.');
-            }
+            await api.patch(`/api/Task/${taskId}/restore-task`);
             setAllTasks(prev => prev.map(t =>
                 t.taskId === taskId ? { ...t, deleted: false } : t
             ));
@@ -4211,20 +4117,7 @@ export default function OpsAdminDashboard() {
             onConfirm: async () => {
                 setConfirmModal(CONFIRM_CLOSED);
                 try {
-                    const res = await fetch(
-                        `/api/task/empty-bin/${employeeId}`,
-                        {
-                            method: 'DELETE',
-                            headers: {
-                                Authorization: `Bearer ${token()}`,
-                            },
-                        }
-                    );
-
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to empty bin.');
-                    }
+                    await api.delete(`/api/Task/empty-bin/${employeeId}`);
 
                     setBinTasks([]);
                     await fetchTasks();
@@ -4239,11 +4132,8 @@ export default function OpsAdminDashboard() {
     // -- Fetch Team Members (for assignee dropdown) --
     const fetchTeamMembers = async () => {
         try {
-            const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=100', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const body = await res.json();
+            const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=100');
+            const body = res.data;
             const rawList: any[] = Array.isArray(body) ? body : (Array.isArray(body?.data?.data) ? body.data.data : (Array.isArray(body?.data) ? body.data : []));
 
             setTeamMembers(rawList.map(e => ({
@@ -4260,11 +4150,8 @@ export default function OpsAdminDashboard() {
     const fetchReopenRequests = async () => {
         setReopenLoading(true);
         try {
-            const res = await fetch('/api/task/reopen-requests', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const data: any[] = await res.json();
+            const res = await api.get('/api/Task/reopen-requests');
+            const data: any[] = res.data;
             setReopenRequests(data.map((r: any) => ({
                 requestId: r.requestId,
                 referenceNumber: r.referenceNumber,
@@ -4295,10 +4182,9 @@ export default function OpsAdminDashboard() {
         fetchDashboardFilterOptions();
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${t}` },
-        })
-            .then(res => res.ok ? res.json() : null)
+        api.get('/api/Auth/me')
+            .then(res => res.data)
+            .catch(() => null)
             .then(resJson => {
                 if (!resJson || !resJson.isSuccess || !resJson.data) return;
                 const data = resJson.data;
@@ -4325,36 +4211,29 @@ export default function OpsAdminDashboard() {
     // -- Create Task --
     const handleNewTask = async (data: CreateTaskDTO) => {
         try {
-            const res = await fetch('/api/task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify(data),
-            });
-            if (res.status === 409) {
-                const errBody = await res.json().catch(() => ({}));
-                if (errBody.data && Array.isArray(errBody.data) && errBody.data.length > 0) {
-                    setDuplicateWarnings(errBody.data);
-                    setPendingTaskData(data);
-                    return;
+            let created;
+            try {
+                const res = await api.post('/api/Task', data);
+                created = res.data;
+            } catch (err: any) {
+                if (err.response?.status === 409) {
+                    const errBody = err.response.data || {};
+                    if (errBody.data && Array.isArray(errBody.data) && errBody.data.length > 0) {
+                        setDuplicateWarnings(errBody.data);
+                        setPendingTaskData(data);
+                        return;
+                    }
+                    throw new Error(errBody.message || errBody.Message || 'Potential duplicate task detected.');
                 }
-                throw new Error(errBody.message || errBody.Message || 'Potential duplicate task detected.');
+                throw new Error(err.response?.data?.message || err.response?.data?.Message || 'Failed to create task.');
             }
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to create task.');
-            }
-            const created = await res.json();
             const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
 
             // Upload supporting document if provided
             if (taskId && pendingFile) {
                 const fileFormData = new FormData();
                 fileFormData.append('file', pendingFile);
-                await fetch(`/api/tasks/${taskId}/attachments`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token()}` },
-                    body: fileFormData,
-                }).catch(() => { });
+                await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData).catch(() => { });
                 setPendingFile(null);
             }
 
@@ -4371,15 +4250,7 @@ export default function OpsAdminDashboard() {
     // -- Update Task --
     const handleEditTask = async (taskId: string, data: UpdateTaskDTO) => {
         try {
-            const res = await fetch(`/api/task/${taskId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify(data),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to update task.');
-            }
+            await api.put(`/api/Task/${taskId}`, data);
             await fetchTasks();
             await fetchDashboardData();
             setEditingTask(null);
@@ -4395,15 +4266,7 @@ export default function OpsAdminDashboard() {
         try {
             const formData = new FormData();
             formData.append('Reason', 'Admin reopen request');
-            const res = await fetch(`/api/task/${taskId}/reopen-request`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token()}` },
-                body: formData,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to reopen task.');
-            }
+            await api.upload(`/api/Task/${taskId}/reopen-request`, formData);
             await fetchTasks();
             await fetchDashboardData();
             await fetchReopenRequests();
@@ -4422,15 +4285,7 @@ export default function OpsAdminDashboard() {
         const task = tasks.find(t => t.taskId === taskId);
         if (!task) { error('Task not found.'); return; }
         try {
-            const res = await fetch(`/api/task/${taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify({ newStatus: STATUS_TO_BACKEND[newStatus] || newStatus }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to update task status.');
-            }
+            await api.patch(`/api/Task/${taskId}/status`, { newStatus: STATUS_TO_BACKEND[newStatus] || newStatus });
             await fetchTasks();
             await fetchDashboardData();
             setViewingTask(null);
@@ -4443,21 +4298,10 @@ export default function OpsAdminDashboard() {
     // -- Task Review (Approve & Close / Return for Rework) --
     const handleReviewTask = async (taskId: string, adminDecision: 'Approve & Close' | 'Return for Rework', reviewerRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    isApproved: adminDecision === 'Approve & Close',
-                    remarks: reviewerRemarks || undefined,
-                }),
+            await api.patch(`/api/Task/${taskId}/review`, {
+                isApproved: adminDecision === 'Approve & Close',
+                remarks: reviewerRemarks || undefined,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to process review decision.');
-            }
             await fetchTasks();
             await fetchDashboardData();
             success(
@@ -4473,23 +4317,12 @@ export default function OpsAdminDashboard() {
     // -- Admin Override (completed task) --
     const handleAdminOverride = async (taskId: string, reason: string, remarks: string, requestedStatus: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/override`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    OverrideReason: reason,
-                    AdminRemarks: remarks,
-                    ApprovalConfirmation: true,
-                    RequestedStatus: requestedStatus,
-                }),
+            await api.post(`/api/Task/${taskId}/override`, {
+                OverrideReason: reason,
+                AdminRemarks: remarks,
+                ApprovalConfirmation: true,
+                RequestedStatus: requestedStatus,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to process admin override.');
-            }
             await fetchTasks();
             setOverrideTask(null);
             success('Administrator override applied � Task reopened � Audit Log entry generated.');
@@ -4501,21 +4334,10 @@ export default function OpsAdminDashboard() {
     // -- Approve Reopen Request --
     const handleApproveReopen = async (requestId: string, adminRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/reopen-requests/${requestId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    ApprovalDecision: 'Approve',
-                    AdminRemarks: adminRemarks,
-                }),
+            await api.patch(`/api/Task/reopen-requests/${requestId}/review`, {
+                ApprovalDecision: 'Approve',
+                AdminRemarks: adminRemarks,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to approve reopen request.');
-            }
             setReopenRequests(prev => prev.map(r =>
                 r.requestId === requestId
                     ? { ...r, status: 'Approved', adminRemarks, reviewedAt: new Date().toISOString() }
@@ -4533,21 +4355,10 @@ export default function OpsAdminDashboard() {
     // -- Reject Reopen Request --
     const handleRejectReopen = async (requestId: string, adminRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/reopen-requests/${requestId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    ApprovalDecision: 'Reject',
-                    AdminRemarks: adminRemarks,
-                }),
+            await api.patch(`/api/Task/reopen-requests/${requestId}/review`, {
+                ApprovalDecision: 'Reject',
+                AdminRemarks: adminRemarks,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to reject reopen request.');
-            }
             setReopenRequests(prev => prev.map(r =>
                 r.requestId === requestId
                     ? { ...r, status: 'Rejected', adminRemarks, reviewedAt: new Date().toISOString() }
@@ -4572,14 +4383,7 @@ export default function OpsAdminDashboard() {
             onConfirm: async () => {
                 setConfirmModal(CONFIRM_CLOSED);
                 try {
-                    const res = await fetch(`/api/task/${taskId}/delete-task`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token()}` },
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to delete task.');
-                    }
+                    await api.delete(`/api/Task/${taskId}/delete-task`);
 
                     // Track locally so refetches don't resurrect the task
                     setDeletedTaskIds(prev => new Set(prev).add(taskId));
@@ -4607,13 +4411,7 @@ export default function OpsAdminDashboard() {
         const token = localStorage.getItem('authToken');
 
         if (token) {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            }).catch(() => { }); // non-fatal � clear localStorage regardless
+            await api.post('/api/Auth/logout', {}).catch(() => { }); // non-fatal � clear localStorage regardless
         }
 
         ['employeeId', 'refreshToken', 'authToken', 'employeeName',
@@ -4645,27 +4443,6 @@ export default function OpsAdminDashboard() {
         const interval = setInterval(() => fetchTasks(), 30000);
         return () => clearInterval(interval);
     }, []);
-
-    // -- SignalR: Auto-refresh dashboard when task data changes --
-    useEffect(() => {
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl('/hubs/workflow')
-            .withAutomaticReconnect()
-            .build();
-
-        connection.on('DashboardDataChanged', () => {
-            fetchDashboardData();
-            fetchTasks();
-            window.dispatchEvent(new CustomEvent('opencode-notification-update'));
-        });
-
-        connection.start().then(() => {
-            const acctId = localStorage.getItem('employeeId');
-            if (acctId) connection.invoke('JoinDashboardGroup', acctId).catch(() => { });
-        }).catch(() => { });
-
-        return () => { connection.stop(); };
-    }, [fetchDashboardData]);
 
     return (
         <div className="dashboard-container">
@@ -4872,12 +4649,7 @@ export default function OpsAdminDashboard() {
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
                     onPushBack={async (id, comment) => {
                         try {
-                            const res = await fetch(`/api/task/${id}/push-back`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                                body: JSON.stringify({ comment }),
-                            });
-                            if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Push back failed.'); }
+                            await api.patch(`/api/Task/${id}/push-back`, { comment });
                             await fetchTasks();
                             await fetchDashboardData();
                             setDetailTask(null);

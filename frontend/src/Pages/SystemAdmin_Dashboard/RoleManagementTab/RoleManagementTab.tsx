@@ -25,6 +25,7 @@ import {
     Calendar,
 } from 'lucide-react';
 import { useToast } from '../../../components/Toast/Toast';
+import api from '../../../api';
 import StatCard from '../../../components/StatCard/StatCard';
 import DataTable, { ActionsDropdown } from '../../../components/ui/DataTable';
 import SubTabNav from '../../../components/ui/SubTabNav';
@@ -421,16 +422,13 @@ export default function RoleManagementTab() {
     const [auditEntries, setAuditEntries] = useState<OrgAuditEntry[]>([]);
     const [auditLoading, setAuditLoading] = useState(false);
 
-    const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}`, 'Content-Type': 'application/json' });
-
     // ─────────────────────────── Fetch Functions ──────────────────────────────
 
     const fetchRoles = async () => {
         setRolesLoading(true);
         try {
-            const rRes = await fetch('/api/role', { headers: authHeaders() });
-            if (!rRes.ok) throw new Error(`Failed to fetch roles`);
-            const rd = await rRes.json();
+            const rRes = await api.get('/api/Role');
+            const rd = rRes.data;
 
             const ROLE_MAP: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
             const normalize = (d: any): RoleResponseDTO => {
@@ -462,15 +460,15 @@ export default function RoleManagementTab() {
         setCaLoading(true);
         try {
             const [caRes, coordRes] = await Promise.all([
-                fetch('/api/client-accounts', { headers: authHeaders() }),
-                fetch('/api/user?role=1', { headers: authHeaders() }),
+                api.get('/api/client-accounts').catch(() => null),
+                api.get('/api/user', { params: { role: 1 } }).catch(() => null),
             ]);
-            if (caRes.ok) {
-                const rd = await caRes.json();
+            if (caRes) {
+                const rd = caRes.data;
                 setClientAccounts(Array.isArray(rd) ? rd : (rd.data?.items ?? (Array.isArray(rd.data) ? rd.data : rd.$values ?? [])));
             }
-            if (coordRes.ok) {
-                const rd = await coordRes.json();
+            if (coordRes) {
+                const rd = coordRes.data;
                 const raw = Array.isArray(rd) ? rd : (rd.data?.items ?? (Array.isArray(rd.data) ? rd.data : rd.$values ?? []));
                 setCoordinators(raw.map((u: any) => ({
                     employeeId: u.id ?? u.userId ?? u.employeeId,
@@ -484,9 +482,8 @@ export default function RoleManagementTab() {
     const fetchDepartments = async () => {
         setDeptsLoading(true);
         try {
-            const res = await fetch('/api/department', { headers: authHeaders() });
-            if (!res.ok) throw new Error(`Failed to fetch departments`);
-            const data = await res.json();
+            const res = await api.get('/api/Department');
+            const data = res.data;
             const normalize = (d: any): DepartmentResponseDTO => ({
                 departmentId: d.departmentId ?? d.DepartmentId,
                 name: d.name ?? d.Name,
@@ -508,9 +505,8 @@ export default function RoleManagementTab() {
     const fetchPositions = async () => {
         setPosLoading(true);
         try {
-            const res = await fetch('/api/job-positions', { headers: authHeaders() });
-            if (!res.ok) throw new Error(`Failed to fetch positions`);
-            const data = await res.json();
+            const res = await api.get('/api/job-positions');
+            const data = res.data;
             const normalize = (p: any): JobPositionResponseDTO => ({
                 jobPositionId: p.jobPositionId ?? p.JobPositionId,
                 name: p.name ?? p.Name,
@@ -537,9 +533,8 @@ export default function RoleManagementTab() {
         if (employees.length > 0) return; // already loaded
         setEmployeesLoading(true);
         try {
-            const res = await fetch('/api/user', { headers: authHeaders() });
-            if (!res.ok) { setEmployees([]); return; }
-            const data = await res.json();
+            const res = await api.get('/api/user');
+            const data = res.data;
             const raw: any[] = Array.isArray(data) ? data : (data.data?.items ?? (Array.isArray(data.data) ? data.data : data.$values ?? []));
             setEmployees(raw.map((e: any): EmployeeSummaryDTO => ({
                 employeeId: e.employeeId ?? e.EmployeeId ?? e.id,
@@ -552,9 +547,8 @@ export default function RoleManagementTab() {
     const fetchAuditLog = async () => {
         setAuditLoading(true);
         try {
-            const res = await fetch('/api/activity-logs?module=organization&limit=20', { headers: authHeaders() });
-            if (!res.ok) { setAuditEntries([]); return; }
-            const data = await res.json();
+            const res = await api.get('/api/audit-logs', { params: { module: 'organization', limit: 20 } });
+            const data = res.data;
             const raw: any[] = Array.isArray(data) ? data : (data.data?.items ?? (Array.isArray(data.data) ? data.data : data.$values ?? []));
             setAuditEntries(raw.map((e: any): OrgAuditEntry => ({
                 id: e.id ?? e.activityLogId ?? e.ActivityLogId ?? String(Math.random()),
@@ -632,24 +626,20 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setQuickDeptErrors(errors); return; }
         setQuickDeptLoading(true);
         try {
-            const res = await fetch('/api/department', {
-                method: 'POST', headers: authHeaders(),
-                body: JSON.stringify({
-                    name: quickDeptForm.name.trim(),
-                    code: quickDeptForm.code.trim().toUpperCase(),
-                    status: 'Active',
-                    effectiveDate: quickDeptForm.effectiveDate,
-                }),
+            const res = await api.post('/api/Department', {
+                name: quickDeptForm.name.trim(),
+                code: quickDeptForm.code.trim().toUpperCase(),
+                status: 'Active',
+                effectiveDate: quickDeptForm.effectiveDate,
             });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create department.'); }
-            const created = await res.json();
+            const created = res.data;
             toastSuccess(`Department "${created.name ?? quickDeptForm.name}" created!`);
             await fetchDepartments();
             const newId = created.departmentId ?? created.DepartmentId ?? '';
             if (newId) setPosForm(f => ({ ...f, departmentId: newId }));
             setShowQuickDept(false);
             setQuickDeptForm({ name: '', code: '', effectiveDate: '' }); setQuickDeptErrors({});
-        } catch (e: any) { toastError(e.message); setQuickDeptErrors({ api: e.message }); } finally { setQuickDeptLoading(false); }
+        } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to create department.'); setQuickDeptErrors({ api: e.response?.data?.message || e.message }); } finally { setQuickDeptLoading(false); }
     };
 
     const openViewRole = (role: RoleResponseDTO) => {
@@ -720,11 +710,10 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setDeptFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const res = await fetch('/api/department', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: deptForm.name.trim(), description: deptForm.description.trim() || undefined }) });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create department.'); }
+            const res = await api.post('/api/Department', { name: deptForm.name.trim(), description: deptForm.description.trim() || undefined });
             toastSuccess('Department created successfully!');
             setDeptDirty(false); setIsCreateDeptOpen(false); fetchDepartments();
-        } catch (e: any) { toastError(e.message); setDeptFormErrors({ api: e.message }); } finally { setActionLoading(false); }
+        } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to create department.'); setDeptFormErrors({ api: e.response?.data?.message || e.message }); } finally { setActionLoading(false); }
     };
 
     const openEditDept = (dept: DepartmentResponseDTO) => {
@@ -747,11 +736,10 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setDeptFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const res = await fetch(`/api/department/${editingDept.departmentId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ name: deptForm.name.trim(), description: deptForm.description.trim() || undefined }) });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update department.'); }
+            const res = await api.put(`/api/Department/${editingDept.departmentId}`, { name: deptForm.name.trim(), description: deptForm.description.trim() || undefined });
             toastSuccess('Department updated successfully!');
             setEditingDept(null); fetchDepartments();
-        } catch (e: any) { toastError(e.message); setDeptFormErrors({ api: e.message }); } finally { setActionLoading(false); }
+        } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to update department.'); setDeptFormErrors({ api: e.response?.data?.message || e.message }); } finally { setActionLoading(false); }
     };
 
     const confirmToggleDeptStatus = (dept: DepartmentResponseDTO) => {
@@ -770,12 +758,11 @@ export default function RoleManagementTab() {
                     if (activate) {
                         toastError('Activation requires backend support. Use the Edit function to update department details.');
                     } else {
-                        const res = await fetch(`/api/department/${dept.departmentId}`, { method: 'DELETE', headers: authHeaders() });
-                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to deactivate.'); }
+                        const res = await api.delete(`/api/Department/${dept.departmentId}`);
                         toastSuccess(`Department deactivated.`);
                     }
                     setConfirmModal(CONFIRM_CLOSED); fetchDepartments();
-                } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
+                } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to deactivate.'); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
         });
     };
@@ -793,10 +780,9 @@ export default function RoleManagementTab() {
             onConfirm: empCount > 0 ? () => setConfirmModal(CONFIRM_CLOSED) : async () => {
                 setActionLoading(true);
                 try {
-                    const res = await fetch(`/api/department/${dept.departmentId}`, { method: 'DELETE', headers: authHeaders() });
-                    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete department.'); }
+                    const res = await api.delete(`/api/Department/${dept.departmentId}`);
                     toastSuccess('Department deleted.'); setConfirmModal(CONFIRM_CLOSED); fetchDepartments();
-                } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
+                } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to delete department.'); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
         });
     };
@@ -853,11 +839,10 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setPosFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const res = await fetch('/api/job-positions', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: posForm.name.trim(), departmentId: posForm.departmentId }) });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create position.'); }
+            const res = await api.post('/api/job-positions', { name: posForm.name.trim(), departmentId: posForm.departmentId });
             toastSuccess('Position created successfully!');
             setIsCreatePosOpen(false); fetchPositions();
-        } catch (e: any) { toastError(e.message); setPosFormErrors({ api: e.message }); } finally { setActionLoading(false); }
+        } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to create position.'); setPosFormErrors({ api: e.response?.data?.message || e.message }); } finally { setActionLoading(false); }
     };
 
     const openEditPos = (pos: JobPositionResponseDTO) => {
@@ -883,11 +868,10 @@ export default function RoleManagementTab() {
         if (Object.keys(errors).length) { setPosFormErrors(errors); return; }
         setActionLoading(true);
         try {
-            const res = await fetch(`/api/job-positions/${editingPos.jobPositionId}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ name: posForm.name.trim(), departmentId: posForm.departmentId }) });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update position.'); }
+            const res = await api.put(`/api/job-positions/${editingPos.jobPositionId}`, { name: posForm.name.trim(), departmentId: posForm.departmentId });
             toastSuccess('Position updated successfully!');
             setEditingPos(null); fetchPositions();
-        } catch (e: any) { toastError(e.message); setPosFormErrors({ api: e.message }); } finally { setActionLoading(false); }
+        } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to update position.'); setPosFormErrors({ api: e.response?.data?.message || e.message }); } finally { setActionLoading(false); }
     };
 
     const confirmTogglePosStatus = (pos: JobPositionResponseDTO) => {
@@ -906,12 +890,11 @@ export default function RoleManagementTab() {
                     if (activate) {
                         toastError('Activation requires backend support. Use the Edit function to update position details.');
                     } else {
-                        const res = await fetch(`/api/job-positions/${pos.jobPositionId}`, { method: 'DELETE', headers: authHeaders() });
-                        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to deactivate.'); }
+                        const res = await api.delete(`/api/job-positions/${pos.jobPositionId}`);
                         toastSuccess(`Position deactivated.`);
                     }
                     setConfirmModal(CONFIRM_CLOSED); fetchPositions();
-                } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
+                } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to deactivate.'); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
         });
     };
@@ -929,10 +912,9 @@ export default function RoleManagementTab() {
             onConfirm: empCount > 0 ? () => setConfirmModal(CONFIRM_CLOSED) : async () => {
                 setActionLoading(true);
                 try {
-                    const res = await fetch(`/api/job-positions/${pos.jobPositionId}`, { method: 'DELETE', headers: authHeaders() });
-                    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete position.'); }
+                    const res = await api.delete(`/api/job-positions/${pos.jobPositionId}`);
                     toastSuccess('Position deleted.'); setConfirmModal(CONFIRM_CLOSED); fetchPositions();
-                } catch (e: any) { toastError(e.message); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
+                } catch (e: any) { toastError(e.response?.data?.message || e.message || 'Failed to delete position.'); setConfirmModal(CONFIRM_CLOSED); } finally { setActionLoading(false); }
             },
         });
     };
@@ -1756,8 +1738,7 @@ export default function RoleManagementTab() {
                                                 confirmLabel: ca.isActive ? 'Deactivate' : 'Activate',
                                                 onConfirm: async () => {
                                                     try {
-                                                        const res = await fetch(`/api/client-accounts/${ca.id}/${ca.isActive ? 'deactivate' : 'activate'}`, { method: 'PATCH', headers: authHeaders() });
-                                                        if (!res.ok) throw new Error('Failed to update');
+                                                        const res = await api.patch(`/api/client-accounts/${ca.id}/${ca.isActive ? 'deactivate' : 'activate'}`);
                                                         toastSuccess(`Client account ${ca.isActive ? 'deactivated' : 'activated'}.`);
                                                         setConfirmModal(CONFIRM_CLOSED);
                                                         await fetchClientAccounts();
@@ -1778,7 +1759,7 @@ export default function RoleManagementTab() {
                                                 notice: 'All coordinator assignments linked to this client will also be removed.',
                                                 confirmLabel: 'Delete',
                                                 onConfirm: async () => {
-                                                    try { const res = await fetch(`/api/client-accounts/${ca.id}`, { method: 'DELETE', headers: authHeaders() }); if (!res.ok) throw new Error('Failed to delete'); toastSuccess('Client account deleted.'); setConfirmModal(CONFIRM_CLOSED); await fetchClientAccounts(); } catch { toastError('Failed to delete client account.'); setConfirmModal(CONFIRM_CLOSED); }
+                                                    try { const res = await api.delete(`/api/client-accounts/${ca.id}`); toastSuccess('Client account deleted.'); setConfirmModal(CONFIRM_CLOSED); await fetchClientAccounts(); } catch { toastError('Failed to delete client account.'); setConfirmModal(CONFIRM_CLOSED); }
                                                 },
                                             }),
                                             variant: 'danger',
@@ -1800,9 +1781,8 @@ export default function RoleManagementTab() {
                                 setCaActionLoading(true);
                                 try {
                                     const url = editingCa ? `/api/client-accounts/${editingCa.id}` : '/api/client-accounts';
-                                    const method = editingCa ? 'PUT' : 'POST';
-                                    const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(editingCa ? { name: caForm.name.trim(), code: caForm.code.trim(), description: caForm.description.trim() } : { name: caForm.name.trim(), code: caForm.code.trim(), description: caForm.description.trim() }) });
-                                    if (!res.ok) throw new Error('Failed to save');
+                                    const body = { name: caForm.name.trim(), code: caForm.code.trim(), description: caForm.description.trim() };
+                                    const res = editingCa ? await api.put(url, body) : await api.post(url, body);
                                     toastSuccess(editingCa ? 'Client account updated.' : 'Client account created.');
                                     setCaFormOpen(false);
                                     await fetchClientAccounts();
@@ -1834,11 +1814,7 @@ export default function RoleManagementTab() {
                                 if (!assignCoordinator) { toastError('Select a coordinator.'); return; }
                                 setCaActionLoading(true);
                                 try {
-                                    const res = await fetch(`/api/client-accounts/coordinators/${assignCoordinator}`, {
-                                        method: 'PUT', headers: authHeaders(),
-                                        body: JSON.stringify({ clientAccountIds: Array.from(assignCaIds) }),
-                                    });
-                                    if (!res.ok) throw new Error('Failed to assign');
+                                    const res = await api.put(`/api/client-accounts/coordinators/${assignCoordinator}`, { clientAccountIds: Array.from(assignCaIds) });
                                     toastSuccess('Client accounts assigned.');
                                     setAssignModalOpen(false);
                                     await fetchClientAccounts();

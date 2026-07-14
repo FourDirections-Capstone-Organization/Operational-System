@@ -44,7 +44,7 @@ export default function SetPasswordPage() {
         setLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            const res = await axios.post('/api/auth/change-password',
+            const res = await axios.post('/api/Auth/change-password',
                 { currentPassword, newPassword, confirmPassword },
                 { headers: { Authorization: `Bearer ${token}` } }
             );

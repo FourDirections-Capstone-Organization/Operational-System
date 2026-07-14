@@ -14,6 +14,7 @@ import ConfirmationModal from '../../../components/ConfirmationModal/Confirmatio
 import StatCard from '../../../components/StatCard/StatCard';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import './OrgStructureTab.css';
+import api from '../../../api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,56 +91,6 @@ const toDisplayRole = (role: any): string => {
 };
 
 const PER_PAGE = 10;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const getAuthHeaders = (): HeadersInit => ({
-    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'Content-Type': 'application/json',
-});
-
-const apiGet = async <T,>(url: string): Promise<T | null> => {
-    try {
-        const res = await fetch(url, { headers: getAuthHeaders() });
-        if (!res.ok) return null;
-        const json = await res.json();
-        const d = json?.data ?? json;
-        return (d?.items ?? d ?? null) as T;
-    } catch { return null; }
-};
-
-const apiPost = async <T,>(url: string, body: any): Promise<{ ok: boolean; data?: T; message?: string }> => {
-    try {
-        const res = await fetch(url, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body) });
-        const json = await res.json();
-        if (!res.ok) return { ok: false, message: json.message || json.Message || 'Request failed' };
-        return { ok: true, data: json?.data ?? json };
-    } catch (err: any) {
-        return { ok: false, message: err.message || 'Network error' };
-    }
-};
-
-const apiPut = async <T,>(url: string, body: any): Promise<{ ok: boolean; data?: T; message?: string }> => {
-    try {
-        const res = await fetch(url, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(body) });
-        const json = await res.json();
-        if (!res.ok) return { ok: false, message: json.message || json.Message || 'Request failed' };
-        return { ok: true, data: json?.data ?? json };
-    } catch (err: any) {
-        return { ok: false, message: err.message || 'Network error' };
-    }
-};
-
-const apiDelete = async (url: string): Promise<{ ok: boolean; message?: string }> => {
-    try {
-        const res = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() });
-        const json = await res.json();
-        if (!res.ok) return { ok: false, message: json.message || json.Message || 'Request failed' };
-        return { ok: true };
-    } catch (err: any) {
-        return { ok: false, message: err.message || 'Network error' };
-    }
-};
 
 const buildName = (e: EmployeeDTO) => [e.firstName, e.middleName, e.lastName, e.suffix].filter(Boolean).join(' ');
 
@@ -394,14 +345,20 @@ function DepartmentsView({ departments, employees, onRefresh }: {
         const name = formName.trim();
         if (!name) { setApiErr('Department name is required.'); return; }
         setSubmitting(true); setApiErr('');
-        const res = editing
-            ? await apiPut(`/api/department/${editing.id}`, { name, description: formDesc.trim() || null })
-            : await apiPost('/api/department', { name, description: formDesc.trim() || null });
-        setSubmitting(false);
-        if (!res.ok) { setApiErr(res.message || 'Failed to save department.'); return; }
-        success(editing ? 'Department updated.' : 'Department created.');
-        setShowForm(false);
-        onRefresh();
+        try {
+            if (editing) {
+                await api.put(`/api/Department/${editing.id}`, { name, description: formDesc.trim() || null });
+            } else {
+                await api.post('/api/Department', { name, description: formDesc.trim() || null });
+            }
+            success(editing ? 'Department updated.' : 'Department created.');
+            setShowForm(false);
+            onRefresh();
+        } catch (err: any) {
+            setApiErr(err.response?.data?.message || err.response?.data?.Message || 'Failed to save department.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDelete = (d: DeptDTO) => {
@@ -418,11 +375,15 @@ function DepartmentsView({ departments, employees, onRefresh }: {
             description: <>Are you sure you want to deactivate <strong>{d.name}</strong>?</>,
             confirmLabel: 'Deactivate',
             onConfirm: async () => {
-                const res = await apiDelete(`/api/department/${d.id}`);
-                if (!res.ok) { error(res.message || 'Failed.'); setConfirm(CONFIRM_CLOSED); return; }
-                success('Department deactivated.');
-                setConfirm(CONFIRM_CLOSED);
-                onRefresh();
+                try {
+                    await api.delete(`/api/Department/${d.id}`);
+                    success('Department deactivated.');
+                    setConfirm(CONFIRM_CLOSED);
+                    onRefresh();
+                } catch (err: any) {
+                    error(err.response?.data?.message || err.response?.data?.Message || 'Failed.');
+                    setConfirm(CONFIRM_CLOSED);
+                }
             },
         });
     };
@@ -534,14 +495,20 @@ function PositionsView({ positions, departments, employees, onRefresh }: {
     const handleSubmit = async () => {
         if (!formName.trim() || !formDeptId) { setApiErr('Name and department are required.'); return; }
         setSubmitting(true); setApiErr('');
-        const res = editing
-            ? await apiPut(`/api/job-positions/${editing.id}`, { name: formName.trim(), departmentId: formDeptId })
-            : await apiPost('/api/job-positions', { name: formName.trim(), departmentId: formDeptId });
-        setSubmitting(false);
-        if (!res.ok) { setApiErr(res.message || 'Failed to save position.'); return; }
-        success(editing ? 'Position updated.' : 'Position created.');
-        setShowForm(false);
-        onRefresh();
+        try {
+            if (editing) {
+                await api.put(`/api/job-positions/${editing.id}`, { name: formName.trim(), departmentId: formDeptId });
+            } else {
+                await api.post('/api/job-positions', { name: formName.trim(), departmentId: formDeptId });
+            }
+            success(editing ? 'Position updated.' : 'Position created.');
+            setShowForm(false);
+            onRefresh();
+        } catch (err: any) {
+            setApiErr(err.response?.data?.message || err.response?.data?.Message || 'Failed to save position.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDelete = (p: PosDTO) => {
@@ -558,11 +525,15 @@ function PositionsView({ positions, departments, employees, onRefresh }: {
             description: <>Are you sure you want to deactivate <strong>{p.name}</strong>?</>,
             confirmLabel: 'Deactivate',
             onConfirm: async () => {
-                const res = await apiDelete(`/api/job-positions/${p.id}`);
-                if (!res.ok) { error(res.message || 'Failed.'); setConfirm(CONFIRM_CLOSED); return; }
-                success('Position deactivated.');
-                setConfirm(CONFIRM_CLOSED);
-                onRefresh();
+                try {
+                    await api.delete(`/api/job-positions/${p.id}`);
+                    success('Position deactivated.');
+                    setConfirm(CONFIRM_CLOSED);
+                    onRefresh();
+                } catch (err: any) {
+                    error(err.response?.data?.message || err.response?.data?.Message || 'Failed.');
+                    setConfirm(CONFIRM_CLOSED);
+                }
             },
         });
     };
@@ -688,19 +659,24 @@ function TransfersView({ employees, departments, positions, onRefresh }: {
 
     const doTransfer = async () => {
         setSubmitting(true); setApiErr('');
-        const res = await apiPost(`/api/transfer/${selectedEmp!.id}`, {
-            newDepartmentId: targetDeptId,
-            newJobPositionId: targetPosId,
-        });
-        setSubmitting(false);
-        if (!res.ok) { setApiErr(res.message || 'Transfer failed.'); setConfirmTransfer(false); return; }
-        success('Employee transferred successfully.');
-        const deptName = departments.find(d => d.id === targetDeptId)?.name || '';
-        const posName = positions.find(p => p.id === targetPosId)?.name || '';
-        setSuccessMsg(`${buildName(selectedEmp!)} transferred to ${deptName} (${posName})`);
-        setShowSuccess(true);
-        resetForm();
-        onRefresh();
+        try {
+            await api.post(`/api/Transfer/${selectedEmp!.id}`, {
+                newDepartmentId: targetDeptId,
+                newJobPositionId: targetPosId,
+            });
+            success('Employee transferred successfully.');
+            const deptName = departments.find(d => d.id === targetDeptId)?.name || '';
+            const posName = positions.find(p => p.id === targetPosId)?.name || '';
+            setSuccessMsg(`${buildName(selectedEmp!)} transferred to ${deptName} (${posName})`);
+            setShowSuccess(true);
+            resetForm();
+            onRefresh();
+        } catch (err: any) {
+            setApiErr(err.response?.data?.message || err.response?.data?.Message || 'Transfer failed.');
+            setConfirmTransfer(false);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const targetDept = departments.find(d => d.id === targetDeptId);
@@ -833,14 +809,23 @@ export default function OrgStructureTab() {
 
     const fetchAll = async () => {
         setLoading(true);
-        const [depts, pos, emps] = await Promise.all([
-            apiGet<DeptDTO[]>('/api/department'),
-            apiGet<PosDTO[]>('/api/job-positions'),
-            apiGet<EmployeeDTO[]>('/api/user'),
-        ]);
-        if (depts) setDepartments(depts);
-        if (pos) setPositions(pos);
-        if (emps) setEmployees(emps);
+        try {
+            const [deptRes, posRes, empRes] = await Promise.all([
+                api.get<DeptDTO[]>('/api/Department'),
+                api.get<PosDTO[]>('/api/job-positions'),
+                api.get<EmployeeDTO[]>('/api/user'),
+            ]);
+            const fromResponse = (res: { data: any }) => {
+                const d = res.data?.data ?? res.data;
+                return d?.items ?? d ?? null;
+            };
+            const depts = fromResponse(deptRes) as DeptDTO[] | null;
+            const pos = fromResponse(posRes) as PosDTO[] | null;
+            const emps = fromResponse(empRes) as EmployeeDTO[] | null;
+            if (depts) setDepartments(depts);
+            if (pos) setPositions(pos);
+            if (emps) setEmployees(emps);
+        } catch { /* silently ignore */ }
         setLoading(false);
     };
 

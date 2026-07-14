@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/Toast/Toast';
+import api from '../../api';
 import './login.css';
 
 /* ── Types ── */
@@ -101,34 +102,25 @@ export default function Login() {
         updateStatus('Authenticating...', 'info');
 
         try {
-            const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    identifier: employeeId.trim(),
-                    password,
-                }),
+            const response = await api.post<any>('/api/Auth/login', {
+                identifier: employeeId.trim(),
+                password,
             });
 
-            let data: any = null;
-            try {
-                data = await response.json();
-            } catch {
-                // Non-JSON response — use status text if available
-            }
+            const data = response.data;
 
-            if (!response.ok) {
-                const msg = data?.message ?? data?.Message ?? (response.statusText || '');
+            if (!data.isSuccess) {
+                const msg = data.message ?? data.Message ?? 'Login failed.';
                 const msgLower = msg.toLowerCase();
 
                 if (msgLower.includes('on leave') || msgLower.includes('onleave')) {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
+                            employeeName: data.employeeName ?? data.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
-                            overrideToken: data?.overrideToken,
-                            leaveId: data?.leaveId,
+                            overrideToken: data.overrideToken,
+                            leaveId: data.leaveId,
                         }
                     });
                     return;
@@ -138,7 +130,7 @@ export default function Login() {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
+                            employeeName: data.employeeName ?? data.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
                         }
                     });
@@ -155,7 +147,7 @@ export default function Login() {
             }
 
             // Unwrap ApiResponseDTO wrapper
-            const d = data?.data ?? data;
+            const d = data.data ?? data;
 
             const roleMap: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
             const roleStr = roleMap[d.role] ?? d.role?.toString?.() ?? '';
@@ -170,18 +162,26 @@ export default function Login() {
             localStorage.setItem('userRole', normalizedRole);
             localStorage.setItem('employeeId', d.employeeNumber ?? employeeId.trim());
             localStorage.setItem('isPasswordChanged', (d.isPasswordChanged ?? false).toString());
-            localStorage.setItem('contactNumber', d.contactNumber ?? d.contact ?? d.phoneNumber ?? '');
             localStorage.setItem('email', d.email ?? '');
-            localStorage.setItem('firstName', d.firstName ?? '');
-            localStorage.setItem('middleName', d.middleName ?? '');
-            localStorage.setItem('lastName', d.lastName ?? '');
-            localStorage.setItem('suffix', d.suffix ?? '');
 
-            const fullName = [d.firstName, d.middleName, d.lastName, d.suffix]
-                .map(s => (s ?? '').trim())
-                .filter(Boolean)
-                .join(' ');
-            localStorage.setItem('employeeName', fullName || d.employeeName || '');
+            // Fetch full profile to populate localStorage
+            try {
+                const meRes = await api.get<any>('/api/Auth/me');
+                const me = meRes.data?.data ?? meRes.data;
+                if (me) {
+                    localStorage.setItem('contactNumber', me.contactNumber ?? '');
+                    localStorage.setItem('firstName', me.firstName ?? '');
+                    localStorage.setItem('middleName', me.middleName ?? '');
+                    localStorage.setItem('lastName', me.lastName ?? '');
+                    localStorage.setItem('suffix', me.suffix ?? '');
+                    const fullName = [me.firstName, me.middleName, me.lastName, me.suffix]
+                        .filter(Boolean).join(' ');
+                    localStorage.setItem('employeeName', fullName || d.fullName || me.fullName || d.employeeName || '');
+                }
+            } catch {
+                // Fallback: use login response values
+                localStorage.setItem('employeeName', d.fullName || d.employeeName || '');
+            }
 
             updateStatus('Login successful. Redirecting...', 'success');
             success('Login successful! Welcome back.');

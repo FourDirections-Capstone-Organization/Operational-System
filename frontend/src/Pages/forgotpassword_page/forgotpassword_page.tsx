@@ -2,6 +2,7 @@
 import './forgotpassword_page.css';
 import { Link } from 'react-router-dom';
 import { Package, Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import api from '../../api';
 
 /* ── Reusable Feature Item ── */
 function FeatureItem({ title, description }: { title: string; description: string }) {
@@ -37,21 +38,13 @@ export default function ForgotPassword() {
         setStatus({ type: 'info', message: 'Sending reset link...' });
 
         try {
-            const res = await fetch('/api/auth/forgot-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to send reset link. Please try again.');
-            }
+            await api.post('/api/Auth/forgot-password', { email });
 
             setStep('sent');
             setStatus(null);
         } catch (err: any) {
-            setStatus({ type: 'error', message: err.message ?? 'Something went wrong. Please try again.' });
+            const msg = err?.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+            setStatus({ type: 'error', message: msg });
         } finally {
             setLoading(false);
         }

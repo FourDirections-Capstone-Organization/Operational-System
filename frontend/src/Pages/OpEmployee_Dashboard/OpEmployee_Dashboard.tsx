@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { HubConnectionBuilder, HubConnection } from '@microsoft/signalr';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -39,12 +38,12 @@ import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import { useToast } from '../../components/Toast/Toast';
 import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
 import StatCard from '../../components/StatCard/StatCard';
-import Digital201FileView from '../SystemAdmin_Dashboard/Digital201FileView/Digital201FileView';
-import ApprovalTracker, { TrackerData } from '../../components/ApprovalTracker/ApprovalTracker';
+
 import FormModal from '../../components/FormModal/FormModal';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable from '../../components/ui/DataTable';
 import TaskComments from '../../components/TaskComments/TaskComments';
+import api from '../../api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@ const getAccountIdFromToken = (): string => {
 
 type Priority = 'high' | 'medium' | 'low';
 type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
-type NavTab = 'dashboard' | 'my-tasks' | 'profile' | 'digital_201' | 'activity_logs';
+type NavTab = 'dashboard' | 'my-tasks' | 'profile' | 'activity_logs';
 
 interface Task {
     id: string;
@@ -113,13 +112,6 @@ interface UserProfile {
     accountStatus: string;
     presenceStatus?: string;
 }
-
-// ─── API Helpers ──────────────────────────────────────────────────────────────
-
-const authHeader = (): HeadersInit => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
-});
 
 const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
 const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -236,7 +228,6 @@ const NAV_GROUPS: { label: string; items: { tab: NavTab; icon: React.FC<any>; la
     {
         label: 'PERSONAL',
         items: [
-            { tab: 'digital_201', icon: FileText, label: 'Digital 201 File' },
             { tab: 'profile', icon: UserCircle2, label: 'Profile' },
             { tab: 'activity_logs', icon: Activity, label: 'Activity Logs' },
         ],
@@ -541,53 +532,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     const urgent = filteredTasks.filter(t => t.priority === 'high' && t.status !== 'completed');
     const firstName = user.fullName ? user.fullName.split(' ')[0] : 'Employee';
     const initials = getInitials(user.fullName);
-    const [recentTrackers, setRecentTrackers] = useState<TrackerData[]>([]);
-    const [activeTrackerCount, setActiveTrackerCount] = useState(0);
-    const [trackersLoading, setTrackersLoading] = useState(true);
-
-    const fetchRecentTrackers = async () => {
-        try {
-            const res = await fetch('/api/approvalrequests/my-trackers?pageSize=5', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (res.ok) {
-                const json = await res.json();
-                const list = json?.data?.data ?? json?.data ?? json ?? [];
-                setRecentTrackers(Array.isArray(list) ? list : []);
-                setActiveTrackerCount(json?.data?.activeCount ?? list.filter((t: any) => t.status === 'Pending').length);
-            }
-        } catch { /* silent */ }
-        finally { setTrackersLoading(false); }
-    };
-
-    useEffect(() => { fetchRecentTrackers(); }, []);
-
-    const trackerConnectionRef = useRef<HubConnection | null>(null);
-
-    useEffect(() => {
-        const accountId = localStorage.getItem('employeeId');
-        if (!accountId) return;
-
-        const conn = new HubConnectionBuilder()
-            .withUrl('/hubs/workflow')
-            .withAutomaticReconnect()
-            .build();
-
-        conn.on('TrackerUpdated', () => {
-            fetchRecentTrackers();
-        });
-
-        conn.start().then(() => {
-            conn.invoke('JoinUserGroup', accountId).catch(() => {});
-        }).catch(() => {});
-
-        trackerConnectionRef.current = conn;
-
-        return () => {
-            conn.stop().catch(() => {});
-        };
-    }, []);
-
     return (
         <div className="tab-content">
             <div className="welcome-banner">
@@ -694,27 +638,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                     </div>
                 </div>
 
-                <div className="card" style={{ marginTop: 16 }}>
-                    <div className="card-header-layout">
-                        <h3><Shield size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} />Pending Approvals</h3>
-                        {activeTrackerCount > 0 && (
-                            <span className="badge badge-purple" style={{ fontSize: 12 }}>{activeTrackerCount} active</span>
-                        )}
-                    </div>
-                    {trackersLoading ? (
-                        <EmptyState icon={<Loader2 size={18} className="spin" />} title="Loading trackers..." />
-                    ) : recentTrackers.length === 0 ? (
-                        <EmptyState icon={<Shield size={22} />} title="No approval requests yet" />
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 4px' }}>
-                            {recentTrackers.slice(0, 3).map(t => (
-                                <div key={t.approvalRequestId} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', background: t.status === 'Pending' ? 'rgba(67,24,255,0.03)' : 'transparent' }}>
-                                    <ApprovalTracker tracker={t} compact />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+
             </div>
         </div>
     );
@@ -872,12 +796,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
         setGateError('');
         try {
             const employeeId = localStorage.getItem('employeeId') ?? '';
-            const verifyRes = await fetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: authHeader(),
-                body: JSON.stringify({ employeeID: employeeId, password: gatePassword }),
-            });
-            const verifyData = await verifyRes.json().catch(() => ({}));
+            const verifyRes = await api.post('/api/Auth/verify-password', { employeeID: employeeId, password: gatePassword });
+            const verifyData = verifyRes.data;
             if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
             setPasswordGate(false);
             setGatePassword('');
@@ -904,18 +824,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             formData.append('contactNumber', form.contactNumber.trim());
             formData.append('email', form.email.trim());
 
-            const token = localStorage.getItem('authToken') ?? '';
-            const res = await fetch(`/api/profile/update-profile?employeeNumber=${encodeURIComponent(employeeId)}`, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                body: formData,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Profile update failed.');
-            }
+            await api.uploadPut(`/api/Profile/update-profile?employeeNumber=${encodeURIComponent(employeeId)}`, formData);
             const newFullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
             localStorage.setItem('employeeName', newFullName);
             localStorage.setItem('firstName', firstName);
@@ -927,7 +836,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             success('Profile updated successfully.');
             setEditMode(false);
         } catch (err: any) {
-            error(err.message ?? 'Something went wrong.');
+            error(err?.response?.data?.message ?? 'Something went wrong.');
         } finally {
             setProfileSaving(false);
         }
@@ -972,23 +881,15 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     const handleChangePwd = async () => {
         setPwdError('');
         if (!pwd.current) { setPwdError('Current password is required.'); return; }
-        if (pwd.next.length < 6) { setPwdError('New password must be at least 6 characters.'); return; }
+        if (pwd.next.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
         if (pwd.next !== pwd.confirm) { setPwdError('Passwords do not match.'); return; }
         setPwdSaving(true);
         try {
-            const res = await fetch('/api/auth/change-password', {
-                method: 'PATCH',
-                headers: authHeader(),
-                body: JSON.stringify({ currentPassword: pwd.current, newPassword: pwd.next }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Password update failed.');
-            }
+            await api.patch('/api/Auth/change-password', { currentPassword: pwd.current, newPassword: pwd.next });
             setPwdMode(false);
             setPwd({ current: '', next: '', confirm: '' });
         } catch (err: any) {
-            setPwdError(err.message ?? 'Something went wrong.');
+            setPwdError(err?.response?.data?.message ?? 'Something went wrong.');
         } finally {
             setPwdSaving(false);
         }
@@ -1305,30 +1206,26 @@ export default function EmployeeDashboard() {
     const [activityLogTotalPages, setActivityLogTotalPages] = useState(1);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
 
-    const fetchActivityLogs = (page: number) => {
-        const t = localStorage.getItem('authToken');
-        if (!t) return;
-        fetch(`/api/activity-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' })
-            .then(res => { if (!res.ok) return null; return res.json(); })
-            .then(data => {
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]));
+    const fetchActivityLogs = async (page: number) => {
+        try {
+            const res = await api.get(`/api/audit-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`);
+            const data = res.data;
+            if (data && Array.isArray(data.data)) {
+                setActivityLogs(data.data);
+                setActivityLogPage(data.pageNumber || page);
+                setActivityLogTotalPages(data.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        }
     };
 
     const handleLogout = async () => {
         const token = localStorage.getItem('authToken');
         if (token) {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            }).catch(() => { });
+            await api.post('/api/Auth/logout').catch(() => { });
         }
         ['employeeId', 'refreshToken', 'authToken', 'employeeName', 'contactNumber', 'role']
             .forEach(k => localStorage.removeItem(k));
@@ -1339,13 +1236,8 @@ export default function EmployeeDashboard() {
         setTasksLoading(true);
         setTasksError('');
         try {
-            const res = await fetch('/api/task?pageNumber=1&pageSize=500', { headers: authHeader() });
-            if (res.status === 401) { handleLogout(); return; }
-            if (!res.ok) {
-                setTasks([]);
-                return;
-            }
-            const json = await res.json();
+            const res = await api.get('/api/Task?pageNumber=1&pageSize=200');
+            const json = res.data;
             const rawList: TaskResponseDTO[] = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             setTasks(rawList.map(dtoToTask));
         } catch {
@@ -1360,9 +1252,9 @@ export default function EmployeeDashboard() {
         const employeeId = localStorage.getItem('employeeId');
         if (!token || !employeeId) { setLoadingUser(false); return; }
 
-        fetch('/api/auth/me', { headers: authHeader() })
-            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then((resJson: any) => {
+        api.get('/api/Auth/me')
+            .then((res: any) => {
+                const resJson = res.data;
                 if (!resJson || !resJson.isSuccess || !resJson.data) throw new Error('Invalid response structure');
                 const data = resJson.data;
                 const fetchedFullName = (data.firstName || data.lastName)
@@ -1410,18 +1302,11 @@ export default function EmployeeDashboard() {
         id: string, status: TaskStatus, progress: number, remarks: string
     ): Promise<void> => {
         const newStatus = STATUS_TO_BACKEND[status] ?? 1;
-        const res = await fetch(`/api/task/${id}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
-            },
-            body: JSON.stringify({ newStatus, progressNotes: remarks.trim() || undefined }),
-        });
-        if (res.status === 401) { handleLogout(); return; }
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error((err as any).message || (err as any).Message || 'Failed to update task progress.');
+        try {
+            await api.patch(`/api/Task/${id}/status`, { newStatus, progressNotes: remarks.trim() || undefined });
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to update task progress.';
+            throw new Error(msg);
         }
         setTasks(ts => ts.map(t => t.id === id ? {
             ...t,
@@ -1439,7 +1324,6 @@ export default function EmployeeDashboard() {
         dashboard: 'My Dashboard',
         'my-tasks': 'My Tasks',
         profile: 'My Profile',
-        digital_201: 'My Digital 201 File',
         activity_logs: 'Activity Logs',
     };
 
@@ -1510,7 +1394,7 @@ export default function EmployeeDashboard() {
             <main className="main-viewport">
                 <DashboardHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/notification/my-notifications"
+                    notificationApi="/api/Notification"
                     userInitials={initials}
                     onSettingsClick={() => setActiveTab('profile')}
                     onLogout={handleLogout}
@@ -1532,14 +1416,6 @@ export default function EmployeeDashboard() {
                 )}
                 {activeTab === 'profile' && (
                     <ProfileTab user={user} onUpdateUser={setUser} />
-                )}
-                {activeTab === 'digital_201' && (
-                    <div className="tab-content" style={{ padding: '0 28px 28px' }}>
-                        <Digital201FileView
-                            employeeNumber={user.employeeId}
-                            readOnly={false}
-                        />
-                    </div>
                 )}
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>

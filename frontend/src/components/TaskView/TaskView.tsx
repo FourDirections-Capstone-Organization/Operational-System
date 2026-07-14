@@ -7,6 +7,8 @@ import {
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
 import StatusBadge from '../ui/StatusBadge';
+import api from '../../api';
+import axios from 'axios';
 import './TaskView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -170,11 +172,9 @@ const TaskView: React.FC<TaskViewProps> = ({
         if (!task.taskId) return;
         setAttachmentsLoading(true);
         try {
-            const res = await fetch(`/api/tasks/${task.taskId}/attachments`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                const json = await res.json();
+            const res = await api.get<any>(`/api/tasks/${task.taskId}/attachments`);
+            const json = res.data;
+            if (res.status === 200) {
                 const raw = json?.data?.items ?? json?.data ?? json;
                 setAttachments(Array.isArray(raw) ? raw.map((a: any) => ({
                     id: a.id,
@@ -199,11 +199,11 @@ const TaskView: React.FC<TaskViewProps> = ({
 
     const handleDownload = async (attachmentId: string, fileName: string) => {
         try {
-            const res = await fetch(`/api/attachments/${attachmentId}/download`, {
+            const res = await axios.get(`/api/attachments/${attachmentId}/download`, {
+                responseType: 'blob',
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error('Download failed');
-            const blob = await res.blob();
+            const blob = res.data;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -262,12 +262,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     // ── Review actions ──
     const handleRequestReview = async () => {
         try {
-            const res = await fetch(`/api/task/${task.taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify({ newStatus: 'DonePendingReview' }),
-            });
-            if (!res.ok) return;
+            await api.patch(`/api/Task/${task.taskId}/status`, { newStatus: 'DonePendingReview' });
             setReviewState('pending_review');
             setLocalStatus('Done/Pending Review');
             setReviewHistory(prev => [...prev, {
@@ -764,14 +759,8 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 onClick={async () => {
                                     if (!holdReason.trim()) return;
                                     setHolding(true);
-                                    const token = localStorage.getItem('authToken');
                                     try {
-                                        const res = await fetch(`/api/task/${task.taskId}/hold`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ holdReason: holdReason.trim() }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Hold failed.'); }
+                                        await api.patch(`/api/Task/${task.taskId}/hold`, { holdReason: holdReason.trim() });
                                         setLocalStatus('On Hold');
                                         setShowHold(false);
                                         setHoldReason('');
@@ -815,14 +804,8 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 onClick={async () => {
                                     if (!revisedDeadline) return;
                                     setResuming(true);
-                                    const token = localStorage.getItem('authToken');
                                     try {
-                                        const res = await fetch(`/api/task/${task.taskId}/resume`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ revisedDeadline: new Date(revisedDeadline).toISOString() }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Resume failed.'); }
+                                        await api.patch(`/api/Task/${task.taskId}/resume`, { revisedDeadline: new Date(revisedDeadline).toISOString() });
                                         setLocalStatus(task.taskStatus === 'On Hold' ? task.taskStatus : 'In Progress');
                                         setShowResume(false);
                                     } catch (err: any) {
@@ -863,14 +846,8 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 onClick={async () => {
                                     if (!cancelReason.trim()) return;
                                     setCancelling(true);
-                                    const token = localStorage.getItem('authToken');
                                     try {
-                                        const res = await fetch(`/api/task/${task.taskId}/cancel`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ cancellationReason: cancelReason.trim(), isConfirmed: true }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Cancellation failed.'); }
+                                        await api.patch(`/api/Task/${task.taskId}/cancel`, { cancellationReason: cancelReason.trim(), isConfirmed: true });
                                         setLocalStatus('Cancelled');
                                         setShowCancel(false);
                                         setCancelReason('');
