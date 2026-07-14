@@ -105,6 +105,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 
 // Hosted Services
