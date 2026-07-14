@@ -145,7 +145,7 @@ export default function Login() {
                     return;
                 }
 
-                if (msgLower.includes('verified') || msgLower.includes('unverified') || msgLower.includes('verify your email') || msgLower.includes('email not verified')) {
+                if (msgLower.includes('verified') || msgLower.includes('unverified') || msgLower.includes('verification') || msgLower.includes('verify your email') || msgLower.includes('email not verified')) {
                     updateStatus('Your account is not yet verified. Please check your email for the verification link.', 'error');
                     return;
                 }

@@ -21,7 +21,7 @@ function VerifyEmail() {
                 return;
             }
             try {
-                await axios.get(`/api/auth/verify-email?token=${token}`);
+                await axios.post('/api/email-verification/verify', { token });
                 setState("success");
             } catch (error: any) {
                 console.log("Error response:", error.response?.data); 
@@ -137,9 +137,9 @@ function VerifyEmail() {
                                     </div>
                                 </div>
                                 <div className="ev-btn-group">
-                                    <a href="/resend-verification" className="ev-btn ev-btn--dark">
-                                        Resend Verification Email
-                                    </a>
+                                    <p className="ev-resend-note">
+                                        Contact your manager to request a new verification email.
+                                    </p>
                                     <a href="/" className="ev-btn ev-btn--outline">
                                         Back to Login
                                     </a>
