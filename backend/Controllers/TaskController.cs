@@ -34,7 +34,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var creatorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _taskService.CreateAsync(dto, creatorId);
+        var ipAddress = GetIpAddress();
+        var result = await _taskService.CreateAsync(dto, creatorId, ipAddress);
         if (!result.IsSuccess)
             return BadRequest(result);
 
@@ -104,7 +105,8 @@ public class TaskController : ControllerBase
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _taskService.UpdateAsync(id, dto, requestUserId);
+        var ipAddress = GetIpAddress();
+        var result = await _taskService.UpdateAsync(id, dto, requestUserId, ipAddress);
         if (!result.IsSuccess)
         {
             if (result.Message.Contains("not found"))
@@ -114,6 +116,15 @@ public class TaskController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    private string? GetIpAddress()
+    {
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+            return forwardedFor.Split(',').First().Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 
     [HttpGet("assignable-users")]

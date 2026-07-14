@@ -4,6 +4,7 @@ using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.Notifications;
+using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.TaskManagement;
 
@@ -12,15 +13,17 @@ public class TaskService : ITaskService
     private readonly AppDbContext _db;
     private readonly INotificationService _notificationService;
     private readonly IDashboardService _dashboardService;
+    private readonly IAuditLogService _auditLogService;
 
-    public TaskService(AppDbContext db, INotificationService notificationService, IDashboardService dashboardService)
+    public TaskService(AppDbContext db, INotificationService notificationService, IDashboardService dashboardService, IAuditLogService auditLogService)
     {
         _db = db;
         _notificationService = notificationService;
         _dashboardService = dashboardService;
+        _auditLogService = auditLogService;
     }
 
-    public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId)
+    public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId, string? ipAddress = null)
     {
         var creator = await _db.Users.FindAsync(creatorId);
         if (creator is null)
@@ -110,6 +113,15 @@ public class TaskService : ITaskService
         }
 
         await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            creatorId,
+            AuditActionType.Create,
+            "Task",
+            task.Id,
+            ipAddress,
+            $"Task '{task.Title}' created",
+            "TaskManagement");
 
         if (assignedUserIds.Count > 0)
         {
@@ -233,7 +245,7 @@ public class TaskService : ITaskService
         return ApiResponseDTO<TaskResponseDTO>.Success(await MapToResponseDTOAsync(task));
     }
 
-    public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateAsync(Guid id, UpdateTaskDTO dto, Guid requestUserId)
+    public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateAsync(Guid id, UpdateTaskDTO dto, Guid requestUserId, string? ipAddress = null)
     {
         var task = await _db.Tasks
             .Include(t => t.Assignments)
@@ -257,6 +269,10 @@ public class TaskService : ITaskService
 
         if (task.Status == Models.Enums.TaskStatus.Cancelled)
             return ApiResponseDTO<TaskResponseDTO>.Failure("Cannot modify a cancelled task");
+
+        var oldTitle = task.Title;
+        var oldStatus = task.Status.ToString();
+        var oldPriority = task.PriorityLevel.ToString();
 
         if (!string.IsNullOrWhiteSpace(dto.Title))
             task.Title = dto.Title.Trim();
@@ -328,6 +344,25 @@ public class TaskService : ITaskService
 
         task.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        var changes = new List<string>();
+        if (oldTitle != task.Title) changes.Add("title");
+        if (oldStatus != task.Status.ToString()) changes.Add("status");
+        if (oldPriority != task.PriorityLevel.ToString()) changes.Add("priority");
+
+        if (changes.Count > 0)
+        {
+            await _auditLogService.LogAsync(
+                requestUserId,
+                AuditActionType.Update,
+                "Task",
+                task.Id,
+                ipAddress,
+                $"Task updated: {string.Join(", ", changes)}",
+                "TaskManagement",
+                oldValue: $"{{\"Title\":\"{oldTitle}\",\"Status\":\"{oldStatus}\",\"Priority\":\"{oldPriority}\"}}",
+                newValue: $"{{\"Title\":\"{task.Title}\",\"Status\":\"{task.Status}\",\"Priority\":\"{task.PriorityLevel}\"}}");
+        }
 
         var currentAssigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
         if (currentAssigneeIds.Count > 0)
