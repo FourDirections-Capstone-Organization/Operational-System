@@ -101,12 +101,15 @@ builder.Services.AddScoped<ITaskTemplateService, TaskTemplateService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<ITaskCommentService, TaskCommentService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 
 
 // Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
 builder.Services.AddHostedService<RecurringTaskGenerator>();
 
+
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 var app = builder.Build();
 
