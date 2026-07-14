@@ -19,15 +19,18 @@ public class JobPositionController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? departmentId)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] Guid? departmentId = null)
     {
         if (departmentId.HasValue)
         {
-            var result = await _jobPositionService.GetByDepartmentAsync(departmentId.Value);
+            var result = await _jobPositionService.GetByDepartmentAsync(departmentId.Value, pageNumber, pageSize);
             return Ok(result);
         }
 
-        var allResult = await _jobPositionService.GetAllAsync();
+        var allResult = await _jobPositionService.GetAllAsync(pageNumber, pageSize);
         return Ok(allResult);
     }
 

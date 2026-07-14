@@ -12,14 +12,16 @@ public interface IDashboardService
         Guid? requestUserDepartmentId,
         DashboardFilterDTO? filters = null);
 
-    Task<ApiResponseDTO<List<DepartmentWorkloadDTO>>> GetWorkloadByDepartmentAsync(
+    Task<ApiResponseDTO<PaginatedResponseDTO<DepartmentWorkloadDTO>>> GetWorkloadByDepartmentAsync(
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId,
+        int pageNumber = 1,
+        int pageSize = 10,
         DashboardFilterDTO? filters = null);
 
-    Task<ApiResponseDTO<List<EmployeeAvailabilityResponseDTO>>> GetEmployeeAvailabilityAsync(
-        Guid? departmentId = null);
+    Task<ApiResponseDTO<PaginatedResponseDTO<EmployeeAvailabilityResponseDTO>>> GetEmployeeAvailabilityAsync(
+        int pageNumber = 1, int pageSize = 10, Guid? departmentId = null);
 
     Task<ApiResponseDTO<bool>> ValidateAssigneeAvailabilityAsync(Guid userId);
 }

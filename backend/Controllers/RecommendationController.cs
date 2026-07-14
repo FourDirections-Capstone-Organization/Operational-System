@@ -35,9 +35,12 @@ public class RecommendationController : ControllerBase
     }
 
     [HttpGet("tasks/{taskId:guid}/recommendations")]
-    public async Task<IActionResult> GetByTask(Guid taskId)
+    public async Task<IActionResult> GetByTask(
+        Guid taskId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _recommendationService.GetByTaskIdAsync(taskId);
+        var result = await _recommendationService.GetByTaskIdAsync(taskId, pageNumber, pageSize);
         if (!result.IsSuccess)
             return NotFound(result);
 
@@ -48,10 +51,12 @@ public class RecommendationController : ControllerBase
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> GetByAssignee(
         Guid userId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null)
     {
-        var result = await _recommendationService.GetByAssigneeIdAsync(userId, dateFrom, dateTo);
+        var result = await _recommendationService.GetByAssigneeIdAsync(userId, pageNumber, pageSize, dateFrom, dateTo);
         return Ok(result);
     }
 }

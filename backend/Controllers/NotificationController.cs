@@ -18,13 +18,15 @@ public class NotificationController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var recipientId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _notificationService.GetByRecipientAsync(recipientId);
+        var result = await _notificationService.GetByRecipientAsync(recipientId, pageNumber, pageSize);
         return Ok(result);
     }
 

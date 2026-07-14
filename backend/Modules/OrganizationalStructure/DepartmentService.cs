@@ -14,13 +14,22 @@ public class DepartmentService : IDepartmentService
         _db = db;
     }
 
-    public async Task<ApiResponseDTO<List<DepartmentResponseDTO>>> GetAllAsync()
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<DepartmentResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10)
     {
-        var departments = await _db.Departments
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = _db.Departments
             .Where(d => d.IsActive)
             .Include(d => d.Users)
-            .Include(d => d.JobPositions)
+            .Include(d => d.JobPositions);
+
+        var totalCount = await query.CountAsync();
+
+        var departments = await query
             .OrderBy(d => d.Name)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(d => new DepartmentResponseDTO
             {
                 Id = d.Id,
@@ -33,7 +42,15 @@ public class DepartmentService : IDepartmentService
             })
             .ToListAsync();
 
-            return ApiResponseDTO<List<DepartmentResponseDTO>>.Success(departments);
+            var paginatedResult = new PaginatedResponseDTO<DepartmentResponseDTO>
+            {
+                Items = departments,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+
+            return ApiResponseDTO<PaginatedResponseDTO<DepartmentResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<DepartmentResponseDTO>> GetByIdAsync(Guid id)

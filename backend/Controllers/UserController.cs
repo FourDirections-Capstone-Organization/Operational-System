@@ -35,12 +35,14 @@ public class UserController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
         [FromQuery] string? role = null,
         [FromQuery] Guid? departmentId = null
     )
     {
-        var result = await _userService.GetAllAsync(search, role, departmentId);
+        var result = await _userService.GetAllAsync(pageNumber, pageSize, search, role, departmentId);
         return Ok(result);
     }
 

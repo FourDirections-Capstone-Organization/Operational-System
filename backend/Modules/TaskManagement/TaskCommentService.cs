@@ -118,16 +118,25 @@ public class TaskCommentService : ITaskCommentService
             "Comment added successfully");
     }
 
-    public async Task<ApiResponseDTO<List<TaskCommentResponseDTO>>> GetByTaskIdAsync(Guid taskId)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskCommentResponseDTO>>> GetByTaskIdAsync(Guid taskId, int pageNumber = 1, int pageSize = 10)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var taskExists = await _db.Tasks.AnyAsync(t => t.Id == taskId);
         if (!taskExists)
-            return ApiResponseDTO<List<TaskCommentResponseDTO>>.Failure("Task not found");
+            return ApiResponseDTO<PaginatedResponseDTO<TaskCommentResponseDTO>>.Failure("Task not found");
 
-        var comments = await _db.TaskComments
+        var query = _db.TaskComments
             .Include(c => c.Author)
-            .Where(c => c.TaskId == taskId && !c.IsDeleted)
+            .Where(c => c.TaskId == taskId && !c.IsDeleted);
+
+        var totalCount = await query.CountAsync();
+
+        var comments = await query
             .OrderBy(c => c.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = new List<TaskCommentResponseDTO>();
@@ -136,7 +145,15 @@ public class TaskCommentService : ITaskCommentService
             response.Add(await MapToResponseDTOAsync(comment));
         }
 
-        return ApiResponseDTO<List<TaskCommentResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<TaskCommentResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<TaskCommentResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<TaskCommentResponseDTO>> UpdateAsync(

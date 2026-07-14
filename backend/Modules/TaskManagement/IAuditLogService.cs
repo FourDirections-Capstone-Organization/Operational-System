@@ -18,7 +18,7 @@ public interface IAuditLogService
         string? oldValue = null,
         string? newValue = null);
 
-    Task<ApiResponseDTO<List<AuditLogResponseDTO>>> GetAllAsync(AuditLogFilterDTO? filters = null);
+    Task<ApiResponseDTO<PaginatedResponseDTO<AuditLogResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10, AuditLogFilterDTO? filters = null);
 
     Task<ApiResponseDTO<AuditLogResponseDTO>> GetByIdAsync(Guid id);
 

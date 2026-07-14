@@ -24,6 +24,8 @@ public class AuditLogController : ControllerBase
     [HttpGet]
     [Authorize(Policy = AuthorizationPolicies.CanAccessAuditLogs)]
     public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] DateTime? dateRangeStart = null,
         [FromQuery] DateTime? dateRangeEnd = null,
         [FromQuery] Guid? userId = null,
@@ -47,7 +49,7 @@ public class AuditLogController : ControllerBase
             TargetEntity = targetEntity
         };
 
-        var result = await _auditLogService.GetAllAsync(filters);
+        var result = await _auditLogService.GetAllAsync(pageNumber, pageSize, filters);
         return Ok(result);
     }
 

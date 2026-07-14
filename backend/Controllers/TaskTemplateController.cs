@@ -35,9 +35,11 @@ public class TaskTemplateController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _templateService.GetAllAsync();
+        var result = await _templateService.GetAllAsync(pageNumber, pageSize);
         return Ok(result);
     }
 

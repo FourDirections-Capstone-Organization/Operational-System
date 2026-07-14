@@ -108,8 +108,11 @@ public class UserService : IUserService
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User registered successfully. Verification email sent.");
     }
 
-    public async Task<ApiResponseDTO<List<UserResponseDTO>>> GetAllAsync(string? search = null, string? role = null, Guid? departmentId = null)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<UserResponseDTO>>> GetAllAsync(int pageNumber = 1, int pageSize = 10, string? search = null, string? role = null, Guid? departmentId = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _db.Users
             .Include(u => u.Department)
             .Include(u => u.JobPosition)
@@ -136,14 +139,26 @@ public class UserService : IUserService
             query = query.Where(u => u.DepartmentId == departmentId.Value);
         }
 
+        var totalCount = await query.CountAsync();
+
         var users = await query
             .OrderBy(u => u.LastName)
             .ThenBy(u => u.FirstName)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = users.Select(MapToResponseDTO).ToList();
 
-        return ApiResponseDTO<List<UserResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<UserResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<UserResponseDTO>>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<UserResponseDTO>> GetByIdAsync(Guid id)

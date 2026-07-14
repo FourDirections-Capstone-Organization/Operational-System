@@ -44,6 +44,8 @@ public class TaskController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] Models.Enums.TaskStatus? status = null,
         [FromQuery] PriorityLevel? priority = null,
         [FromQuery] TaskClassification? classification = null,
@@ -69,6 +71,7 @@ public class TaskController : ControllerBase
 
         var result = await _taskService.GetAllAsync(
             requestUserId, requestUserRole, requestUserDepartmentId,
+            pageNumber, pageSize,
             status, priority, classification, assignedToUserId, departmentId, search);
         return Ok(result);
     }
@@ -119,9 +122,11 @@ public class TaskController : ControllerBase
     }
 
     [HttpGet("assignable-users")]
-    public async Task<IActionResult> GetAssignableUsers()
+    public async Task<IActionResult> GetAssignableUsers(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var result = await _taskService.GetAssignableUsersAsync();
+        var result = await _taskService.GetAssignableUsersAsync(pageNumber, pageSize);
         return Ok(result);
     }
 

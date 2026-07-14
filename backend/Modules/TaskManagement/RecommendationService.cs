@@ -59,18 +59,27 @@ public class RecommendationService : IRecommendationService
             "Recommendation saved successfully");
     }
 
-    public async Task<ApiResponseDTO<List<RecommendationResponseDTO>>> GetByTaskIdAsync(Guid taskId)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<RecommendationResponseDTO>>> GetByTaskIdAsync(Guid taskId, int pageNumber = 1, int pageSize = 10)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var taskExists = await _db.Tasks.AnyAsync(t => t.Id == taskId);
         if (!taskExists)
-            return ApiResponseDTO<List<RecommendationResponseDTO>>.Failure("Task not found");
+            return ApiResponseDTO<PaginatedResponseDTO<RecommendationResponseDTO>>.Failure("Task not found");
 
-        var recommendations = await _db.Recommendations
+        var query = _db.Recommendations
             .Include(r => r.Task)
             .Include(r => r.Assignee)
             .Include(r => r.Coordinator)
-            .Where(r => r.TaskId == taskId)
+            .Where(r => r.TaskId == taskId);
+
+        var totalCount = await query.CountAsync();
+
+        var recommendations = await query
             .OrderByDescending(r => r.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = new List<RecommendationResponseDTO>();
@@ -79,12 +88,23 @@ public class RecommendationService : IRecommendationService
             response.Add(await MapToResponseDTOAsync(rec));
         }
 
-        return ApiResponseDTO<List<RecommendationResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<RecommendationResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<RecommendationResponseDTO>>.Success(paginatedResult);
     }
 
-    public async Task<ApiResponseDTO<List<RecommendationResponseDTO>>> GetByAssigneeIdAsync(
-        Guid assigneeId, DateTime? dateFrom = null, DateTime? dateTo = null)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<RecommendationResponseDTO>>> GetByAssigneeIdAsync(
+        Guid assigneeId, int pageNumber = 1, int pageSize = 10, DateTime? dateFrom = null, DateTime? dateTo = null)
     {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _db.Recommendations
             .Include(r => r.Task)
             .Include(r => r.Assignee)
@@ -98,8 +118,12 @@ public class RecommendationService : IRecommendationService
         if (dateTo.HasValue)
             query = query.Where(r => r.CreatedAt <= dateTo.Value);
 
+        var totalCount = await query.CountAsync();
+
         var recommendations = await query
             .OrderBy(r => r.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         var response = new List<RecommendationResponseDTO>();
@@ -108,7 +132,15 @@ public class RecommendationService : IRecommendationService
             response.Add(await MapToResponseDTOAsync(rec));
         }
 
-        return ApiResponseDTO<List<RecommendationResponseDTO>>.Success(response);
+        var paginatedResult = new PaginatedResponseDTO<RecommendationResponseDTO>
+        {
+            Items = response,
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize
+        };
+
+        return ApiResponseDTO<PaginatedResponseDTO<RecommendationResponseDTO>>.Success(paginatedResult);
     }
 
     private async Task<RecommendationResponseDTO> MapToResponseDTOAsync(Recommendation rec)

@@ -66,6 +66,8 @@ public class DashboardController : ControllerBase
     [HttpGet("workload/department")]
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> GetWorkloadByDepartment(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] DateTime? dateRangeStart = null,
         [FromQuery] DateTime? dateRangeEnd = null,
         [FromQuery] Guid? departmentId = null)
@@ -94,16 +96,18 @@ public class DashboardController : ControllerBase
         };
 
         var result = await _dashboardService.GetWorkloadByDepartmentAsync(
-            requestUserId, requestUserRole, requestUserDepartmentId, filters);
+            requestUserId, requestUserRole, requestUserDepartmentId, pageNumber, pageSize, filters);
         return Ok(result);
     }
 
     [HttpGet("employee-availability")]
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> GetEmployeeAvailability(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
         [FromQuery] Guid? departmentId = null)
     {
-        var result = await _dashboardService.GetEmployeeAvailabilityAsync(departmentId);
+        var result = await _dashboardService.GetEmployeeAvailabilityAsync(pageNumber, pageSize, departmentId);
         return Ok(result);
     }
 }
