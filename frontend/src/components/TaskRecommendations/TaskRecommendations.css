@@ -1,7 +1,8 @@
 .tr-container {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    height: 100%;
+    overflow: hidden;
 }
 
 .tr-header {
@@ -63,12 +64,13 @@
 }
 
 .tr-list {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 0 14px;
-    max-height: 260px;
+    padding: 8px 14px;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .tr-empty {

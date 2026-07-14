@@ -54,7 +54,6 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const unreadCount = notifTotalUnread;
-    const baseUrl = apiEndpoint.substring(0, apiEndpoint.lastIndexOf('/'));
 
     const visibleNotifs = activeTab === 'unread'
         ? notifs.filter(n => !n.isRead)
@@ -64,20 +63,23 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         try {
             const p = page ?? notifPage;
             const token = localStorage.getItem('authToken');
-            const sep = apiEndpoint.includes('?') ? '&' : '?';
-            const res = await fetch(`${apiEndpoint}${sep}pageNumber=${p}&pageSize=${NOTIF_PAGE_SIZE}`, {
+            const res = await fetch(apiEndpoint, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error();
             const json = await res.json();
-            const paginated = json?.data ?? json;
-            const list: NotificationItem[] = Array.isArray(paginated)
-                ? paginated
-                : paginated?.data ?? paginated?.notifications ?? paginated?.items ?? [];
-            const totalPages = paginated?.totalPages ?? 1;
-            const totalRecords = paginated?.totalRecords ?? list.length;
-            const totalUnread = paginated?.totalUnread ?? list.filter((n: NotificationItem) => !n.isRead).length;
-            setNotifTotalPages(totalPages);
+            const rawList: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            const list: NotificationItem[] = rawList.map((n: any) => ({
+                notificationId: n.id ?? n.notificationId,
+                taskId: n.relatedTaskId ?? n.taskId ?? null,
+                notificationType: typeof n.type === 'string' ? n.type : (n.notificationType ?? ''),
+                message: n.message ?? n.title ?? '',
+                isRead: n.isRead ?? false,
+                createdAt: n.createdAt ?? '',
+            }));
+            const totalRecords = list.length;
+            const totalUnread = list.filter(n => !n.isRead).length;
+            setNotifTotalPages(1);
             setNotifTotalRecords(totalRecords);
             setNotifTotalUnread(totalUnread);
             setNotifPage(p);
@@ -133,7 +135,7 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         ));
         try {
             const token = localStorage.getItem('authToken');
-            const res = await fetch(`${baseUrl}/${id}/read`, {
+            const res = await fetch(`${apiEndpoint}/${id}/read`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -160,26 +162,17 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
 
         const token = localStorage.getItem('authToken');
 
-        const results = await Promise.allSettled(
-            unread.map(n =>
-                fetch(`${baseUrl}/${n.notificationId}/read`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                })
-            )
-        );
-
-        results.forEach((result, index) => {
-            const id = unread[index].notificationId;
-            if (result.status === 'rejected' || !result.value.ok) {
-                setNotifs(prev => prev.map(n =>
-                    n.notificationId === id ? { ...n, isRead: false } : n
-                ));
-            }
+        const res = await fetch(`${apiEndpoint}/read-all`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
         });
+
+        if (!res.ok) {
+            setNotifs(prev => prev.map(n => ({ ...n, isRead: false })));
+        }
     };
 
     return (

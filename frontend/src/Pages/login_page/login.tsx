@@ -79,7 +79,7 @@ export default function Login() {
 
     const validateEmployeeId = (value: string): string => {
         if (!value.trim()) return 'Employee ID or Email is required.';
-        if (value.trim().length > 100) return 'Input too long.';
+        if (value.trim().length > 254) return 'Input too long.';
         return '';
     };
 
@@ -302,7 +302,7 @@ export default function Login() {
                                     disabled={isLoading}
                                     autoComplete="username"
                                     autoFocus
-                                    maxLength={20}
+                                    maxLength={254}
                                     required
                                 />
                             </div>

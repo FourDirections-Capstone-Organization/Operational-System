@@ -15,7 +15,7 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({
     title,
-    notificationApi = '/api/notification/my-notifications',
+    notificationApi = '/api/Notification',
     userInitials,
     onSettingsClick,
     onLogout,

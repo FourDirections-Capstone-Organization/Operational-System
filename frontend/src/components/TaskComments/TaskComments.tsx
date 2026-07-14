@@ -64,7 +64,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editMessage, setEditMessage] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
-    const endRef = useRef<HTMLDivElement>(null);
+    const threadRef = useRef<HTMLDivElement>(null);
 
     const fetchComments = useCallback(async () => {
         setLoading(true);
@@ -77,7 +77,18 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             }
             if (!res.ok) throw new Error('Failed to load comments.');
             const json = await res.json();
-            setComments(json.data ?? []);
+            const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            setComments(list.map((c: any) => ({
+                taskCommentId: c.id ?? c.taskCommentId,
+                taskId: c.taskId ?? taskId,
+                employeeId: c.authorId ?? c.employeeId ?? '',
+                accountId: c.authorId ?? c.accountId ?? '',
+                authorName: c.authorName ?? '',
+                message: c.content ?? c.message ?? '',
+                attachmentUrl: c.attachmentFileName ?? c.attachmentUrl ?? '',
+                createdAt: c.createdAt ?? '',
+                updatedAt: c.updatedAt ?? undefined,
+            })));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load comments.');
             setComments([]);
@@ -87,7 +98,19 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     }, [taskId]);
 
     useEffect(() => { fetchComments(); }, [fetchComments]);
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [comments]);
+
+    // Scroll the thread container itself to its bottom. We deliberately avoid
+    // scrollIntoView() on a sentinel element here: without an explicit
+    // `block: 'nearest'`/'end', it defaults to aligning the target to the
+    // *top* of the scroll container, which over-scrolls past the last
+    // message and leaves a blank gap above it (cutting off whichever
+    // message lands at the boundary). Setting scrollTop directly avoids
+    // that overshoot entirely.
+    useEffect(() => {
+        const el = threadRef.current;
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+    }, [comments]);
 
     const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -108,9 +131,8 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         setSending(true);
         try {
             const fd = new FormData();
-            fd.append('TaskId', taskId);
-            fd.append('Message', newMessage.trim());
-            if (attachment) fd.append('Attachment', attachment);
+            fd.append('content', newMessage.trim());
+            if (attachment) fd.append('attachment', attachment);
             const res = await fetch(`/api/tasks/${taskId}/comments`, {
                 method: 'POST',
                 headers: authHeader(),
@@ -155,7 +177,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             const res = await fetch(`/api/tasks/${taskId}/comments/${editingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', ...authHeader() },
-                body: JSON.stringify({ Message: editMessage.trim() }),
+                body: JSON.stringify({ content: editMessage.trim() }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -203,7 +225,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                 <div className="tc-error"><AlertCircle size={14} /> {error}</div>
             )}
 
-            <div className="tc-thread">
+            <div className="tc-thread" ref={threadRef}>
                 {loading ? (
                     <div className="tc-loading"><Loader2 size={18} className="tc-spin" /> Loading comments...</div>
                 ) : comments.length === 0 ? (
@@ -275,7 +297,6 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                         </div>
                     );
                 })}
-                <div ref={endRef} />
             </div>
 
             <div className="tc-input-area">

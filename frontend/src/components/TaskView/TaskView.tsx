@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
     XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
-    FileText, Download, Trash2, Paperclip,
+    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
@@ -70,6 +70,7 @@ interface TaskViewProps {
     onApprove?: (taskId: string) => void;
     onReject?: (taskId: string, reason: string) => void;
     onDeleteAttachment?: (attachmentId: string) => void;
+    onPushBack?: (taskId: string, comment: string) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -144,12 +145,24 @@ const RejectModal: React.FC<{
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TaskView: React.FC<TaskViewProps> = ({
-    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment,
+    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment, onPushBack,
 }) => {
     const [reopening, setReopening] = useState(false);
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
     const [attachmentsLoading, setAttachmentsLoading] = useState(false);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [showPushBack, setShowPushBack] = useState(false);
+    const [pushBackComment, setPushBackComment] = useState('');
+    const [pushingBack, setPushingBack] = useState(false);
+    const [showHold, setShowHold] = useState(false);
+    const [holdReason, setHoldReason] = useState('');
+    const [holding, setHolding] = useState(false);
+    const [showResume, setShowResume] = useState(false);
+    const [revisedDeadline, setRevisedDeadline] = useState('');
+    const [resuming, setResuming] = useState(false);
+    const [showCancel, setShowCancel] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelling, setCancelling] = useState(false);
 
     const token = localStorage.getItem('authToken');
 
@@ -184,12 +197,24 @@ const TaskView: React.FC<TaskViewProps> = ({
         fetchAttachments();
     }, [fetchAttachments]);
 
-    const handleDownload = (attachmentId: string, fileName: string) => {
-        const a = document.createElement('a');
-        a.href = `/api/attachments/${attachmentId}/download`;
-        if (token) a.href += `?token=${encodeURIComponent(token)}`;
-        a.download = fileName;
-        a.click();
+    const handleDownload = async (attachmentId: string, fileName: string) => {
+        try {
+            const res = await fetch(`/api/attachments/${attachmentId}/download`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Download failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch {
+            // silently fail
+        }
     };
 
     const handleDelete = (attachmentId: string) => {
@@ -210,12 +235,23 @@ const TaskView: React.FC<TaskViewProps> = ({
     const [reviewHistory, setReviewHistory] = useState<ReviewHistoryEntry[]>([]);
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [localStatus, setLocalStatus] = useState<TaskStatus>(task.taskStatus);
+    // Controls: mobile full-screen tab (details | comments | recommendations)
+    // AND (on desktop) which panel shows on the right — 'details' has no
+    // meaning on the right panel, so it falls back to 'comments' there.
     const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'recommendations'>('details');
 
     const currentUser = localStorage.getItem('employeeName') ?? 'Admin';
+    const userRole = localStorage.getItem('userRole') ?? '';
+    const isCoordOrManager = userRole === 'Coordinator' || userRole === 'Manager';
+    const isEmployee = ['Dispatcher', 'Encoder', 'Courier', 'Accountant'].includes(userRole);
+    const isAssignedToMe = task.assignedTo === localStorage.getItem('employeeId');
 
     const od = isEffectivelyOverdue({ ...task, taskStatus: localStatus });
     const effectiveStatus = od ? 'Overdue' : localStatus;
+
+    // What the right-hand panel should render on desktop.
+    const rightPanelTab: 'comments' | 'recommendations' =
+        activeTab === 'recommendations' ? 'recommendations' : 'comments';
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -224,13 +260,21 @@ const TaskView: React.FC<TaskViewProps> = ({
     }, [onClose]);
 
     // ── Review actions ──
-    const handleRequestReview = () => {
-        setReviewState('pending_review');
-        setLocalStatus('Done/Pending Review');
-        setReviewHistory(prev => [...prev, {
-            action: 'submitted', by: task.assignedEmployee,
-            at: new Date().toISOString(),
-        }]);
+    const handleRequestReview = async () => {
+        try {
+            const res = await fetch(`/api/task/${task.taskId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+                body: JSON.stringify({ newStatus: 'DonePendingReview' }),
+            });
+            if (!res.ok) return;
+            setReviewState('pending_review');
+            setLocalStatus('Done/Pending Review');
+            setReviewHistory(prev => [...prev, {
+                action: 'submitted', by: currentUser,
+                at: new Date().toISOString(),
+            }]);
+        } catch { /* silently fail */ }
     };
 
     const handleApprove = () => {
@@ -266,79 +310,79 @@ const TaskView: React.FC<TaskViewProps> = ({
 
     // ── Review banner ──
     const renderReviewBanner = () => {
-        if (reviewState === 'pending_review') return (
-            <div className="tv-review-banner tv-review-pending">
-                <div className="tv-review-banner-left">
-                    <Clock size={16} />
-                    <div>
-                        <span className="tv-review-banner-title">Awaiting completion review</span>
-                        <span className="tv-review-banner-sub">
-                            {task.assignedEmployee} submitted this task for review. Review and approve or reject.
-                        </span>
+        const isDonePending = effectiveStatus === 'Done/Pending Review' || effectiveStatus === 'Pending Admin Review';
+        const isInProgress = effectiveStatus === 'In Progress' || effectiveStatus === 'Not Started';
+        const isCompleted = effectiveStatus === 'Completed';
+        const isCancelled = effectiveStatus === 'Cancelled';
+
+        if (isCompleted || isCancelled) return null;
+
+        // Coordinator/Manager view: show approve/reject for tasks pending review
+        if (isCoordOrManager && isDonePending) {
+            return (
+                <div className="tv-review-banner tv-review-pending">
+                    <div className="tv-review-banner-left">
+                        <Clock size={16} />
+                        <div>
+                            <span className="tv-review-banner-title">Awaiting completion review</span>
+                            <span className="tv-review-banner-sub">
+                                {task.assignedEmployee} submitted this task for review.
+                            </span>
+                        </div>
+                    </div>
+                    <div className="tv-review-banner-actions">
+                        <button className="tv-btn tv-btn-danger-solid" onClick={() => setShowRejectModal(true)}>
+                            <XCircle size={13} /> Reject
+                        </button>
+                        <button className="tv-btn tv-btn-success" onClick={handleApprove}>
+                            <CheckCircle2 size={13} /> Approve
+                        </button>
                     </div>
                 </div>
-                <div className="tv-review-banner-actions">
-                    <button className="tv-btn tv-btn-danger-solid" onClick={() => setShowRejectModal(true)}>
-                        <XCircle size={13} /> Reject
+            );
+        }
+
+        // Employee view: show "Submit for Review" when task is In Progress
+        if (isEmployee && isInProgress && isAssignedToMe) {
+            return (
+                <div className="tv-review-banner tv-review-none">
+                    <div className="tv-review-banner-left">
+                        <Clock size={15} />
+                        <div>
+                            <span className="tv-review-banner-title">Task in progress</span>
+                            <span className="tv-review-banner-sub">
+                                Submit this task for review when ready.
+                            </span>
+                        </div>
+                    </div>
+                    <button className="tv-btn tv-btn-primary" onClick={handleRequestReview}>
+                        <CheckCircle2 size={13} /> Submit for Review
                     </button>
-                    <button className="tv-btn tv-btn-success" onClick={handleApprove}>
-                        <CheckCircle2 size={13} /> Approve
+                </div>
+            );
+        }
+
+        // Rejected state — employee can resubmit
+        if (reviewState === 'rejected' && isInProgress && isEmployee) {
+            return (
+                <div className="tv-review-banner tv-review-rejected">
+                    <div className="tv-review-banner-left">
+                        <AlertTriangle size={16} />
+                        <div>
+                            <span className="tv-review-banner-title">Completion rejected</span>
+                            <span className="tv-review-banner-sub">
+                                The employee needs to revise and resubmit.
+                            </span>
+                        </div>
+                    </div>
+                    <button className="tv-btn tv-btn-outline-sm" onClick={handleRequestReview}>
+                        <CheckCircle2 size={12} /> Re-submit
                     </button>
                 </div>
-            </div>
-        );
+            );
+        }
 
-        if (reviewState === 'approved') return (
-            <div className="tv-review-banner tv-review-approved">
-                <div className="tv-review-banner-left">
-                    <ThumbsUp size={16} />
-                    <div>
-                        <span className="tv-review-banner-title">Completion approved</span>
-                        <span className="tv-review-banner-sub">This task has been marked as complete.</span>
-                    </div>
-                </div>
-                <button className="tv-btn tv-btn-ghost-sm" onClick={handleReopen} disabled={reopening}
-                    style={reopening ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                    <RotateCcw size={12} /> {reopening ? 'Reopen Requested' : 'Reopen'}
-                </button>
-            </div>
-        );
-
-        if (reviewState === 'rejected') return (
-            <div className="tv-review-banner tv-review-rejected">
-                <div className="tv-review-banner-left">
-                    <AlertTriangle size={16} />
-                    <div>
-                        <span className="tv-review-banner-title">Completion rejected</span>
-                        <span className="tv-review-banner-sub">
-                            The employee needs to revise and resubmit.
-                        </span>
-                    </div>
-                </div>
-                <button className="tv-btn tv-btn-outline-sm" onClick={handleRequestReview}>
-                    <Clock size={12} /> Re-submit
-                </button>
-            </div>
-        );
-
-        // none — show simulate button (demo only; in real app employee triggers this)
-        return (
-            <div className="tv-review-banner tv-review-none">
-                <div className="tv-review-banner-left">
-                    <Clock size={15} />
-                    <div>
-                        <span className="tv-review-banner-title">Task in progress</span>
-                        <span className="tv-review-banner-sub">
-                            Waiting for {task.assignedEmployee} to submit for review.
-                        </span>
-                    </div>
-                </div>
-                <button className="tv-btn tv-btn-ghost-sm" onClick={handleRequestReview}
-                    title="Simulate employee submitting for review">
-                    Simulate submit ↗
-                </button>
-            </div>
-        );
+        return null;
     };
 
     return (
@@ -386,6 +430,30 @@ const TaskView: React.FC<TaskViewProps> = ({
                         <button className="tv-btn tv-btn-primary" onClick={onEdit}>
                             <Pencil size={13} /> Edit
                         </button>
+                        {(task.taskStatus === 'Done/Pending Review' || task.taskStatus === 'Pending Admin Review') && onPushBack && (
+                            <button className="tv-btn tv-btn-outline" onClick={() => setShowPushBack(true)}>
+                                <RotateCcw size={13} /> Push Back
+                            </button>
+                        )}
+                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
+                            <button className="tv-btn tv-btn-outline" onClick={() => setShowHold(true)}>
+                                <Clock size={13} /> Hold
+                            </button>
+                        )}
+                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'Done/Pending Review' && effectiveStatus !== 'Pending Admin Review' && (
+                            <button className="tv-btn tv-btn-outline-danger" onClick={() => setShowCancel(true)}>
+                                <XCircle size={13} /> Cancel
+                            </button>
+                        )}
+                        {isCoordOrManager && effectiveStatus === 'On Hold' && (
+                            <button className="tv-btn tv-btn-outline" onClick={() => {
+                                const d = new Date(); d.setDate(d.getDate() + 1);
+                                setRevisedDeadline(d.toISOString().slice(0, 16));
+                                setShowResume(true);
+                            }}>
+                                <RotateCcw size={13} /> Resume
+                            </button>
+                        )}
                         <button className="tv-icon-btn" onClick={onClose} aria-label="Close">
                             <X size={16} />
                         </button>
@@ -597,14 +665,29 @@ const TaskView: React.FC<TaskViewProps> = ({
                         </div>
                     </div>
 
-                    {/* ── Right: Comments ── */}
-                    <div className={`tv-comments${activeTab === 'comments' ? ' tv-mobile-visible' : ''}`}>
-                        <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} />
-                    </div>
-
-                    {/* ── Right: Recommendations ── */}
-                    <div className={`tv-comments${activeTab === 'recommendations' ? ' tv-mobile-visible' : ''}`}>
-                        <TaskRecommendations taskId={task.taskId} />
+                    {/* ── Right: Comments / Recommendations (single panel, toggled) ── */}
+                    <div className={`tv-comments${activeTab !== 'details' ? ' tv-mobile-visible' : ''}`}>
+                        <div className="tv-comments-toggle">
+                            <button
+                                type="button"
+                                className={rightPanelTab === 'comments' ? 'active' : ''}
+                                onClick={() => setActiveTab('comments')}
+                            >
+                                <MessageSquare size={13} /> Comments
+                            </button>
+                            <button
+                                type="button"
+                                className={rightPanelTab === 'recommendations' ? 'active' : ''}
+                                onClick={() => setActiveTab('recommendations')}
+                            >
+                                <Lightbulb size={13} /> Recommendations
+                            </button>
+                        </div>
+                        <div className="tv-comments-panel">
+                            {rightPanelTab === 'recommendations'
+                                ? <TaskRecommendations taskId={task.taskId} />
+                                : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} />}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -614,6 +697,193 @@ const TaskView: React.FC<TaskViewProps> = ({
                     onConfirm={handleReject}
                     onCancel={() => setShowRejectModal(false)}
                 />
+            )}
+
+            {showPushBack && (
+                <div className="tv-modal-overlay" onClick={() => !pushingBack && setShowPushBack(false)}>
+                    <div className="tv-modal" onClick={e => e.stopPropagation()}>
+                        <div className="tv-modal-header">
+                            <div className="tv-modal-icon tv-modal-icon-danger">
+                                <RotateCcw size={20} />
+                            </div>
+                            <div>
+                                <h4 className="tv-modal-title">Push Back Task</h4>
+                                <p className="tv-modal-sub">Return this task to In Progress with a mandatory reason.</p>
+                            </div>
+                        </div>
+                        <textarea
+                            className="tv-modal-textarea"
+                            placeholder="Explain why this task needs to be revised..."
+                            value={pushBackComment}
+                            onChange={e => setPushBackComment(e.target.value)}
+                            rows={3}
+                            autoFocus
+                        />
+                        <div className="tv-modal-actions">
+                            <button className="tv-btn tv-btn-outline" onClick={() => { setShowPushBack(false); setPushBackComment(''); }} disabled={pushingBack}>Cancel</button>
+                            <button className="tv-btn tv-btn-danger"
+                                onClick={async () => {
+                                    if (!pushBackComment.trim()) return;
+                                    setPushingBack(true);
+                                    try { await onPushBack?.(task.taskId, pushBackComment.trim()); } catch {}
+                                    setPushingBack(false);
+                                    setShowPushBack(false);
+                                    setPushBackComment('');
+                                }}
+                                disabled={!pushBackComment.trim() || pushingBack}>
+                                {pushingBack ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />} Push Back
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showHold && (
+                <div className="tv-modal-overlay" onClick={() => !holding && setShowHold(false)}>
+                    <div className="tv-modal" onClick={e => e.stopPropagation()}>
+                        <div className="tv-modal-header">
+                            <div className="tv-modal-icon tv-modal-icon-warning">
+                                <Clock size={20} />
+                            </div>
+                            <div>
+                                <h4 className="tv-modal-title">Place Task On Hold</h4>
+                                <p className="tv-modal-sub">The deadline/SLA countdown will pause immediately.</p>
+                            </div>
+                        </div>
+                        <textarea
+                            className="tv-modal-textarea"
+                            placeholder="Reason for holding this task (required)..."
+                            value={holdReason}
+                            onChange={e => setHoldReason(e.target.value)}
+                            rows={3}
+                            autoFocus
+                        />
+                        <div className="tv-modal-actions">
+                            <button className="tv-btn tv-btn-outline" onClick={() => { setShowHold(false); setHoldReason(''); }} disabled={holding}>Cancel</button>
+                            <button className="tv-btn tv-btn-warning"
+                                onClick={async () => {
+                                    if (!holdReason.trim()) return;
+                                    setHolding(true);
+                                    const token = localStorage.getItem('authToken');
+                                    try {
+                                        const res = await fetch(`/api/task/${task.taskId}/hold`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ holdReason: holdReason.trim() }),
+                                        });
+                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Hold failed.'); }
+                                        setLocalStatus('On Hold');
+                                        setShowHold(false);
+                                        setHoldReason('');
+                                    } catch (err: any) {
+                                        console.error(err);
+                                    } finally { setHolding(false); }
+                                }}
+                                disabled={!holdReason.trim() || holding}>
+                                {holding ? <Loader2 size={13} className="spin" /> : <Clock size={13} />} Place On Hold
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showResume && (
+                <div className="tv-modal-overlay" onClick={() => !resuming && setShowResume(false)}>
+                    <div className="tv-modal" onClick={e => e.stopPropagation()}>
+                        <div className="tv-modal-header">
+                            <div className="tv-modal-icon tv-modal-icon-success">
+                                <RotateCcw size={20} />
+                            </div>
+                            <div>
+                                <h4 className="tv-modal-title">Resume Task</h4>
+                                <p className="tv-modal-sub">Set a new revised deadline to restart the countdown.</p>
+                            </div>
+                        </div>
+                        <div style={{ padding: '0 24px 16px' }}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Revised Deadline *</label>
+                            <input
+                                type="datetime-local"
+                                value={revisedDeadline}
+                                onChange={e => setRevisedDeadline(e.target.value)}
+                                min={new Date().toISOString().slice(0, 16)}
+                                style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, outline: 'none' }}
+                            />
+                        </div>
+                        <div className="tv-modal-actions">
+                            <button className="tv-btn tv-btn-outline" onClick={() => setShowResume(false)} disabled={resuming}>Cancel</button>
+                            <button className="tv-btn tv-btn-primary"
+                                onClick={async () => {
+                                    if (!revisedDeadline) return;
+                                    setResuming(true);
+                                    const token = localStorage.getItem('authToken');
+                                    try {
+                                        const res = await fetch(`/api/task/${task.taskId}/resume`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ revisedDeadline: new Date(revisedDeadline).toISOString() }),
+                                        });
+                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Resume failed.'); }
+                                        setLocalStatus(task.taskStatus === 'On Hold' ? task.taskStatus : 'In Progress');
+                                        setShowResume(false);
+                                    } catch (err: any) {
+                                        console.error(err);
+                                    } finally { setResuming(false); }
+                                }}
+                                disabled={!revisedDeadline || resuming}>
+                                {resuming ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />} Resume Task
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showCancel && (
+                <div className="tv-modal-overlay" onClick={() => !cancelling && setShowCancel(false)}>
+                    <div className="tv-modal" onClick={e => e.stopPropagation()}>
+                        <div className="tv-modal-header">
+                            <div className="tv-modal-icon tv-modal-icon-danger">
+                                <XCircle size={20} />
+                            </div>
+                            <div>
+                                <h4 className="tv-modal-title">Cancel Task</h4>
+                                <p className="tv-modal-sub">This action cannot be undone. The task will be marked as Cancelled.</p>
+                            </div>
+                        </div>
+                        <textarea
+                            className="tv-modal-textarea"
+                            placeholder="Reason for cancellation (required)..."
+                            value={cancelReason}
+                            onChange={e => setCancelReason(e.target.value)}
+                            rows={3}
+                            autoFocus
+                        />
+                        <div className="tv-modal-actions">
+                            <button className="tv-btn tv-btn-outline" onClick={() => { setShowCancel(false); setCancelReason(''); }} disabled={cancelling}>Keep Task</button>
+                            <button className="tv-btn tv-btn-danger"
+                                onClick={async () => {
+                                    if (!cancelReason.trim()) return;
+                                    setCancelling(true);
+                                    const token = localStorage.getItem('authToken');
+                                    try {
+                                        const res = await fetch(`/api/task/${task.taskId}/cancel`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ cancellationReason: cancelReason.trim(), isConfirmed: true }),
+                                        });
+                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Cancellation failed.'); }
+                                        setLocalStatus('Cancelled');
+                                        setShowCancel(false);
+                                        setCancelReason('');
+                                    } catch (err: any) {
+                                        console.error(err);
+                                    } finally { setCancelling(false); }
+                                }}
+                                disabled={!cancelReason.trim() || cancelling}>
+                                {cancelling ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancel Task
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
