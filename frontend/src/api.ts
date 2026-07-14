@@ -27,17 +27,13 @@ const api = {
   delete: <TResponse = any>(url: string) =>
     axios.delete<TResponse>(url),
 
-  /** Upload file(s) via FormData — Content-Type is set automatically */
+  /** Upload file(s) via FormData — Content-Type with boundary is set automatically by axios */
   upload: <TResponse = any>(url: string, formData: FormData) =>
-    axios.post<TResponse>(url, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    axios.post<TResponse>(url, formData),
 
   /** Upload file(s) via PUT with FormData */
   uploadPut: <TResponse = any>(url: string, formData: FormData) =>
-    axios.put<TResponse>(url, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    axios.put<TResponse>(url, formData),
 };
 
 export default api;

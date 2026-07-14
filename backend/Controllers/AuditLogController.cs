@@ -21,6 +21,20 @@ public class AuditLogController : ControllerBase
         _auditLogService = auditLogService;
     }
 
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyLogs(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var userId = GetUserIdFromClaims();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user"));
+
+        var filters = new AuditLogFilterDTO { UserId = userId.Value };
+        var result = await _auditLogService.GetAllAsync(pageNumber, pageSize, filters);
+        return Ok(result);
+    }
+
     [HttpGet]
     [Authorize(Policy = AuthorizationPolicies.CanAccessAuditLogs)]
     public async Task<IActionResult> GetAll(

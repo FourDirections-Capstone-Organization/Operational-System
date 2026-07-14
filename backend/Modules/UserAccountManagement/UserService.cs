@@ -4,6 +4,7 @@ using Backend.Modules.Email;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.AuthenticationAndCredentials;
+using Backend.Modules.TaskManagement;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 
@@ -14,6 +15,7 @@ public class UserService : IUserService
     private readonly AppDbContext _db;
     private readonly IEmailService _emailService;
     private readonly IEmailVerificationService _emailVerificationService;
+    private readonly IAuditLogService _auditLogService;
     private readonly string _frontendUrl;
     private readonly ILogger<UserService> _logger;
 
@@ -21,12 +23,14 @@ public class UserService : IUserService
         AppDbContext db,
         IEmailService emailService,
         IEmailVerificationService emailVerificationService,
+        IAuditLogService auditLogService,
         IConfiguration configuration,
         ILogger<UserService> logger)
     {
         _db = db;
         _emailService = emailService;
         _emailVerificationService = emailVerificationService;
+        _auditLogService = auditLogService;
         _frontendUrl = configuration["AppSettings:FrontendUrl"] ?? "http://localhost:5173";
         _logger = logger;
     }
@@ -103,10 +107,19 @@ public class UserService : IUserService
         await _emailVerificationService.SendVerificationEmailForUserAsync(user.Id, verificationUrl);
 
         // Send welcome email with login credentials
-        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}".Replace("  ", " ").Trim();
         await _emailService.SendWelcomeEmailAsync(user.Email, fullName, user.EmployeeNumber, tempPassword);
 
         _logger.LogInformation("New user registered: {EmployeeNumber} - {Email}", user.EmployeeNumber, user.Email);
+
+        await _auditLogService.LogAsync(
+            null,
+            AuditActionType.Create,
+            "User",
+            user.Id,
+            null,
+            $"User {fullName} ({user.EmployeeNumber}) registered",
+            "UserManagement");
 
         var response = MapToResponseDTO(user);
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User registered successfully. Verification email sent.");
@@ -251,11 +264,22 @@ public class UserService : IUserService
 
         await _db.SaveChangesAsync();
 
+        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}".Replace("  ", " ").Trim();
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Update,
+            "User",
+            user.Id,
+            null,
+            $"User {fullName} ({user.EmployeeNumber}) profile updated",
+            "UserManagement");
+
         var response = MapToResponseDTO(user);
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User updated successfully");
     }
 
-    public async Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id)
+    public async Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id, Guid? requestUserId = null)
     {
         var user = await _db.Users.FindAsync(id);
 
@@ -265,6 +289,9 @@ public class UserService : IUserService
         if (user.IsDeactivated)
             return ApiResponseDTO<bool>.Failure("User is already deactivated");
 
+        if (requestUserId.HasValue && requestUserId.Value == id)
+            return ApiResponseDTO<bool>.Failure("You cannot deactivate your own account");
+
         // Soft deactivate
         user.IsDeactivated = true;
         user.IsActive = false;
@@ -272,12 +299,23 @@ public class UserService : IUserService
 
         await _db.SaveChangesAsync();
 
+        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}".Replace("  ", " ").Trim();
+
         _logger.LogInformation("User deactivated: {EmployeeNumber}", user.EmployeeNumber);
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Update,
+            "User",
+            user.Id,
+            null,
+            $"User {fullName} ({user.EmployeeNumber}) deactivated",
+            "UserManagement");
 
         return ApiResponseDTO<bool>.Success(true, "User deactivated successfully. Historical data preserved.");
     }
 
-    public async Task<ApiResponseDTO<bool>> ActivateAsync(Guid id)
+    public async Task<ApiResponseDTO<bool>> ActivateAsync(Guid id, Guid? requestUserId = null)
     {
         
         var user = await _db.Users.FindAsync(id);
@@ -288,6 +326,9 @@ public class UserService : IUserService
         if (!user.IsDeactivated)
             return ApiResponseDTO<bool>.Failure("User is already active");
 
+        if (requestUserId.HasValue && requestUserId.Value == id)
+            return ApiResponseDTO<bool>.Failure("You cannot activate your own account");
+
         // Reactivate
         user.IsDeactivated = false;
         user.IsActive = true;
@@ -295,7 +336,18 @@ public class UserService : IUserService
 
         await _db.SaveChangesAsync();
 
+        var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}".Replace("  ", " ").Trim();
+
         _logger.LogInformation("User activated: {EmployeeNumber}", user.EmployeeNumber);
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Update,
+            "User",
+            user.Id,
+            null,
+            $"User {fullName} ({user.EmployeeNumber}) activated",
+            "UserManagement");
 
         return ApiResponseDTO<bool>.Success(true, "User activated successfully");
 

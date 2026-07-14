@@ -14,6 +14,7 @@ using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.TaskManagement;
 using Backend.Modules.Notifications;
+using Backend.Models.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -122,12 +123,6 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // Only recreate in development to pick up model changes
-    // (tables added after the DB was first created, e.g. AuditLogs)
-    if (app.Environment.IsDevelopment())
-    {
-        db.Database.EnsureDeleted();
-    }
     db.Database.EnsureCreated();
 
     // Seed default departments and positions
@@ -146,6 +141,19 @@ using (var scope = app.Services.CreateScope())
     // Seed default notification settings
     var notificationSettingsService = scope.ServiceProvider.GetRequiredService<INotificationSettingsService>();
     await notificationSettingsService.SeedDefaultSettingsAsync();
+
+    // Reactivate any deactivated Manager accounts (safety net)
+    var deactivatedManagers = await db.Users
+        .Where(u => u.Role == UserRole.Manager && (u.IsDeactivated || !u.IsActive))
+        .ToListAsync();
+    foreach (var mgr in deactivatedManagers)
+    {
+        mgr.IsDeactivated = false;
+        mgr.IsActive = true;
+        mgr.UpdatedAt = DateTime.UtcNow;
+    }
+    if (deactivatedManagers.Count > 0)
+        await db.SaveChangesAsync();
 }
 
 if (app.Environment.IsDevelopment())

@@ -230,7 +230,13 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
             const userId = lookupData?.data?.id ?? lookupData?.id;
             if (!userId) throw new Error('Employee not found.');
 
-            // 1. Update personal details
+            // 1. Update status FIRST (backend blocks PUT on deactivated users)
+            if (form.accountStatus !== profile.accountStatus) {
+                const isActive = form.accountStatus === 'Active';
+                await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
+            }
+
+            // 2. Update personal details
             await api.put(`/api/User/${userId}`, {
                 firstName,
                 middleName,
@@ -239,12 +245,6 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 contactNumber: form.contactNumber,
                 email: form.email.trim(),
             });
-
-            // 2. Update status in database if changed
-            if (form.accountStatus !== profile.accountStatus) {
-                const isActive = form.accountStatus === 'Active';
-                await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
-            }
 
             // 3. Update role if changed
             const newRoleVal = toBackendRole(form.role);
@@ -451,13 +451,22 @@ export default function EmployeeDetailPanel({
         const fetchLogs = async () => {
             setLoadingLogs(true);
             try {
-                const res = await api.get(`/api/audit-logs/employee/${encodeURIComponent(profile.employeeNumber)}`);
-                const data = res.data;
-                setActivityLogs(Array.isArray(data) ? data.map((log: any) => ({
-                    id: log.activityLogId,
-                    description: log.description,
-                    timestamp: log.createdAt,
-                })) : []);
+                // Look up user GUID first
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
+                const lookupData = lookupRes.data;
+                const userId = lookupData?.data?.id ?? lookupData?.id;
+                if (userId) {
+                    const res = await api.get('/api/audit-logs', { params: { userId, pageSize: 50 } });
+                    const json = res.data;
+                    const items = json?.isSuccess && json?.data?.items ? json.data.items : [];
+                    setActivityLogs(items.map((log: any) => ({
+                        id: log.id ?? log.activityLogId,
+                        description: log.description ?? '',
+                        timestamp: log.timestamp ?? log.createdAt ?? '',
+                    })));
+                } else {
+                    setActivityLogs([]);
+                }
             } catch {
                 setActivityLogs([]);
             } finally {
@@ -635,6 +644,7 @@ export default function EmployeeDetailPanel({
             <div className="ed-section-tabs">
                 {([
                     { key: 'overview', icon: User, label: 'Overview' },
+                    { key: 'deliveries', icon: Truck, label: 'Deliveries' },
                     { key: 'activity', icon: ClipboardList, label: 'Activity Logs' },
                 ] as const).map(({ key, icon: Icon, label }) => (
                     <button
@@ -773,50 +783,16 @@ export default function EmployeeDetailPanel({
                             <h3>
                                 <Truck size={15} /> Delivery History
                             </h3>
-                            <span className="ed-badge-count">{deliveries.length} records</span>
                         </div>
-                        {loadingDeliveries ? (
-                            <div className="ed-empty">
-                                <Loader2 size={22} className="spin" />
-                                <p>Loading deliveries…</p>
-                            </div>
-                        ) : deliveries.length === 0 ? (
-                            <div className="ed-empty">
-                                <Package size={24} />
-                                <p>No delivery records found</p>
-                            </div>
-                        ) : (
-                            <div style={{ overflowX: 'auto' }}>
-                                <table className="ed-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tracking #</th>
-                                            <th>Recipient</th>
-                                            <th>Destination</th>
-                                            <th>Status</th>
-                                            <th>Assigned</th>
-                                            <th>Delivered</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {deliveries.map(d => (
-                                            <tr key={d.deliveryId}>
-                                                <td className="ed-tracking-num">{d.trackingNumber}</td>
-                                                <td>{d.recipient}</td>
-                                                <td>{d.destination}</td>
-                                                <td>
-                                                    <span className={`ed-delivery-badge ${deliveryStatusClass(d.status)}`}>
-                                                        {d.status}
-                                                    </span>
-                                                </td>
-                                                <td>{fmtDate(d.assignedAt)}</td>
-                                                <td>{fmtDate(d.deliveredAt)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                        <div className="ed-empty" style={{ padding: '48px 24px' }}>
+                            <Package size={32} style={{ opacity: 0.4, marginBottom: 8 }} />
+                            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                Delivery tracking is coming soon.
+                            </p>
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                This feature will be available in a future update.
+                            </p>
+                        </div>
                     </div>
                 )}
 

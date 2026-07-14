@@ -905,6 +905,13 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (!userId) throw new Error('Employee not found.');
 
+                // Activate/deactivate BEFORE updating personal details
+                // (backend blocks PUT on deactivated users)
+                if (form.accountStatus !== employee.accountStatus) {
+                    const isActive = form.accountStatus === 'Active';
+                    await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
+                }
+
                 await api.put(`/api/User/${userId}`, {
                     firstName: form.firstName.trim(),
                     middleName: form.middleName.trim(),
@@ -913,11 +920,6 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                     contactNumber: form.contactNumber,
                     email: form.email.trim(),
                 });
-
-                if (form.accountStatus !== employee.accountStatus) {
-                    const isActive = form.accountStatus === 'Active';
-                    await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
-                }
                 const newRoleVal = toBackendRole(form.role);
                 const oldRoleVal = typeof employee.role === 'number' ? employee.role : parseInt(employee.role, 10);
                 if (newRoleVal !== oldRoleVal) {
@@ -1205,6 +1207,7 @@ interface DashboardTabProps {
     activityLogs: ActivityLog[];
     loading: boolean;
     onSelectEmployee: (emp: RecentEmployee) => void;
+    onEditEmployee?: (emp: RecentEmployee) => void;
     onViewAll: () => void;
     onAddEmployee: () => void;
     rolesCount?: number;
@@ -1213,7 +1216,7 @@ interface DashboardTabProps {
     onActivityLogPageChange?: (page: number) => void;
 }
 
-function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
+function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onEditEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const activeCount = employees.filter(e => e.accountStatus === 'Active').length;
     const deactivatedCount = employees.filter(e => e.accountStatus === 'Deactivated').length;
@@ -1374,48 +1377,45 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
             <div className="dashboard-grid">
                 <div className="card">
                     <div className="card-header-layout"><span className="text-link">Recent Employees</span><button className="view-all-link" onClick={onViewAll}>View more →</button></div>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>NAME</th>
-                                <th>ID</th>
-                                <th>ROLE</th>
-                                <th>STATUS</th>
-                                <th>ACTIONS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading
-                                ? <tr><td colSpan={5}><EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." /></td></tr>
-                                : recentEmployees.length === 0
-                                    ? <tr><td colSpan={5}><EmptyState message="No data available" /></td></tr>
-                                    : recentEmployees.filter(emp => {
-                                        if (!searchQuery) return true;
-                                        const q = searchQuery.toLowerCase();
-                                        return getEmployeeDisplayName(emp).toLowerCase().includes(q)
-                                            || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
-                                            || (emp.role && emp.role.toLowerCase().includes(q));
-                                    }).slice(0, 7).map(emp => {
-                                        const name = getEmployeeDisplayName(emp);
-                                        return (
-                                            <tr key={emp.employeeNumber}>
-                                                <td>
-                                                    <div className="emp-name-cell">
-                                                        <div className="emp-avatar">{name.charAt(0).toUpperCase()}</div>
-                                                        <span className="cell-name">{name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="cell-id">{emp.employeeNumber}</td>
-                                                <td><RoleBadge role={toDisplayRole(emp.role)} size="sm" /></td>
-                                                <td><StatusBadge status={emp.accountStatus || 'Active'} size="sm" /></td>
-                                                <td className="cell-actions">
-                                                    <button className="action-icon-btn" title="Edit" onClick={() => onSelectEmployee(emp)}><Pencil size={14} /></button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                        </tbody>
-                    </table>
+                    {loading ? (
+                        <EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." />
+                    ) : recentEmployees.length === 0 ? (
+                        <EmptyState message="No data available" />
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {recentEmployees.filter(emp => {
+                                if (!searchQuery) return true;
+                                const q = searchQuery.toLowerCase();
+                                return getEmployeeDisplayName(emp).toLowerCase().includes(q)
+                                    || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
+                                    || (emp.role && emp.role.toLowerCase().includes(q));
+                            }).slice(0, 7).map(emp => {
+                                const name = getEmployeeDisplayName(emp);
+                                return (
+                                    <div key={emp.employeeNumber} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s' }} onClick={() => onSelectEmployee(emp)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-main)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                                            <div className="emp-avatar">{name.charAt(0).toUpperCase()}</div>
+                                            <span style={{ position: 'absolute', bottom: 1, right: 1, width: 9, height: 9, borderRadius: '50%', background: emp.presenceStatus === 'Online' ? 'var(--status-active)' : 'var(--text-secondary)', border: '2px solid var(--bg-card)', display: 'block' }} title={emp.presenceStatus ?? 'Offline'} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{name}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{emp.employeeNumber}</span>
+                                                <RoleBadge role={toDisplayRole(emp.role)} size="sm" />
+                                                <StatusBadge status={emp.accountStatus || 'Active'} size="sm" />
+                                            </div>
+                                        </div>
+                                        <div className="cell-actions" onClick={e => e.stopPropagation()}>
+                                            <button className="action-icon-btn" title="View Details" onClick={() => onSelectEmployee(emp)}><Eye size={14} /></button>
+                                            {onEditEmployee && (
+                                                <button className="action-icon-btn" title="Edit" onClick={() => onEditEmployee(emp)}><Pencil size={14} /></button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
                 <div className="card activity-card">
                     <div className="card-header-layout"><span className="text-link">Recent Activity</span></div>
@@ -2310,31 +2310,44 @@ export default function Dashboard() {
     const [activityLogDateFrom, setActivityLogDateFrom] = useState('');
     const [activityLogDateTo, setActivityLogDateTo] = useState('');
 
-    const fetchActivityLogs = (page: number) => {
+    const fetchActivityLogs = async (page: number) => {
         setActivityLogLoading(true);
-        const params: Record<string, any> = { page: String(page), pageSize: String(ACTIVITY_LOG_PAGE_SIZE) };
-        if (activityLogSearch) params.search = activityLogSearch;
-        if (activityLogEmployee) params.employeeId = activityLogEmployee;
-        if (activityLogType) params.activityType = activityLogType;
-        if (activityLogDateFrom) params.dateFrom = activityLogDateFrom;
-        if (activityLogDateTo) params.dateTo = activityLogDateTo;
-        api.get('/api/audit-logs/recent', params)
-            .then(res => {
-                const data = res.data;
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else if (Array.isArray(data)) {
-                    setActivityLogs(data);
-                    setActivityLogPage(1);
-                    setActivityLogTotalPages(1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]))
-            .finally(() => setActivityLogLoading(false));
+        try {
+            const params: Record<string, any> = { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE };
+            if (activityLogSearch) params.search = activityLogSearch;
+            if (activityLogEmployee) {
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(activityLogEmployee)}`).catch(() => null);
+                const lookupData = lookupRes?.data;
+                const empUserId = lookupData?.data?.id ?? lookupData?.id;
+                if (empUserId) params.userId = empUserId;
+            }
+            if (activityLogType) params.actionType = activityLogType;
+            if (activityLogDateFrom) params.dateRangeStart = activityLogDateFrom;
+            if (activityLogDateTo) params.dateRangeEnd = activityLogDateTo;
+            const res = await api.get('/api/audit-logs', { params });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items.map((log: any) => ({
+                    activityLogId: log.id ?? log.activityLogId,
+                    accountId: log.userId ?? log.accountId ?? '',
+                    firstName: log.actorName?.split(' ')[0] ?? log.firstName ?? '',
+                    middleName: log.middleName ?? '',
+                    lastName: log.actorName?.split(' ').slice(1).join(' ') ?? log.lastName ?? '',
+                    activityType: log.actionType ?? log.activityType ?? '',
+                    description: log.description ?? '',
+                    createdAt: log.timestamp ?? log.createdAt ?? '',
+                })));
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        } finally {
+            setActivityLogLoading(false);
+        }
     };
 
     // Re-fetch activity logs when the tab becomes active or any filter changes
@@ -2505,6 +2518,7 @@ export default function Dashboard() {
                         activityLogs={activityLogs}
                         loading={empLoading}
                         onSelectEmployee={emp => { setEmpModalEditMode(false); setSelectedEmployee(emp); }}
+                        onEditEmployee={emp => { setEmpModalEditMode(true); setSelectedEmployee(emp); }}
                         onViewAll={() => { setActiveTab('employees'); setSelectedPanelEmployee(null); }}
                         onAddEmployee={() => setShowAddModal(true)}
                         rolesCount={rolesList.length}

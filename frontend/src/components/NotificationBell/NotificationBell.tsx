@@ -19,12 +19,41 @@ interface NotificationBellProps {
     apiEndpoint: string;
 }
 
+const NOTIF_ENUM_MAP: Record<number, string> = {
+    0: 'TaskAssigned',
+    1: 'TaskUpdated',
+    2: 'TaskOverdue',
+    3: 'DeadlineWarning',
+    4: 'PushBack',
+    5: 'TaskCancelled',
+    6: 'TaskResumed',
+    7: 'TaskOnHold',
+    8: 'TaskCompleted',
+    9: 'TemplateTaskUnassigned',
+};
+
 function getTypeBadge(type: string): { label: string; cls: string } {
     switch (type) {
         case 'TaskAssigned':
             return { label: 'Task assigned', cls: 'task-assigned' };
-        case 'TaskDeadlineApproaching':
+        case 'TaskUpdated':
+            return { label: 'Task updated', cls: 'task-assigned' };
+        case 'TaskOverdue':
+            return { label: 'Overdue', cls: 'deadline' };
+        case 'DeadlineWarning':
             return { label: 'Deadline', cls: 'deadline' };
+        case 'PushBack':
+            return { label: 'Pushed back', cls: 'default' };
+        case 'TaskCancelled':
+            return { label: 'Cancelled', cls: 'default' };
+        case 'TaskResumed':
+            return { label: 'Resumed', cls: 'task-assigned' };
+        case 'TaskOnHold':
+            return { label: 'On hold', cls: 'default' };
+        case 'TaskCompleted':
+            return { label: 'Completed', cls: 'task-assigned' };
+        case 'TemplateTaskUnassigned':
+            return { label: 'Unassigned', cls: 'default' };
         default:
             return { label: type, cls: 'default' };
     }
@@ -60,6 +89,18 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         ? notifs.filter(n => !n.isRead)
         : notifs;
 
+    const fetchUnreadCount = async () => {
+        try {
+            const res = await api.get<any>(`${apiEndpoint}/unread-count`);
+            const json = res.data;
+            if (json.isSuccess && typeof json.data === 'number') {
+                setNotifTotalUnread(json.data);
+            }
+        } catch {
+            // non-fatal
+        }
+    };
+
     const fetchNotifs = async (page?: number) => {
         try {
             const p = page ?? notifPage;
@@ -69,16 +110,16 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
             const list: NotificationItem[] = rawList.map((n: any) => ({
                 notificationId: n.id ?? n.notificationId,
                 taskId: n.relatedTaskId ?? n.taskId ?? null,
-                notificationType: typeof n.type === 'string' ? n.type : (n.notificationType ?? ''),
+                notificationType: typeof n.type === 'string'
+                    ? n.type
+                    : (NOTIF_ENUM_MAP[n.type as number] ?? n.notificationType ?? ''),
                 message: n.message ?? n.title ?? '',
                 isRead: n.isRead ?? false,
                 createdAt: n.createdAt ?? '',
             }));
             const totalRecords = json.data?.totalCount ?? list.length;
-            const totalUnread = list.filter(n => !n.isRead).length;
             setNotifTotalPages(json.data?.totalPages ?? 1);
             setNotifTotalRecords(totalRecords);
-            setNotifTotalUnread(totalUnread);
             setNotifPage(p);
             setNotifs(prev => {
                 const locallyRead = new Set(
@@ -98,7 +139,8 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
 
     useEffect(() => {
         fetchNotifs(1);
-        const interval = setInterval(() => fetchNotifs(notifPage), 5000);
+        fetchUnreadCount();
+        const interval = setInterval(() => { fetchNotifs(1); fetchUnreadCount(); }, 5000);
         return () => clearInterval(interval);
     }, [apiEndpoint]);
 
@@ -130,12 +172,14 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         setNotifs(prev => prev.map(n =>
             n.notificationId === id ? { ...n, isRead: true } : n
         ));
+        setNotifTotalUnread(prev => Math.max(0, prev - 1));
         try {
             await api.patch(`${apiEndpoint}/${id}/read`);
         } catch {
             setNotifs(prev => prev.map(n =>
                 n.notificationId === id ? { ...n, isRead: false } : n
             ));
+            setNotifTotalUnread(prev => prev + 1);
         }
     };
 
@@ -144,6 +188,7 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         if (unread.length === 0) return;
 
         setNotifs(prev => prev.map(n => ({ ...n, isRead: true })));
+        setNotifTotalUnread(0);
 
         await api.patch(`${apiEndpoint}/read-all`);
     };

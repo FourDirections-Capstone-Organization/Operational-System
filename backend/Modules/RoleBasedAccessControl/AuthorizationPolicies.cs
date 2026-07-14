@@ -25,8 +25,8 @@ public static class AuthorizationPolicies
         options.AddPolicy(CanManageUsers, policy =>
             policy.RequireRole(UserRole.Manager.ToString()));
 
-        // Can access audit logs (Manager Only)
+        // Can access audit logs (Manager and Coordinator)
         options.AddPolicy(CanAccessAuditLogs, policy =>
-            policy.RequireRole(UserRole.Manager.ToString()));
+            policy.RequireRole(UserRole.Manager.ToString(), UserRole.Coordinator.ToString()));
     }
 }

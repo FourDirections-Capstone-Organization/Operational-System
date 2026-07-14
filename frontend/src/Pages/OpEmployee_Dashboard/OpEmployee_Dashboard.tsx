@@ -60,7 +60,7 @@ const getAccountIdFromToken = (): string => {
 
 type Priority = 'high' | 'medium' | 'low';
 type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
-type NavTab = 'dashboard' | 'my-tasks' | 'profile' | 'activity_logs';
+type NavTab = 'dashboard' | 'my-tasks' | 'task-progress-review' | 'profile' | 'activity_logs';
 
 interface Task {
     id: string;
@@ -76,6 +76,9 @@ interface Task {
     supportingEvidenceUrl?: string;
     referenceNumber?: string;
     isConfidential?: boolean;
+    pushBackComment?: string;
+    reviewRemarks?: string;
+    isApproved?: boolean;
 }
 
 interface TaskResponseDTO {
@@ -101,6 +104,9 @@ interface TaskResponseDTO {
     supportingEvidenceUrl?: string;
     taskReferenceNumber?: string;
     isConfidential?: boolean;
+    pushBackComment?: string;
+    reviewRemarks?: string;
+    isApproved?: boolean;
 }
 
 interface UserProfile {
@@ -150,6 +156,9 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
         supportingEvidenceUrl: dto.supportingEvidenceUrl,
         referenceNumber: dto.taskReferenceNumber,
         isConfidential: dto.isConfidential ?? false,
+        pushBackComment: dto.pushBackComment,
+        reviewRemarks: dto.reviewRemarks,
+        isApproved: dto.isApproved,
     };
 };
 
@@ -223,6 +232,12 @@ const NAV_GROUPS: { label: string; items: { tab: NavTab; icon: React.FC<any>; la
         items: [
             { tab: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
             { tab: 'my-tasks', icon: ClipboardList, label: 'My Tasks' },
+        ],
+    },
+    {
+        label: 'WORKFLOW',
+        items: [
+            { tab: 'task-progress-review', icon: Eye, label: 'Task Progress Review' },
         ],
     },
     {
@@ -302,6 +317,22 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
                 <div style={{ marginBottom: 12 }}>
                     <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Remarks</label>
                     <p style={{ margin: '4px 0 0', fontSize: 14 }}>{task.remarks}</p>
+                </div>
+            )}
+            {task.pushBackComment && (
+                <div style={{ marginBottom: 12, padding: 10, background: 'rgba(238,93,80,0.06)', borderRadius: 8, border: '1px solid rgba(238,93,80,0.15)' }}>
+                    <label style={{ fontSize: 12, color: 'var(--status-failed)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <RefreshCw size={12} /> Coordinator Push-Back Comment
+                    </label>
+                    <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-primary)' }}>"{task.pushBackComment}"</p>
+                </div>
+            )}
+            {task.reviewRemarks && (
+                <div style={{ marginBottom: 12, padding: 10, background: 'rgba(5,205,153,0.06)', borderRadius: 8, border: '1px solid rgba(5,205,153,0.15)' }}>
+                    <label style={{ fontSize: 12, color: 'var(--status-active)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} /> Review Remarks
+                    </label>
+                    <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-primary)' }}>{task.reviewRemarks}</p>
                 </div>
             )}
 
@@ -881,11 +912,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     const handleChangePwd = async () => {
         setPwdError('');
         if (!pwd.current) { setPwdError('Current password is required.'); return; }
-        if (pwd.next.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
+        if (pwd.next.length < 15) { setPwdError('New password must be at least 15 characters.'); return; }
         if (pwd.next !== pwd.confirm) { setPwdError('Passwords do not match.'); return; }
         setPwdSaving(true);
         try {
-            await api.patch('/api/Auth/change-password', { currentPassword: pwd.current, newPassword: pwd.next });
+            await api.post('/api/Auth/change-password', { currentPassword: pwd.current, newPassword: pwd.next, confirmPassword: pwd.confirm });
             setPwdMode(false);
             setPwd({ current: '', next: '', confirm: '' });
         } catch (err: any) {
@@ -1118,11 +1149,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                                 type={showPwd[k] ? 'text' : 'password'}
                                                 value={pwd[k]}
                                                 onChange={e => setPwd(p => ({ ...p, [k]: e.target.value }))}
-                                                placeholder={
-                                                    i === 0 ? 'Enter current password'
-                                                        : i === 1 ? 'At least 6 characters'
-                                                            : 'Re-enter new password'
-                                                }
+                                                    placeholder={
+                                                        i === 0 ? 'Enter current password'
+                                                            : i === 1 ? 'At least 15 characters'
+                                                                : 'Re-enter new password'
+                                                    }
                                             />
                                             <button className="pwd-toggle" onClick={() => toggleShow(k)} tabIndex={-1}>
                                                 {showPwd[k] ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -1177,6 +1208,179 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     );
 };
 
+// ─── Task Progress Review Tab ─────────────────────────────────────────────────
+
+const TaskProgressReviewTab: React.FC<{
+    tasks: Task[];
+    loading: boolean;
+    error: string;
+    onView: (id: string) => void;
+    onUpdate: (id: string) => void;
+    onRetry: () => void;
+}> = ({ tasks, loading, error, onView, onUpdate, onRetry }) => {
+    const pendingReview = tasks.filter(t => t.status === 'pending-review' || t.status === 'done');
+    const pushedBack = tasks.filter(t => t.status === 'in-progress' && !!t.pushBackComment);
+    const completed = tasks.filter(t => t.status === 'completed');
+
+    if (loading) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <Loader2 size={22} className="spin" />
+                        <p>Loading review data…</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <AlertCircle size={22} style={{ color: 'var(--danger)' }} />
+                        <p>{error}</p>
+                        <button className="btn btn-primary" onClick={onRetry} style={{ marginTop: 8 }}>
+                            <RefreshCw size={13} /> Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const allEmpty = pendingReview.length === 0 && pushedBack.length === 0 && completed.length === 0;
+    if (allEmpty) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <Eye size={22} />
+                        <p>No tasks have been submitted for review yet.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const SectionCard: React.FC<{
+        title: string;
+        icon: React.ReactNode;
+        count: number;
+        badgeCls: string;
+        children: React.ReactNode;
+    }> = ({ title, icon, count, badgeCls, children }) => (
+        <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header-layout" style={{ marginBottom: 12 }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    {icon}
+                    {title}
+                </h3>
+                <span className={`badge ${badgeCls}`}>{count}</span>
+            </div>
+            {children}
+        </div>
+    );
+
+    const renderTaskRow = (t: Task, extra?: React.ReactNode) => {
+        const es = effectiveStatus(t);
+        const sm = statusMeta[es];
+        const pm = priorityMeta[t.priority];
+        const od = es === 'overdue';
+        return (
+            <div
+                key={t.id}
+                className="dash-task-row"
+                onClick={() => onView(t.id)}
+                style={{ cursor: 'pointer', padding: '10px 0', borderBottom: '1px solid var(--border)' }}
+            >
+                <div className="dtr-left">
+                    <span className={`prio-dot ${pm.cls}`} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="dtr-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {t.name}
+                            {t.isConfidential && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap' }}>
+                                    CONFIDENTIAL
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                {t.referenceNumber ? `#${t.referenceNumber}` : ''}
+                            </span>
+                            {extra}
+                        </div>
+                    </div>
+                </div>
+                <div className="dtr-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className={`badge ${sm.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        {sm.icon}{sm.label}
+                    </span>
+                    {t.status !== 'completed' && (
+                        <button
+                            className="btn btn-xs btn-primary"
+                            onClick={e => { e.stopPropagation(); onUpdate(t.id); }}
+                        >
+                            Update
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="tab-content">
+
+            {/* ── Pending Review ── */}
+            {pendingReview.length > 0 && (
+                <SectionCard title="Pending Review" icon={<Eye size={16} />} count={pendingReview.length} badgeCls="badge-purple">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        These tasks are waiting for your coordinator's review.
+                    </p>
+                    {pendingReview.map(t => renderTaskRow(t))}
+                </SectionCard>
+            )}
+
+            {/* ── Pushed Back ── */}
+            {pushedBack.length > 0 && (
+                <SectionCard title="Pushed Back / Needs Revision" icon={<RefreshCw size={16} />} count={pushedBack.length} badgeCls="badge-amber">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        Your coordinator returned these tasks for revision. See their comments below.
+                    </p>
+                    {pushedBack.map(t =>
+                        <div key={t.id}>
+                            {renderTaskRow(t, t.pushBackComment ? (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed)', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                    " {t.pushBackComment} "
+                                </span>
+                            ) : undefined)}
+                        </div>
+                    )}
+                </SectionCard>
+            )}
+
+            {/* ── Approved / Completed ── */}
+            {completed.length > 0 && (
+                <SectionCard title="Approved / Completed" icon={<CheckCircle2 size={16} />} count={completed.length} badgeCls="badge-green">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        These tasks have been reviewed and approved.
+                    </p>
+                    {completed.map(t => renderTaskRow(t, t.reviewRemarks ? (
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                            Remarks: {t.reviewRemarks}
+                        </span>
+                    ) : undefined))}
+                </SectionCard>
+            )}
+
+        </div>
+    );
+};
+
 // ─── Root Component ───────────────────────────────────────────────────────────
 
 export default function EmployeeDashboard() {
@@ -1208,12 +1412,13 @@ export default function EmployeeDashboard() {
 
     const fetchActivityLogs = async (page: number) => {
         try {
-            const res = await api.get(`/api/audit-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`);
-            const data = res.data;
-            if (data && Array.isArray(data.data)) {
-                setActivityLogs(data.data);
-                setActivityLogPage(data.pageNumber || page);
-                setActivityLogTotalPages(data.totalPages || 1);
+            const res = await api.get('/api/audit-logs/my', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items);
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
             } else {
                 setActivityLogs([]);
             }
@@ -1323,6 +1528,7 @@ export default function EmployeeDashboard() {
     const pageTitles: Record<NavTab, string> = {
         dashboard: 'My Dashboard',
         'my-tasks': 'My Tasks',
+        'task-progress-review': 'Task Progress Review',
         profile: 'My Profile',
         activity_logs: 'Activity Logs',
     };
@@ -1409,6 +1615,13 @@ export default function EmployeeDashboard() {
                 )}
                 {activeTab === 'my-tasks' && (
                     <MyTasksTab
+                        tasks={tasks} loading={tasksLoading} error={tasksError}
+                        onView={setViewingId} onUpdate={setUpdatingId}
+                        onRetry={fetchTasks}
+                    />
+                )}
+                {activeTab === 'task-progress-review' && (
+                    <TaskProgressReviewTab
                         tasks={tasks} loading={tasksLoading} error={tasksError}
                         onView={setViewingId} onUpdate={setUpdatingId}
                         onRetry={fetchTasks}

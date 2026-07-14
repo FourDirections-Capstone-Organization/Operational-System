@@ -41,13 +41,15 @@ axios.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        // Handle deactivated/locked account
-        const msg = error.response?.data?.message ?? '';
-        if (msg.toLowerCase().includes('deactivated') || msg.toLowerCase().includes('locked')) {
-            const empNum = localStorage.getItem('employeeId') || '';
-            localStorage.clear();
-            window.location.href = `/account_locked?employeeNumber=${encodeURIComponent(empNum)}`;
-            return Promise.reject(error);
+        // Handle deactivated/locked account — only for 401 from SessionTimeoutMiddleware
+        if (error.response?.status === 401) {
+            const msg = error.response?.data?.message ?? '';
+            if (msg.toLowerCase().includes('deactivated') || msg.toLowerCase().includes('locked')) {
+                const empNum = localStorage.getItem('employeeId') || '';
+                localStorage.clear();
+                window.location.href = `/account_locked?employeeNumber=${encodeURIComponent(empNum)}`;
+                return Promise.reject(error);
+            }
         }
 
         if (error.response?.status !== 401 || originalRequest._retry) {

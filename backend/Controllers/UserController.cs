@@ -91,7 +91,10 @@ public class UserController : ControllerBase
     [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Deactivate(Guid id)
     {
-        var result = await _userService.DeactivateAsync(id);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid? requestUserId = Guid.TryParse(userId, out var guid) ? guid : null;
+
+        var result = await _userService.DeactivateAsync(id, requestUserId);
         if (!result.IsSuccess)
         {
             if (result.Message.Contains("not found"))
@@ -107,7 +110,10 @@ public class UserController : ControllerBase
     [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
     public async Task<IActionResult> Activate(Guid id)
     {
-        var result = await _userService.ActivateAsync(id);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid? requestUserId = Guid.TryParse(userId, out var guid) ? guid : null;
+
+        var result = await _userService.ActivateAsync(id, requestUserId);
         if (!result.IsSuccess)
         {
             if (result.Message.Contains("not found"))

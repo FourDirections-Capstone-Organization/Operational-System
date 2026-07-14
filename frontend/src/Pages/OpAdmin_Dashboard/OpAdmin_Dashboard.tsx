@@ -550,6 +550,7 @@ interface WorkloadInfo {
     employeeName: string;
     accountId: string;
     availabilityStatus: string;
+    isAvailable: boolean;
     workload: number;
     role: string;
     isRecommended: boolean;
@@ -622,19 +623,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
                         employeeName: emp.fullName ?? emp.FullName ?? '',
                         accountId: emp.userId ?? emp.UserId ?? emp.id,
-                        availabilityStatus: 'Active',
-                        workload: 0,
+                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
+                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
+                        workload: emp.workload ?? 0,
                         role: emp.role ?? '',
                         isRecommended: true,
                         recommendationReason: 'Available for assignment',
                     }));
                     setEligibleEmployees(mapped);
-                    if (mapped.length > 0) {
-                        const best = mapped.reduce((a, b) => a.workload <= b.workload ? a : b);
+                    const activeEmployees = mapped.filter(e => e.isAvailable);
+                    if (activeEmployees.length > 0) {
+                        const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
                         setRecommendation({
                             employeeName: best.employeeName,
                             accountId: best.accountId,
-                            availabilityStatus: 'Active',
+                            availabilityStatus: best.availabilityStatus,
                             workload: best.workload,
                             reason: 'Available for assignment',
                         });
@@ -655,6 +658,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         };
         fetchRecommendations();
         fetchDepartments();
+
+        // FR-065: Periodic refresh of availability status
+        const interval = setInterval(fetchRecommendations, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     // -- Per-field live validator ------------------------------------------
@@ -1111,17 +1118,23 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                             {eligibleEmployees.map(e => {
                                                 const isSelected = form.assignedTo === e.accountId;
                                                 const isRecommended = recommendation?.accountId === e.accountId;
+                                                const disabled = !e.isAvailable;
                                                 return (
                                                     <div
                                                         key={e.accountId}
-                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}`}
-                                                        onClick={() => { setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
+                                                        onClick={() => {
+                                                            if (disabled) return;
+                                                            setForm(prev => ({ ...prev, assignedTo: e.accountId }));
+                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                                        }}
+                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
                                                     >
                                                         <span className="sr-emp-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                             {isSelected && <CheckCircle2 size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
                                                             {e.employeeName}
                                                         </span>
-                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
                                                             {e.availabilityStatus}
                                                         </span>
                                                         <span className="sr-workload">{e.workload} tasks</span>
@@ -1159,11 +1172,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                         <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
                                             {eligibleEmployees.map(e => {
                                                 const selected = selectedTeamIds.includes(e.accountId);
+                                                const disabled = !e.isAvailable;
                                                 return (
                                                     <div
                                                         key={e.accountId}
-                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}`}
+                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
                                                         onClick={() => {
+                                                            if (disabled) return;
                                                             setSelectedTeamIds(prev =>
                                                                 prev.includes(e.accountId)
                                                                     ? prev.filter(id => id !== e.accountId)
@@ -1171,12 +1186,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                                             );
                                                             setErrors(prev => ({ ...prev, assignedTo: '' }));
                                                         }}
+                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
                                                     >
-                                                        <input type="checkbox" checked={selected}
+                                                        <input type="checkbox" checked={selected} disabled={disabled}
                                                             onChange={() => { }}
                                                             onClick={e => e.stopPropagation()} />
                                                         <span className="sr-emp-name">{e.employeeName}</span>
-                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
                                                             {e.availabilityStatus}
                                                         </span>
                                                         <span className="sr-workload">{e.workload} tasks</span>
@@ -3179,11 +3195,11 @@ function ProfileTab() {
 
     const handlePwSave = async () => {
         if (!pwForm.current) { setPwError('Current password is required.'); return; }
-        if (pwForm.next.length < 8) { setPwError('New password must be at least 8 characters.'); return; }
+        if (pwForm.next.length < 15) { setPwError('New password must be at least 15 characters.'); return; }
         if (pwForm.next !== pwForm.confirm) { setPwError('Passwords do not match.'); return; }
         setPwSaving(true);
         try {
-            await api.patch('/api/Auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next });
+            await api.post('/api/Auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next, confirmPassword: pwForm.confirm });
             success('Password changed successfully!');
             setEditingPassword(false);
             setPwForm({ current: '', next: '', confirm: '' });
@@ -4018,20 +4034,21 @@ export default function OpsAdminDashboard() {
     const [activityLogTotalPages, setActivityLogTotalPages] = useState(1);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
 
-    const fetchActivityLogs = (page: number) => {
-        api.get(`/api/audit-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`)
-            .then(res => res.data)
-            .catch(() => null)
-            .then(data => {
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]));
+    const fetchActivityLogs = async (page: number) => {
+        try {
+            const res = await api.get('/api/audit-logs', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items);
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        }
     };
 
     // -- Update fetchTasks --
