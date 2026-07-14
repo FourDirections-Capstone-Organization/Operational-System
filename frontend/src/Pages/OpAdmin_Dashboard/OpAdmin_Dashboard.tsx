@@ -23,6 +23,7 @@ import {
     LogOut,
     Save,
     Loader2,
+    User,
     Users,
     Search,
     Trash2,
@@ -40,6 +41,7 @@ import {
     Activity,
     Building,
     Clock,
+    Play,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
@@ -321,6 +323,7 @@ const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 interface TaskTemplateDTO {
     templateId: string;
     templateName: string;
+    defaultTitle: string;
     templateDescription: string;
     priorityLevel: string;
     recurrenceType: string;
@@ -337,6 +340,7 @@ interface TaskTemplateDTO {
 
 interface CreateTemplateDTO {
     templateName: string;
+    defaultTitle: string;
     templateDescription: string;
     priorityLevel: string;
     recurrenceType: string;
@@ -1359,7 +1363,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ task, onEdit, onReopen, onStatusC
                 <div className="view-modal-section">
                     <label className="view-modal-label">Assigned To:</label>
                     <div className="view-modal-assignee-box">
-                        {task.assignedEmployee || '�'}
+                        {task.assignedEmployee || 'Unassigned'}
                     </div>
                 </div>
 
@@ -2122,6 +2126,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
             setTemplates(list.map((t: any) => ({
                 templateId: t.id ?? t.templateId,
                 templateName: t.templateName ?? '',
+                defaultTitle: t.defaultTitle ?? '',
                 templateDescription: t.defaultDescription ?? '',
                 priorityLevel: String(t.defaultPriorityLevel ?? t.priorityLevel ?? 'Medium'),
                 recurrenceType: String(t.recurrenceRule ?? t.recurrenceType ?? 'Daily'),
@@ -2166,12 +2171,22 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
         }
     };
 
+    const handleDeploy = async (templateId: string) => {
+        try {
+            await api.post(`/api/TaskTemplate/${templateId}/deploy`);
+            success('Task deployed successfully from template.');
+            await fetchTemplates();
+        } catch (err: any) {
+            error(err.message ?? 'Failed to deploy task from template.');
+        }
+    };
+
     const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3, Critical: 3 };
     const RECUR_TO_BACKEND: Record<string, number> = { Daily: 0, Weekly: 1, Monthly: 2 };
     const handleSave = async (data: CreateTemplateDTO, templateId?: string) => {
         const backendPayload = {
             templateName: data.templateName,
-            defaultTitle: data.templateName,
+            defaultTitle: data.defaultTitle || data.templateName,
             defaultDescription: data.templateDescription,
             defaultPriorityLevel: PRIO_TO_BACKEND[data.priorityLevel] ?? 1,
             defaultClassification: 0,
@@ -2219,6 +2234,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                         <td>
                             <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.templateName}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.templateDescription}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>Task title: {t.defaultTitle || t.templateName}</div>
                         </td>
                         <td><PrioBadge p={t.priorityLevel as Priority} /></td>
                         <td>
@@ -2235,6 +2251,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                             <ActionsDropdown
                                 actions={[
                                     { label: 'Edit', icon: <Pencil size={12} />, onClick: () => openEdit(t) },
+                                    { label: 'Deploy Now', icon: <Play size={12} />, onClick: () => handleDeploy(t.templateId), variant: 'success' as const },
                                     {
                                         label: t.templateStatus === 'Active' ? 'Deactivate' : 'Activate',
                                         icon: <ToggleLeft size={12} />,
@@ -2290,6 +2307,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
     const isEdit = !!template;
     const [form, setForm] = useState({
         templateName: template?.templateName ?? '',
+        defaultTitle: template?.defaultTitle ?? '',
         templateDescription: template?.templateDescription ?? '',
         priorityLevel: template?.priorityLevel ?? 'Medium',
         recurrenceType: template?.recurrenceType ?? 'Daily',
@@ -2305,6 +2323,8 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
         const e: Record<string, string> = {};
         if (!form.templateName.trim()) e.templateName = 'Template name is required.';
         else if (form.templateName.length > 150) e.templateName = 'Must not exceed 150 characters.';
+        if (!form.defaultTitle.trim()) e.defaultTitle = 'Default title is required.';
+        else if (form.defaultTitle.length > 150) e.defaultTitle = 'Must not exceed 150 characters.';
         if (!form.templateDescription.trim()) e.templateDescription = 'Description is required.';
         else if (form.templateDescription.length > 2000) e.templateDescription = 'Must not exceed 2000 characters.';
         if (!form.recurrenceStartDate) e.recurrenceStartDate = 'Start date is required.';
@@ -2319,6 +2339,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
         try {
             await onSave({
                 templateName: form.templateName.trim(),
+                defaultTitle: form.defaultTitle.trim(),
                 templateDescription: form.templateDescription.trim(),
                 priorityLevel: form.priorityLevel,
                 recurrenceType: form.recurrenceType,
@@ -2361,6 +2382,13 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
                 <input type="text" className={errors.templateName ? 'report-input report-input-error' : 'report-input'}
                     value={form.templateName} onChange={set('templateName')} maxLength={150} placeholder="e.g. Weekly Warehouse Inventory" />
                 <FieldErr name="templateName" />
+            </div>
+
+            <div className="field">
+                <label>Default Task Title *</label>
+                <input type="text" className={errors.defaultTitle ? 'report-input report-input-error' : 'report-input'}
+                    value={form.defaultTitle} onChange={set('defaultTitle')} maxLength={150} placeholder="e.g. Conduct weekly warehouse inventory" />
+                <FieldErr name="defaultTitle" />
             </div>
 
             <div className="field">
@@ -2420,12 +2448,60 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
 
 // --- Team Tab -----------------------------------------------------------------
 
+interface EmpRecDTO {
+    recommendationId: string;
+    category: string;
+    notes: string;
+    recommendedByName: string;
+    taskTitle: string;
+    createdAt: string;
+}
+
+const CATEGORY_LABELS: Record<number, string> = {
+    0: 'Timeliness',
+    1: 'Work Quality',
+    2: 'Communication',
+    3: 'Other',
+};
+
 const TeamTab: React.FC<{
     tasks: Task[];
     teamMembers: TeamMember[];
     onView: (id: string) => void;
 }> = ({ tasks, teamMembers, onView }) => {
     const [selectedMemberId, setSelectedMemberId] = useState(teamMembers[0]?.accountId ?? '');
+    const [showRecModal, setShowRecModal] = useState(false);
+    const [recEmployee, setRecEmployee] = useState('');
+    const [recEmployeeName, setRecEmployeeName] = useState('');
+    const [empRecommendations, setEmpRecommendations] = useState<EmpRecDTO[]>([]);
+    const [recLoading, setRecLoading] = useState(false);
+    const [recError, setRecError] = useState('');
+
+    const fetchEmpRecommendations = async (empId: string, empName: string) => {
+        setRecLoading(true);
+        setRecError('');
+        setEmpRecommendations([]);
+        setRecEmployee(empId);
+        setRecEmployeeName(empName);
+        setShowRecModal(true);
+        try {
+            const res = await api.get<any>(`/api/users/${empId}/recommendations`);
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
+            setEmpRecommendations(list.map((r: any) => ({
+                recommendationId: r.id ?? r.recommendationId,
+                category: CATEGORY_LABELS[r.category as number] ?? String(r.category),
+                notes: r.notes ?? '',
+                recommendedByName: r.coordinatorName ?? '',
+                taskTitle: r.taskTitle ?? '',
+                createdAt: r.createdAt ?? '',
+            })));
+        } catch (err: any) {
+            setRecError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
+        } finally {
+            setRecLoading(false);
+        }
+    };
 
     return (
         <div className="dashboard-content">
@@ -2450,6 +2526,10 @@ const TeamTab: React.FC<{
                                 </div>
                                 <span className="badge badge-blue">{mt.length} tasks</span>
                                 <span className="badge badge-green">{mc} done</span>
+                                <button className="btn btn-sm" onClick={e => { e.stopPropagation(); fetchEmpRecommendations(m.accountId, m.employeeName); }}
+                                    style={{ marginLeft: 4, padding: '4px 8px', fontSize: 10 }}>
+                                    <Lightbulb size={10} /> Recs
+                                </button>
                             </div>
                         );
                     })}
@@ -2485,6 +2565,40 @@ const TeamTab: React.FC<{
                         .map(t => <TaskRow key={t.taskId} task={t} onView={onView} />)
                 }
             </div>
+
+            <FormModal isOpen={showRecModal} onClose={() => setShowRecModal(false)}
+                title="Recommendation History"
+                subtitle={`All recommendations for ${recEmployeeName}`}
+                size="md"
+                footer={<button className="btn" onClick={() => setShowRecModal(false)}>Close</button>}
+            >
+                {recLoading ? (
+                    <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading recommendations...</div>
+                ) : recError ? (
+                    <div className="tr-error" style={{ marginBottom: 12 }}><AlertCircle size={13} /> {recError}</div>
+                ) : empRecommendations.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        No recommendations for this employee yet.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                        {empRecommendations.map(r => (
+                            <div key={r.recommendationId} className="tr-item">
+                                <div className="tr-item-top">
+                                    <span className="tr-category">{r.category}</span>
+                                    <span className="tr-author"><User size={10} /> {r.recommendedByName}</span>
+                                </div>
+                                <div className="tr-notes">{r.notes}</div>
+                                <div style={{ fontSize: 10, color: '#94a3b8', display: 'flex', gap: 8 }}>
+                                    <span>Task: {r.taskTitle}</span>
+                                    <span>·</span>
+                                    <span>{new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </FormModal>
         </div>
     );
 };

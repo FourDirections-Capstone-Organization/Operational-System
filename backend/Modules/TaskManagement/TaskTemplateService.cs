@@ -11,11 +11,13 @@ public class TaskTemplateService : ITaskTemplateService
 {
     private readonly AppDbContext _db;
     private readonly INotificationService _notificationService;
+    private readonly IAuditLogService _auditLogService;
 
-    public TaskTemplateService(AppDbContext db, INotificationService notificationService)
+    public TaskTemplateService(AppDbContext db, INotificationService notificationService, IAuditLogService auditLogService)
     {
         _db = db;
         _notificationService = notificationService;
+        _auditLogService = auditLogService;
     }
 
     public async Task<ApiResponseDTO<TaskTemplateResponseDTO>> CreateAsync(
@@ -71,6 +73,15 @@ public class TaskTemplateService : ITaskTemplateService
 
         _db.TaskTemplates.Add(template);
         await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            creatorId,
+            AuditActionType.Create,
+            "TaskTemplate",
+            template.Id,
+            null,
+            $"Task template '{template.TemplateName}' created",
+            "TaskManagement");
 
         return ApiResponseDTO<TaskTemplateResponseDTO>.Success(
             await MapToResponseDTOAsync(template),
@@ -177,6 +188,15 @@ public class TaskTemplateService : ITaskTemplateService
         template.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            template.CreatedById,
+            AuditActionType.Update,
+            "TaskTemplate",
+            template.Id,
+            null,
+            $"Task template '{template.TemplateName}' updated",
+            "TaskManagement");
+
         return ApiResponseDTO<TaskTemplateResponseDTO>.Success(
             await MapToResponseDTOAsync(template),
             "Task template updated successfully");
@@ -195,6 +215,15 @@ public class TaskTemplateService : ITaskTemplateService
         template.IsActive = false;
         template.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            template.CreatedById,
+            AuditActionType.Delete,
+            "TaskTemplate",
+            template.Id,
+            null,
+            $"Task template '{template.TemplateName}' deactivated",
+            "TaskManagement");
 
         return ApiResponseDTO<bool>.Success(true, "Template deactivated successfully");
     }
@@ -285,6 +314,15 @@ public class TaskTemplateService : ITaskTemplateService
 
         await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
         await _db.Entry(task).Collection(t => t.Assignments).LoadAsync();
+
+        await _auditLogService.LogAsync(
+            coordinatorId,
+            AuditActionType.Create,
+            "TaskTemplate",
+            template.Id,
+            null,
+            $"Manual deployment from template '{template.TemplateName}' created task '{task.Title}'",
+            "TaskManagement");
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapTaskToResponseDTOAsync(task),
