@@ -102,6 +102,10 @@ public class UserService : IUserService
         var verificationUrl = $"{_frontendUrl}/verify-email";
         await _emailVerificationService.SendVerificationEmailForUserAsync(user.Id, verificationUrl);
 
+        // Send welcome email with login credentials
+        var fullName = $"{user.FirstName} {user.LastName}".Trim();
+        await _emailService.SendWelcomeEmailAsync(user.Email, fullName, user.EmployeeNumber, tempPassword);
+
         _logger.LogInformation("New user registered: {EmployeeNumber} - {Email}", user.EmployeeNumber, user.Email);
 
         var response = MapToResponseDTO(user);

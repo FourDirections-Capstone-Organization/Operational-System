@@ -26,9 +26,6 @@ public class AuthController : ControllerBase
     {
         var ipAddress = GetIpAddress();
         var result = await _authService.LoginAsync(dto, ipAddress);
-        if (!result.IsSuccess)
-            return Unauthorized(result);
-
         return Ok(result);
     }
 
