@@ -34,7 +34,9 @@ export async function selectClassification(page: Page, label: string) {
 }
 
 export async function selectSingleAssignee(page: Page, name: string) {
-  await page.locator('.sr-eligible-row', { hasText: name }).first().click();
+  const row = page.locator('.sr-eligible-row', { hasText: name }).first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
 }
 
 export async function submitTaskForm(page: Page) {

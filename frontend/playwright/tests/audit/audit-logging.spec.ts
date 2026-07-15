@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, waitForDashboard, openSidebarTab, completeOnboardingIfNeeded } from '../../helpers/auth';
+import { loginAndHandleOnboarding, openSidebarTab } from '../../helpers/auth';
 
 const MANAGER_ID = process.env.MANAGER_ID || '';
 const MANAGER_PW = process.env.MANAGER_PW || '';
@@ -15,9 +15,7 @@ test.beforeAll(() => {
 test.describe('Flow 5.2: Audit Logging', () => {
   test('Manager views audit logs and filters them', async ({ page }) => {
     await test.step('Login as Manager and open Activity Logs tab', async () => {
-      await login(page, MANAGER_ID, MANAGER_PW);
-      await completeOnboardingIfNeeded(page, MANAGER_ID, MANAGER_PW);
-      await waitForDashboard(page, 'Manager');
+      await loginAndHandleOnboarding(page, MANAGER_ID, MANAGER_PW, 'Manager');
       await openSidebarTab(page, 'Activity Logs');
     });
 

@@ -216,36 +216,41 @@ const NAV_GROUPS = [
     {
         label: 'MAIN MENU',
         items: [
-            { tab: 'dashboard' as NavTab, icon: LayoutDashboard, label: 'Dashboard' },
-            { tab: 'employees' as NavTab, icon: Users, label: 'Manage Employee' },
+            { tab: 'dashboard' as NavTab, icon: 'LayoutDashboard', label: 'Dashboard' },
+            { tab: 'employees' as NavTab, icon: 'Users', label: 'Manage Employee' },
         ],
     },
     {
         label: 'INTEGRATION',
         items: [
-            { tab: 'delivery' as NavTab, icon: FileText, label: 'Delivery Summary' },
-            { tab: 'tasks' as NavTab, icon: ClipboardList, label: 'Task Management' },
-            { tab: 'finance' as NavTab, icon: BarChart3, label: 'Finance' },
+            { tab: 'delivery' as NavTab, icon: 'FileText', label: 'Delivery Summary' },
+            { tab: 'tasks' as NavTab, icon: 'ClipboardList', label: 'Task Management' },
+            { tab: 'finance' as NavTab, icon: 'BarChart3', label: 'Finance' },
         ],
     },
     {
         label: 'REPORTS',
         items: [
-            { tab: 'reports' as NavTab, icon: BarChart3, label: 'Reports' },
+            { tab: 'reports' as NavTab, icon: 'BarChart3', label: 'Reports' },
         ],
     },
     {
         label: 'SYSTEM',
         items: [
-            { tab: 'announcements' as NavTab, icon: Megaphone, label: 'Announcements' },
-            { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
-            { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
-            { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
-            { tab: 'notifications' as NavTab, icon: Bell, label: 'Notifications' },
-            { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
+            { tab: 'announcements' as NavTab, icon: 'Megaphone', label: 'Announcements' },
+            { tab: 'settings' as NavTab, icon: 'Settings', label: 'Settings' },
+            { tab: 'roles' as NavTab, icon: 'Shield', label: 'Role Management' },
+            { tab: 'org-structure' as NavTab, icon: 'GitBranch', label: 'Org Structure' },
+            { tab: 'notifications' as NavTab, icon: 'Bell', label: 'Notifications' },
+            { tab: 'activity_logs' as NavTab, icon: 'Activity', label: 'Activity Logs' },
         ],
     },
 ];
+
+const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+    LayoutDashboard, Users, FileText, ClipboardList, BarChart3,
+    Megaphone, Settings, Shield, GitBranch, Bell, Activity,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2531,11 +2536,14 @@ export default function Dashboard() {
                     {NAV_GROUPS.map(group => (
                         <div key={group.label} className="nav-section">
                             <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon: Icon, label }) => (
-                                <div key={tab} className={`nav-item${activeTab === tab ? ' nav-item-active' : ''}`} onClick={() => { setActiveTab(tab); setSelectedPanelEmployee(null); }}>
-                                    <Icon size={18} /><span className="nav-item-label">{label}</span>
-                                </div>
-                            ))}
+                            {group.items.map(({ tab, icon, label }) => {
+                                const Icon = NAV_ICONS[icon];
+                                return (
+                                    <div key={tab} className={`nav-item${activeTab === tab ? ' nav-item-active' : ''}`} onClick={() => { setActiveTab(tab); setSelectedPanelEmployee(null); }}>
+                                        {Icon && <Icon size={18} />}<span className="nav-item-label">{label}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ))}
                 </nav>

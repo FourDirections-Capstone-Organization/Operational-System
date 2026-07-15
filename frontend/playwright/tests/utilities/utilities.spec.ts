@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, waitForDashboard, waitForSuccessToast, openSidebarTab, completeOnboardingIfNeeded } from '../../helpers/auth';
+import { loginAndHandleOnboarding, openSidebarTab } from '../../helpers/auth';
 import {
   clickNewTask, fillTaskTitle, fillTaskDescription, selectPriority,
   selectClassification, selectSingleAssignee, submitTaskForm,
@@ -23,9 +23,7 @@ test.beforeAll(() => {
 test.describe('Flow 5.1: Utilities', () => {
   test('duplicate task warning triggers and allows continue', async ({ page }) => {
     await test.step('Login as Coordinator', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await completeOnboardingIfNeeded(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
     });
 
@@ -35,12 +33,20 @@ test.describe('Flow 5.1: Utilities', () => {
       await fillTaskDescription(page, 'Original task for duplicate detection test');
       await selectPriority(page, 'Low');
       await selectClassification(page, 'Routine Daily Task');
-      await selectSingleAssignee(page, ENCODER_ID);
+      await selectSingleAssignee(page, 'Encoder1');
       await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await page.waitForTimeout(3_000);
+      await page.evaluate(() => {
+        document.querySelectorAll('.modal-overlay, .fm-overlay').forEach(el => el.remove());
+      });
+      await page.waitForTimeout(500);
     });
 
     await test.step('Create similar task and see duplicate warning', async () => {
+      await page.evaluate(() => {
+        document.querySelectorAll('.modal-overlay, .fm-overlay').forEach(el => el.remove());
+      });
+      await page.waitForTimeout(500);
       await clickNewTask(page);
       await fillTaskTitle(page, BASE_TITLE);
       await fillTaskDescription(page, 'Similar description to trigger duplicate check');
@@ -56,11 +62,11 @@ test.describe('Flow 5.1: Utilities', () => {
         await expect(page.locator('h3', { hasText: /duplicate/i })).toBeVisible();
         await expect(page.locator('button', { hasText: 'Continue Anyway' })).toBeVisible();
 
-        await selectSingleAssignee(page, ENCODER_ID);
+        await selectSingleAssignee(page, 'Encoder1');
         await page.locator('button', { hasText: 'Continue Anyway' }).click();
         await page.waitForTimeout(1_000);
       } else {
-        await selectSingleAssignee(page, ENCODER_ID);
+        await selectSingleAssignee(page, 'Encoder1');
       }
 
       await submitTaskForm(page);

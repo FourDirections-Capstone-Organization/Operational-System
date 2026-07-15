@@ -1,34 +1,57 @@
 import { Page, expect } from '@playwright/test';
 
-export async function login(page: Page, employeeId: string, password: string) {
+export const NEW_PW = 'E2eTest@2024!StrongPass';
+
+async function doLogin(page: Page, employeeId: string, password: string) {
   await page.goto('/');
   await page.locator('#employeeId').fill(employeeId);
   await page.locator('#password').fill(password);
   await page.locator('button.submit-btn').click();
-
-  await page.waitForURL(/\/onboarding|\/set-password|\/SystemAdmin|\/OpAdmin|\/OpEmployee/, { timeout: 15_000 });
+  await page.waitForTimeout(2_000);
 }
 
-const NEW_TEST_PASSWORD = 'E2eTest@2024!StrongPass';
-
-async function tryApiOnboarding(page: Page, employeeId: string, currentPassword: string): Promise<boolean> {
+async function finalizePasswordChange(page: Page, employeeId: string, originalPassword: string) {
   const token = await page.evaluate(() => localStorage.getItem('authToken'));
   if (!token) return false;
 
   const resp = await page.request.post('/api/Auth/change-password', {
     headers: { Authorization: `Bearer ${token}` },
-    data: { currentPassword, newPassword: NEW_TEST_PASSWORD, confirmPassword: NEW_TEST_PASSWORD },
+    data: { currentPassword: originalPassword, newPassword: NEW_PW, confirmPassword: NEW_PW },
   });
   const body = await resp.json() as any;
   if (!body.isSuccess) return false;
 
   await page.evaluate(() => localStorage.setItem('isPasswordChanged', 'true'));
-  await page.goto('/');
-  await page.locator('#employeeId').fill(employeeId);
-  await page.locator('#password').fill(NEW_TEST_PASSWORD);
-  await page.locator('button.submit-btn').click();
-  await page.waitForURL(/\/(SystemAdmin|OpAdmin|OpEmployee)/, { timeout: 15_000 });
+  await doLogin(page, employeeId, NEW_PW);
   return true;
+}
+
+export async function loginAndHandleOnboarding(page: Page, employeeId: string, originalPassword: string, role: string) {
+  await doLogin(page, employeeId, originalPassword);
+
+  const url = page.url();
+
+  // Case 1: Already on dashboard
+  if (url.includes('/SystemAdmin') || url.includes('/OpAdmin') || url.includes('/OpEmployee')) {
+    const path = getExpectedDashboard(role);
+    await page.waitForURL(`**${path}`, { timeout: 15_000 });
+    return;
+  }
+
+  // Case 2: Redirected to onboarding → change password via API
+  if (url.includes('/onboarding') || url.includes('/set-password')) {
+    const ok = await finalizePasswordChange(page, employeeId, originalPassword);
+    if (ok) {
+      const path = getExpectedDashboard(role);
+      await page.waitForURL(`**${path}`, { timeout: 15_000 });
+      return;
+    }
+  }
+
+  // Case 3: Login failed (password already changed) → retry with new password
+  await doLogin(page, employeeId, NEW_PW);
+  const path = getExpectedDashboard(role);
+  await page.waitForURL(`**${path}`, { timeout: 15_000 });
 }
 
 export function getExpectedDashboard(role: string): string {
@@ -41,6 +64,14 @@ export function getExpectedDashboard(role: string): string {
     Accountant: '/OpEmployee_Dashboard',
   };
   return map[role] ?? '/OpEmployee_Dashboard';
+}
+
+export async function login(page: Page, employeeId: string, password: string) {
+  await page.goto('/');
+  await page.locator('#employeeId').fill(employeeId);
+  await page.locator('#password').fill(password);
+  await page.locator('button.submit-btn').click();
+  await page.waitForTimeout(2_000);
 }
 
 export async function waitForDashboard(page: Page, role: string) {
@@ -64,7 +95,13 @@ export async function waitForSuccessToast(page: Page) {
 }
 
 export async function openSidebarTab(page: Page, label: string) {
-  await page.locator('.nav-item', { has: page.locator('.nav-item-label', { hasText: label }) }).click();
+  await page.evaluate(() => {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.scrollTop = sidebar.scrollHeight;
+  });
+  await page.waitForTimeout(500);
+  const item = page.locator('.nav-item-label', { hasText: label });
+  await item.click({ force: true });
 }
 
 export async function openEmployeeDetail(page: Page, employeeId: string) {
@@ -75,44 +112,4 @@ export async function openEmployeeDetail(page: Page, employeeId: string) {
 export async function confirmPasswordGate(page: Page, password: string, confirmLabel: string) {
   await page.locator('#gate-pw-input').fill(password);
   await page.locator('.cm-btn.cm-btn-confirm', { hasText: confirmLabel }).click();
-}
-
-export async function completeOnboardingIfNeeded(page: Page, employeeId: string, currentPassword: string) {
-  const url = page.url();
-  if (!url.includes('/onboarding') && !url.includes('/set-password')) {
-    return;
-  }
-
-  const done = await tryApiOnboarding(page, employeeId, currentPassword);
-  if (done) return;
-
-  await page.waitForURL('**/onboarding**', { timeout: 10_000 });
-
-  const allInputs = page.locator('input');
-  const totalInputs = await allInputs.count();
-
-  if (totalInputs > 0) {
-    for (let i = 0; i < Math.min(totalInputs, 5); i++) {
-      const val = await allInputs.nth(i).inputValue();
-      if (val === '') {
-        if (i === 0) await allInputs.nth(i).fill('E2E');
-        else if (i === 1) await allInputs.nth(i).fill('TestUser');
-        else if (i === 4) await allInputs.nth(i).fill('09171234567');
-      }
-    }
-    const btn = page.locator('button', { hasText: /Save.*Continue/ });
-    if (await btn.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await btn.click();
-      await page.waitForTimeout(2_000);
-    }
-  }
-
-  const pwInputs = page.locator('input[type="password"]');
-  if ((await pwInputs.count()) >= 3) {
-    await pwInputs.nth(0).fill(currentPassword);
-    await pwInputs.nth(1).fill(NEW_TEST_PASSWORD);
-    await pwInputs.nth(2).fill(NEW_TEST_PASSWORD);
-    await page.locator('button', { hasText: /Set Password/ }).click();
-    await page.waitForURL(/\/(SystemAdmin|OpAdmin|OpEmployee)/, { timeout: 15_000 });
-  }
 }

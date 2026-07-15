@@ -817,7 +817,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         try {
             await onSave(payload);
         } catch {
-            // Error handled by parent
+            onClose();
         } finally {
             setSubmitting(false);
         }
@@ -4917,13 +4917,14 @@ export default function OpsAdminDashboard() {
                 setPendingFile(null);
             }
 
+            setShowNew(false);
             await fetchTasks();
             await fetchDashboardData();
-            setShowNew(false);
             success('Task created successfully.');
         } catch (err: any) {
             console.error('Create task error:', err);
             error(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to create task.');
+            setShowNew(false);
         }
     };
 

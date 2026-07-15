@@ -1587,7 +1587,7 @@ export default function EmployeeDashboard() {
                         </div>
                         <div className="profile-info">
                             <span className="profile-name">{user.fullName || 'Employee'}</span>
-                            <span className="profile-role">{toDisplayRole(user.role) || 'Encoder'}</span>
+                            <span className="profile-role">{(toDisplayRole(user.role) || 'Encoder').toUpperCase()}</span>
                         </div>
                         <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
                             <LogOut size={16} />
