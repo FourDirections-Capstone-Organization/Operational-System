@@ -316,7 +316,7 @@ const TASK_STATUSES_FILTER = [
 ];
 
 const PER_PAGE = 10;
-const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
+const PRIORITY_LEVELS = ['Urgent', 'High', 'Medium', 'Low'];
 
 // --- Task Template Types -------------------------------------------------------
 
@@ -429,7 +429,7 @@ const isTransitionValid = (from: string, to: string): boolean =>
     FSM_TRANSITIONS[from]?.includes(to) ?? false;
 
 const priorityDotClass = (p: Priority): string =>
-    ({ Urgent: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
+    ({ Urgent: 'prio-dot urgent', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
 
 const fmtDate = (d: string): string => {
     if (!d) return '—';
@@ -469,7 +469,7 @@ const Avatar: React.FC<{ member: TeamMember; size?: 'sm' | 'md' }> = ({ member, 
 );
 
 const PRIO_META: Record<string, { label: string; color: string; bg: string; border: string; icon: string }> = {
-    Critical: { label: 'Critical', color: '#7c1d1d', bg: '#fef2f2', border: '#fecaca', icon: '🔴' },
+    Urgent: { label: 'Urgent', color: '#7c1d1d', bg: '#fef2f2', border: '#fecaca', icon: '🔴' },
     High: { label: 'High', color: '#b91c1c', bg: '#fff7ed', border: '#fed7aa', icon: '🟠' },
     Medium: { label: 'Medium', color: '#92400e', bg: '#fffbeb', border: '#fde68a', icon: '🟡' },
     Low: { label: 'Low', color: '#065f46', bg: '#f0fdf4', border: '#bbf7d0', icon: '🟢' },
@@ -711,7 +711,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             }
             case 'priority': {
                 if (!value) return 'Priority is required.';
-                if (!['Critical', 'High', 'Medium', 'Low'].includes(value)) return 'Please select a valid priority.';
+                if (!['Urgent', 'High', 'Medium', 'Low'].includes(value)) return 'Please select a valid priority.';
                 return '';
             }
             default:
@@ -753,18 +753,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     todayStart.setHours(0, 0, 0, 0);
     const minDateTime = todayStart.toISOString().slice(0, 16);
 
-    const PRIORITY_MAP: Record<string, number> = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+    const PRIORITY_MAP: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
     const SCOPE_MAP: Record<string, number> = { SingleEmployee: 0, Team: 1, Department: 2 };
-    const isUrgent = form.priority === 'Critical';
+    const isUrgent = form.priority === 'Urgent';
     const slaLocked = isUrgent || isSLAEditLock;
-    const slaDeadline = React.useMemo(() => {
-        if (isUrgent) {
-            const d = new Date();
-            d.setHours(d.getHours() + 24);
-            return d;
-        }
-        return null;
-    }, [isUrgent]);
+    const getSlaDeadline = () => {
+        const d = new Date();
+        d.setHours(d.getHours() + 24);
+        return d;
+    };
 
     const handleSave = async () => {
         if (!validateAll()) return;
@@ -932,7 +929,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                 value={form.priority}
                                 onChange={e => {
                                     const val = e.target.value;
-                                    setForm(prev => ({ ...prev, priority: val as Priority, dueAt: val === 'Critical' ? slaDeadline?.toISOString().slice(0, 16) ?? prev.dueAt : prev.dueAt }));
+                                    setForm(prev => ({ ...prev, priority: val as Priority, dueAt: val === 'Urgent' ? getSlaDeadline().toISOString().slice(0, 16) : prev.dueAt }));
                                     setFormError('');
                                     const msg = validateField('priority', val);
                                     setErrors(prev => ({ ...prev, priority: msg || '' }));
@@ -940,7 +937,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                 className={errors.priority ? 'input-error' : ''}
                             >
                                 <option value="">Select priority</option>
-                                <option value="Critical">🔴 Critical</option>
+                                <option value="Urgent">🔴 Urgent</option>
                                 <option value="High">🟠 High</option>
                                 <option value="Medium">🟡 Medium</option>
                                 <option value="Low">🟢 Low</option>
@@ -949,9 +946,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             {!errors.priority && form.priority && (
                                 <span style={{
                                     fontSize: 11, marginTop: 3, display: 'block',
-                                    color: form.priority === 'Critical' ? '#7c1d1d' : form.priority === 'High' ? 'var(--status-failed)' : form.priority === 'Medium' ? 'var(--status-pending)' : 'var(--status-active)',
+                                    color: form.priority === 'Urgent' ? '#7c1d1d' : form.priority === 'High' ? 'var(--status-failed)' : form.priority === 'Medium' ? 'var(--status-pending)' : 'var(--status-active)',
                                 }}>
-                                    {form.priority === 'Critical' && '🔴 Critical — requires immediate attention'}
+                                    {form.priority === 'Urgent' && '🔴 Urgent — requires immediate attention'}
                                     {form.priority === 'High' && '🟠 High priority — will be flagged for urgent attention'}
                                     {form.priority === 'Medium' && '🟡 Medium priority selected'}
                                     {form.priority === 'Low' && '🟢 Low priority selected'}
@@ -1890,7 +1887,7 @@ const DashboardTab: React.FC<{
 
 const TASK_STATUS_FILTERS = ['Draft', 'Assigned', 'In Progress', 'Pending Admin Review', 'Done', 'Completed', 'Overdue'];
 
-const PRIORITY_WEIGHTS: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 4, High: 3, Medium: 2, Low: 1 };
 
 const TasksTab: React.FC<{
     tasks: Task[];
@@ -1980,7 +1977,7 @@ const TasksTab: React.FC<{
                         </select>
                         <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value); setTaskPage(1); }}>
                             <option value="">All Priorities</option>
-                            <option value="Critical">Critical</option>
+                            <option value="Urgent">Urgent</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
@@ -2181,7 +2178,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
         }
     };
 
-    const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3, Critical: 3 };
+    const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
     const RECUR_TO_BACKEND: Record<string, number> = { Daily: 0, Weekly: 1, Monthly: 2 };
     const handleSave = async (data: CreateTemplateDTO, templateId?: string) => {
         const backendPayload = {
@@ -4726,7 +4723,7 @@ export default function OpsAdminDashboard() {
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
-            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
+            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
             const normalized: Task[] = rawList.map(t => ({
                 taskId: t.id ?? t.taskId,
@@ -4896,12 +4893,16 @@ export default function OpsAdminDashboard() {
         try {
             // Check for duplicates before saving (requirement 1, 7)
             if (!skipDuplicateCheck) {
-                const checkRes = await api.post('/api/Duplicate/check', { title: data.title, description: data.description });
-                const checkJson = checkRes.data;
-                if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
-                    setDuplicateWarnings(checkJson.data.matches);
-                    setPendingTaskData(data);
-                    return; // Show warning instead of saving (requirement 5, 6)
+                try {
+                    const checkRes = await api.post('/api/Duplicate/check', { title: data.title, description: data.description });
+                    const checkJson = checkRes.data;
+                    if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
+                        setDuplicateWarnings(checkJson.data.matches);
+                        setPendingTaskData(data);
+                        return;
+                    }
+                } catch {
+                    // Duplicate check failed — proceed with creation
                 }
             }
 
@@ -5368,6 +5369,7 @@ export default function OpsAdminDashboard() {
                     duplicates={duplicateWarnings}
                     onContinue={() => {
                         const task = pendingTaskData;
+                        setShowNew(false);
                         setDuplicateWarnings([]);
                         setPendingTaskData(null);
                         handleNewTask(task, true);

@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
+import { login, loginAndHandleOnboarding, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
 import {
   clickNewTask, fillTaskTitle, fillTaskDescription, selectPriority,
-  selectClassification, selectSingleAssignee, submitTaskForm,
+  selectClassification, selectSingleAssignee, submitTaskAndConfirm,
   verifyTaskInTable, verifyTaskCard,
 } from '../../helpers/task';
 
@@ -35,8 +35,7 @@ test.describe('Flow 2.1: Task Creation & SLA Enforcement', () => {
 
     // ── 1. Coordinator creates a Critical task ──
     await test.step('Coordinator creates a Critical task with SLA lock', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
 
       await openSidebarTab(page, 'Tasks');
       await clickNewTask(page);
@@ -44,29 +43,27 @@ test.describe('Flow 2.1: Task Creation & SLA Enforcement', () => {
       await fillTaskTitle(page, TASK_TITLE);
       await fillTaskDescription(page, TASK_DESC);
 
-      // Set priority to Critical → SLA deadline should lock
-      await selectPriority(page, 'Critical');
+      // Set priority to Urgent → SLA deadline should lock
+      await selectPriority(page, 'Urgent');
 
       const dueInput = page.locator('.modal-card input[type="datetime-local"]');
       await expect(dueInput).toHaveClass(/input-sla-locked/);
-      await expect(dueInput).toBeDisabled({ timeout: 3_000 });
+      await expect(dueInput).toHaveAttribute('readonly', '');
       await expect(page.locator('.modal-card', { hasText: /SLA enforced/ })).toBeVisible();
 
       // Set classification
       await selectClassification(page, 'Routine Daily Task');
 
       // Assignment is SingleEmployee by default — select encoder
-      await selectSingleAssignee(page, ENCODER_ID);
+      await selectSingleAssignee(page, 'Test Encoder1');
 
-      await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await submitTaskAndConfirm(page);
     });
 
     // ── 2. Encoder sees the task in My Tasks ──
     await test.step('Encoder can see the assigned task', async () => {
       await logout(page, 'Coordinator');
-      await login(page, ENCODER_ID, ENCODER_PW);
-      await waitForDashboard(page, 'Encoder');
+      await loginAndHandleOnboarding(page, ENCODER_ID, ENCODER_PW, 'Encoder');
 
       await openSidebarTab(page, 'My Tasks');
       await verifyTaskCard(page, TASK_TITLE);
@@ -75,8 +72,7 @@ test.describe('Flow 2.1: Task Creation & SLA Enforcement', () => {
     // ── 3. Manager sees the task in Task Management ──
     await test.step('Manager can see the task in Task Management', async () => {
       await logout(page, 'Encoder');
-      await login(page, MANAGER_ID, MANAGER_PW);
-      await waitForDashboard(page, 'Manager');
+      await loginAndHandleOnboarding(page, MANAGER_ID, MANAGER_PW, 'Manager');
 
       await openSidebarTab(page, 'Task Management');
       await verifyTaskInTable(page, TASK_TITLE);

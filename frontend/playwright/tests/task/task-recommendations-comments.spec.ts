@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
+import { login, loginAndHandleOnboarding, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
 import {
-  clickNewTask, fillTaskTitle, fillTaskDescription, selectPriority,
-  selectClassification, selectSingleAssignee, submitTaskForm,
+  clickNewTask, fillTaskTitle, fillTaskDescription, fillTaskDueDate,
+  selectPriority, selectClassification, selectSingleAssignee, submitTaskAndConfirm,
 } from '../../helpers/task';
 
 const COORDINATOR_ID = process.env.COORDINATOR_ID || '';
@@ -26,17 +26,16 @@ test.describe('Flow 2.4: Recommendations & Comments', () => {
   test('coordinator adds recommendation and comment; encoder sees and adds comments', async ({ page }) => {
     // ── 0. Coordinator creates a task ──
     await test.step('Create a task for testing', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
       await clickNewTask(page);
       await fillTaskTitle(page, taskTitle);
       await fillTaskDescription(page, 'Test for recommendations and comments');
       await selectPriority(page, 'Medium');
       await selectClassification(page, 'Routine Daily Task');
-      await selectSingleAssignee(page, ENCODER_ID);
-      await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await selectSingleAssignee(page, 'Test Encoder1');
+      await fillTaskDueDate(page);
+      await submitTaskAndConfirm(page);
     });
 
     // ── 1. Coordinator adds a recommendation ──
@@ -73,8 +72,7 @@ test.describe('Flow 2.4: Recommendations & Comments', () => {
 
     // ── 3. Encoder sees comments and adds own ──
     await test.step('Encoder views and adds comments', async () => {
-      await login(page, ENCODER_ID, ENCODER_PW);
-      await waitForDashboard(page, 'Encoder');
+      await loginAndHandleOnboarding(page, ENCODER_ID, ENCODER_PW, 'Encoder');
       await openSidebarTab(page, 'My Tasks');
 
       const card = page.locator('.task-card', { has: page.locator('.tc-name', { hasText: taskTitle }) });

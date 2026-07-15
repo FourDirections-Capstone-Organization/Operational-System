@@ -11,7 +11,7 @@ export interface TMTask {
     classification?: string;
     project?: string;
     assignee?: { id: string; name: string };
-    priority: 'Critical' | 'High' | 'Medium' | 'Low';
+    priority: 'Urgent' | 'High' | 'Medium' | 'Low';
     status: 'Backlog' | 'To do' | 'In progress' | 'In review' | 'Done';
     dueDate?: string;
     startDate?: string;
@@ -44,9 +44,9 @@ interface TMProps {
 
 type TabType = 'active' | 'completed' | 'bin';
 
-const PRIORITIES: TMTask['priority'][] = ['Critical', 'High', 'Medium', 'Low'];
-const PRIO_COLORS: Record<string, string> = { Critical: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#2563eb' };
-const PRIO_BG: Record<string, string> = { Critical: '#fef2f2', High: '#fff7ed', Medium: '#fffbeb', Low: '#eff6ff' };
+const PRIORITIES: TMTask['priority'][] = ['Urgent', 'High', 'Medium', 'Low'];
+const PRIO_COLORS: Record<string, string> = { Urgent: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#2563eb' };
+const PRIO_BG: Record<string, string> = { Urgent: '#fef2f2', High: '#fff7ed', Medium: '#fffbeb', Low: '#eff6ff' };
 const STATUS_DOT: Record<string, string> = { Backlog: '#94a3b8', 'To do': '#3b82f6', 'In progress': '#16a34a', 'In review': '#d97706', Done: '#94a3b8' };
 const ASSIGNEE_COLORS = ['#4318ff', '#059669', '#dc2626', '#d97706', '#0284c7', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#c026d3'];
 const getAc = (n: string) => ASSIGNEE_COLORS[n.length % ASSIGNEE_COLORS.length];
@@ -55,7 +55,7 @@ const getProgress = (s: string) => s === 'Done' ? 100 : s === 'In progress' ? 50
 
 const PriorityBadge = ({ p }: { p: string }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: PRIO_BG[p] || '#f1f5f9', color: PRIO_COLORS[p] || '#475569' }}>
-        <span style={{ fontSize: 10 }}>{p === 'Critical' ? '⬆' : p === 'High' ? '↗' : p === 'Medium' ? '→' : '↘'}</span> {p}
+        <span style={{ fontSize: 10 }}>{p === 'Urgent' ? '⬆' : p === 'High' ? '↗' : p === 'Medium' ? '→' : '↘'}</span> {p}
     </span>
 );
 

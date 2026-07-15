@@ -39,8 +39,32 @@ export async function selectSingleAssignee(page: Page, name: string) {
   await row.click();
 }
 
+export async function fillTaskDueDate(page: Page, daysFromNow = 3) {
+  const future = new Date();
+  future.setDate(future.getDate() + daysFromNow);
+  const dateStr = future.toISOString().slice(0, 16);
+  await page.locator('.modal-card input[type="datetime-local"]').fill(dateStr);
+}
+
 export async function submitTaskForm(page: Page) {
   await page.locator('.modal-actions button.btn.btn-primary', { hasText: 'Save Changes' }).click();
+}
+
+export async function submitTaskAndConfirm(page: Page) {
+  await page.locator('.modal-actions button.btn.btn-primary', { hasText: 'Save Changes' }).click();
+
+  // Wait for either success toast or duplicate dialog
+  const toastOrDialog = Promise.race([
+    page.locator('.toast.toast-success').waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'toast'),
+    page.locator('dialog', { hasText: /duplicate task/i }).waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'dialog'),
+  ]);
+
+  const result = await toastOrDialog;
+  if (result === 'dialog') {
+    await page.locator('dialog', { hasText: /duplicate task/i }).locator('button', { hasText: 'Continue Anyway' }).click();
+    // Now wait for the actual success toast after confirming
+    await page.locator('.toast.toast-success').waitFor({ state: 'visible', timeout: 15_000 });
+  }
 }
 
 export async function verifyTaskInTable(page: Page, title: string) {

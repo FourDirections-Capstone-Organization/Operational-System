@@ -133,7 +133,7 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
     const createdByEmployee = dto.createdByName ?? dto.createdByEmployee ?? '';
 
     const priorityMap: Record<string, Priority> = {
-        High: 'high', Medium: 'medium', Low: 'low', Urgent: 'high', Critical: 'high',
+        High: 'high', Medium: 'medium', Low: 'low', Urgent: 'high',
     };
     const statusMap: Record<string, TaskStatus> = {
         Draft: 'pending', Pending: 'pending', Assigned: 'assigned',

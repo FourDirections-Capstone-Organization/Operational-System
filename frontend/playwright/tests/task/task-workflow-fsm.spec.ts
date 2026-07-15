@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
+import { login, loginAndHandleOnboarding, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
 import {
-  clickNewTask, fillTaskTitle, fillTaskDescription, selectPriority,
-  selectClassification, selectSingleAssignee, submitTaskForm,
+  clickNewTask, fillTaskTitle, fillTaskDescription, fillTaskDueDate,
+  selectPriority, selectClassification, selectSingleAssignee, submitTaskAndConfirm,
 } from '../../helpers/task';
 
 const COORDINATOR_ID = process.env.COORDINATOR_ID || '';
@@ -26,24 +26,22 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
 
     // ── 1. Coordinator creates a task ──
     await test.step('Coordinator creates a task', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
       await clickNewTask(page);
       await fillTaskTitle(page, taskTitle);
       await fillTaskDescription(page, 'FSM flow test task');
       await selectPriority(page, 'Medium');
       await selectClassification(page, 'Routine Daily Task');
-      await selectSingleAssignee(page, ENCODER_ID);
-      await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await selectSingleAssignee(page, 'Test Encoder1');
+      await fillTaskDueDate(page);
+      await submitTaskAndConfirm(page);
     });
 
     // ── 2. Encoder advances task: assigned → in-progress ──
     await test.step('Encoder advances task to In Progress', async () => {
       await logout(page, 'Coordinator');
-      await login(page, ENCODER_ID, ENCODER_PW);
-      await waitForDashboard(page, 'Encoder');
+      await loginAndHandleOnboarding(page, ENCODER_ID, ENCODER_PW, 'Encoder');
       await openSidebarTab(page, 'My Tasks');
 
       const card = page.locator('.task-card', { has: page.locator('.tc-name', { hasText: taskTitle }) });
@@ -71,8 +69,7 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
 
     // ── 4. Coordinator rejects (push back) the task ──
     await test.step('Coordinator rejects the task via push back', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
 
       // Click task row → ViewModal
@@ -93,8 +90,7 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
 
     // ── 5. Encoder re-submits for review ──
     await test.step('Encoder re-submits for review', async () => {
-      await login(page, ENCODER_ID, ENCODER_PW);
-      await waitForDashboard(page, 'Encoder');
+      await loginAndHandleOnboarding(page, ENCODER_ID, ENCODER_PW, 'Encoder');
       await openSidebarTab(page, 'My Tasks');
 
       const card = page.locator('.task-card', { has: page.locator('.tc-name', { hasText: taskTitle }) });
@@ -110,8 +106,7 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
 
     // ── 6. Coordinator approves the task ──
     await test.step('Coordinator approves the task', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
 
       await page.locator('table tbody tr', { hasText: taskTitle }).click();
@@ -133,17 +128,16 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
 
     // ── Create a task ──
     await test.step('Coordinator creates a task', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
       await clickNewTask(page);
       await fillTaskTitle(page, taskTitle);
       await fillTaskDescription(page, 'FSM hold test');
       await selectPriority(page, 'Low');
       await selectClassification(page, 'Routine Daily Task');
-      await selectSingleAssignee(page, ENCODER_ID);
-      await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await selectSingleAssignee(page, 'Test Encoder1');
+      await fillTaskDueDate(page);
+      await submitTaskAndConfirm(page);
     });
 
     // ── Place on Hold ──
@@ -187,17 +181,16 @@ test.describe('Flow 2.2: Task Workflow FSM', () => {
     const taskTitle = `FSM Cancel ${Date.now()}`;
 
     await test.step('Coordinator creates a task', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Tasks');
       await clickNewTask(page);
       await fillTaskTitle(page, taskTitle);
       await fillTaskDescription(page, 'FSM cancel test');
       await selectPriority(page, 'Medium');
       await selectClassification(page, 'Routine Daily Task');
-      await selectSingleAssignee(page, ENCODER_ID);
-      await submitTaskForm(page);
-      await waitForSuccessToast(page);
+      await selectSingleAssignee(page, 'Test Encoder1');
+      await fillTaskDueDate(page);
+      await submitTaskAndConfirm(page);
     });
 
     await test.step('Coordinator cancels the task', async () => {

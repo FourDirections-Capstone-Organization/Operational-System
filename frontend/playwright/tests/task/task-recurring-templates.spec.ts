@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
+import { login, loginAndHandleOnboarding, logout, waitForDashboard, waitForSuccessToast, openSidebarTab } from '../../helpers/auth';
 
 const COORDINATOR_ID = process.env.COORDINATOR_ID || '';
 const COORDINATOR_PW = process.env.COORDINATOR_PW || '';
@@ -15,8 +15,7 @@ test.describe('Flow 2.3: Recurring Task Automation', () => {
   test('create, deploy, and manage a task template', async ({ page }) => {
     // ── 1. Create template ──
     await test.step('Coordinator creates a weekly task template', async () => {
-      await login(page, COORDINATOR_ID, COORDINATOR_PW);
-      await waitForDashboard(page, 'Coordinator');
+      await loginAndHandleOnboarding(page, COORDINATOR_ID, COORDINATOR_PW, 'Coordinator');
       await openSidebarTab(page, 'Task Templates');
 
       await page.locator('button.btn.btn-primary', { has: page.locator('span', { hasText: 'Create Template' }) }).click();
@@ -35,9 +34,9 @@ test.describe('Flow 2.3: Recurring Task Automation', () => {
       const dateStr = tomorrow.toISOString().slice(0, 10);
       await page.locator('input[type="date"]').fill(dateStr);
 
-      await page.locator('button.filter-pill', { hasText: 'Active' }).click();
+      await page.getByRole('button', { name: 'Active', exact: true }).click();
 
-      await page.locator('button.btn.btn-primary', { hasText: 'Create Template' }).click();
+      await page.locator('.modal-card button.btn.btn-primary', { hasText: 'Create Template' }).click();
       await waitForSuccessToast(page);
     });
 

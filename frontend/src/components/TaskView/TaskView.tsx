@@ -13,7 +13,7 @@ import './TaskView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
+type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 type TaskStatus = 'Not Started' | 'In Progress' | 'Done/Pending Review' | 'Completed' | 'On Hold' | 'Cancelled' | 'Overdue';
 type ReviewState = 'none' | 'pending_review' | 'approved' | 'rejected';
 
@@ -100,7 +100,7 @@ const PrioBadge: React.FC<{ p: Priority }> = ({ p }) => (
 );
 
 const priorityDotClass = (p: Priority): string =>
-    ({ Critical: 'tv-prio-dot high', High: 'tv-prio-dot high', Medium: 'tv-prio-dot medium', Low: 'tv-prio-dot low' }[p]);
+    ({ Urgent: 'tv-prio-dot high', High: 'tv-prio-dot high', Medium: 'tv-prio-dot medium', Low: 'tv-prio-dot low' }[p]);
 
 // ─── Reject Modal ─────────────────────────────────────────────────────────────
 
