@@ -59,8 +59,8 @@ db:
   image: postgres:16-alpine
   environment:
     POSTGRES_DB: backend_db
-    POSTGRES_USER: postgres
-    POSTGRES_PASSWORD: postgres
+    POSTGRES_USER: [redacted]
+    POSTGRES_PASSWORD: [redacted]
   command:
     - "postgres"
     - "-c"
@@ -390,13 +390,3 @@ Remove-Item -Recurse -Force neo4j-data
 | **Frontend Developer** | Hermione Benitez |
 | **Backend Developer** | John Angelo Mikhail Reveche |
 | **Integrator** | Hermione Benitez & John Angelo Mikhail Reveche |
-
-## Guides
-
-| Guide | Description |
-|---|---|
-| [Backend Guide](./guide/backend-guide.md) | Setup, Docker, API docs, and CI/CD pipeline |
-| [JWT Authentication Guide](./guide/jwt-authentication-guide.md) | Auth flows, models, tokens, and production deployment |
-| [CI Issue Lifecycle](./guide/ci-issue-lifecycle.md) | How CI failures create/close issues, fixing flows, and edge cases |
-| [pgAdmin Usage](./guide/pgadmin-usage.md) | Connecting, querying, and managing PostgreSQL via pgAdmin 4 |
-| [Centralized Auth & Integration](./guide/centralized-auth-integration.md) | Shared JWT auth, service accounts, and cross-system API integration |
