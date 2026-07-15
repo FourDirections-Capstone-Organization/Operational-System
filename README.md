@@ -59,8 +59,8 @@ db:
   image: postgres:16-alpine
   environment:
     POSTGRES_DB: backend_db
-    POSTGRES_USER: [redacted]
-    POSTGRES_PASSWORD: [redacted]
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
   command:
     - "postgres"
     - "-c"
