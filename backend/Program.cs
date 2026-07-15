@@ -14,6 +14,7 @@ using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.TaskManagement;
 using Backend.Modules.Notifications;
+using Backend.Models;
 using Backend.Models.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -43,7 +44,7 @@ builder.Services.AddOpenApi(options =>
             }
         };
         
-        return Task.CompletedTask;
+        return System.Threading.Tasks.Task.CompletedTask;
     });
 });
 
@@ -109,6 +110,8 @@ builder.Services.AddScoped<IFomsExportService, FomsExportService>();
 builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<ISuitabilityService, SuitabilityService>();
+builder.Services.Configure<Neo4jSettings>(builder.Configuration.GetSection("Neo4jSettings"));
 
 
 // Hosted Services

@@ -35,6 +35,9 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=backend_db;Username=postgres;Password=postgres"
       Jwt__Key: "${JWT_KEY}"
+      Neo4jSettings__Uri: bolt://neo4j:7687
+      Neo4jSettings__User: neo4j
+      Neo4jSettings__Password: starslab!
     ports:
       - "5100:8080"
     depends_on:
@@ -145,7 +148,7 @@ services:
     restart: unless-stopped
     environment:
       Kafka__BootstrapServers: kafka:9092
-      Kafka__GroupId: stars-cdc-processor-v3
+      Kafka__GroupId: stars-cdc-processor-v6
       Kafka__Topics:0: stars.public.Users
       Kafka__Topics:1: stars.public.Tasks
       Kafka__Topics:2: stars.public.TaskAssignments

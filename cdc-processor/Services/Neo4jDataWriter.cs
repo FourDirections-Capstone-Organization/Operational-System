@@ -198,8 +198,8 @@ public class Neo4jDataWriter : IAsyncDisposable
             });
         }
 
-        var taskStatusInProgress = new HashSet<string> { "NotStarted", "InProgress", "DonePendingReview" };
-        var taskStatusCompleted = new HashSet<string> { "Completed" };
+        var taskStatusInProgress = new HashSet<string> { "0", "1", "2" };
+        var taskStatusCompleted = new HashSet<string> { "3" };
 
         var employeeTaskCounts = new Dictionary<string, (int active, int routineCompleted, int specialCompleted)>();
 

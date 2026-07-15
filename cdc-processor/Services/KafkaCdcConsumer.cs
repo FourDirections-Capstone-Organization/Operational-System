@@ -25,7 +25,7 @@ public class KafkaCdcConsumer
 
         if (topicsToRead.Count == 0)
         {
-            _logger.LogInformation("No CDC topics available yet. Waiting for Debezium snapshot.");
+            _logger.LogInformation("No CDC topics available yet.");
             return new List<CdcPayload>();
         }
 
@@ -42,19 +42,19 @@ public class KafkaCdcConsumer
         consumer.Subscribe(topicsToRead);
 
         var events = new List<CdcPayload>();
-        var timeout = TimeSpan.FromSeconds(10);
+        var totalWait = TimeSpan.FromSeconds(30);
+        var started = DateTime.UtcNow;
 
-        for (int poll = 0; poll < 12; poll++)
+        try
         {
-            try
+            while (DateTime.UtcNow - started < totalWait)
             {
-                var cts = new CancellationTokenSource(timeout);
-                var result = consumer.Consume(cts.Token);
-
-                if (result.IsPartitionEOF) continue;
-
                 try
                 {
+                    var result = consumer.Consume(TimeSpan.FromSeconds(5));
+                    if (result == null) continue;
+                    if (result.IsPartitionEOF) continue;
+
                     var envelope = JsonSerializer.Deserialize<DebeziumEnvelope>(result.Message.Value);
                     if (envelope?.Payload != null)
                     {
@@ -63,19 +63,17 @@ public class KafkaCdcConsumer
                         events.Add(envelope.Payload);
                     }
                 }
-                catch (JsonException ex)
+                catch (ConsumeException ex)
                 {
-                    _logger.LogWarning("Skipping malformed message on {Topic}: {Error}", result.Topic, ex.Message);
+                    if (ex.Error.IsLocalError && ex.Error.Code == ErrorCode.Local_TimedOut)
+                        continue;
+                    _logger.LogWarning("Consume error: {Reason}", ex.Error.Reason);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                // Timeout - no message available in this poll
-            }
-            catch (ConsumeException ex)
-            {
-                _logger.LogDebug("Poll {N}: {Error}", poll, ex.Error.Reason);
-            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Consumer error: {Error}", ex.Message);
         }
 
         _logger.LogInformation("Consumed {Count} CDC events from {Topics}",
