@@ -45,7 +45,6 @@ This becomes increasingly slow and complex as data grows. Each suitability query
 3. [Change Data Capture (CDC)](#change-data-capture-cdc)
 4. [Setup Guide](#setup-guide)
 5. [Team](#team)
-6. [Guides](#guides)
 
 ---
 
