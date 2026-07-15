@@ -1,4 +1,4 @@
-# Operational System — STARS
+# SpeedEx Task Allocation and Recommendation System
 
 A full-stack operational task management system built with modern web technologies. The backend provides a RESTful API with PostgreSQL persistence and OpenAPI/Scalar documentation. The frontend is a React SPA with real-time communication via SignalR. Includes a Change Data Capture (CDC) pipeline with Neo4j for graph-based employee suitability analysis.
 
