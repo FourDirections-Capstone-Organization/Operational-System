@@ -137,6 +137,30 @@ services:
       kafka:
         condition: service_healthy
 
+  cdc-processor:
+    build:
+      context: ./cdc-processor
+      dockerfile: Dockerfile
+    container_name: cdc-processor
+    restart: unless-stopped
+    environment:
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__GroupId: stars-cdc-processor-v3
+      Kafka__Topics:0: stars.public.Users
+      Kafka__Topics:1: stars.public.Tasks
+      Kafka__Topics:2: stars.public.TaskAssignments
+      Kafka__Topics:3: stars.public.Recommendations
+      Kafka__Topics:4: stars.public.Departments
+      Neo4j__Uri: bolt://neo4j:7687
+      Neo4j__User: neo4j
+      Neo4j__Password: starslab!
+      CdcProcessor__SyncIntervalMinutes: 10
+    depends_on:
+      kafka:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+
 volumes:
   pgdata:
   kafka-data:
