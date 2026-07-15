@@ -164,6 +164,19 @@ services:
       neo4j:
         condition: service_healthy
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: stars@admin.com
+      PGADMIN_DEFAULT_PASSWORD: starslab!
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
   kafka-data:

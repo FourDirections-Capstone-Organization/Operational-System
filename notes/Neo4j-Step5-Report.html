@@ -176,8 +176,26 @@ LIMIT 5</code></div>
 <tr><td>Query suitability</td><td><span class="inline-code">GET /api/tasks/{taskId}/suitability</span></td></tr>
 <tr><td>Check Neo4j graph</td><td>Open <a href="http://localhost:7474" style="color: #89b4fa;">http://localhost:7474</a> (neo4j/starslab!)</td></tr>
 <tr><td>Check Kafka messages</td><td>Open <a href="http://localhost:8081" style="color: #89b4fa;">http://localhost:8081</a></td></tr>
-<tr><td>All services</td><td><span class="inline-code">docker compose ps</span> — all 8 should be Up</td></tr>
+<tr><td>All services</td><td><span class="inline-code">docker compose ps</span> — all 9 should be Up</td></tr>
 </table>
+
+<h3>pgAdmin — PostgreSQL Web UI</h3>
+<p>Open <a href="http://localhost:5050" style="color: #89b4fa;">http://localhost:5050</a> and log in with:</p>
+<ul>
+  <li><strong>Email:</strong> <span class="inline-code">stars@admin.com</span></li>
+  <li><strong>Password:</strong> <span class="inline-code">starslab!</span></li>
+</ul>
+<p>Then click <strong>Add New Server</strong> and configure:</p>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>Name</td><td><span class="inline-code">STARS</span></td></tr>
+<tr><td>Host</td><td><span class="inline-code">db</span></td></tr>
+<tr><td>Port</td><td><span class="inline-code">5432</span></td></tr>
+<tr><td>Username</td><td><span class="inline-code">postgres</span></td></tr>
+<tr><td>Password</td><td><span class="inline-code">postgres</span></td></tr>
+<tr><td>Database</td><td><span class="inline-code">backend_db</span></td></tr>
+</table>
+<p>You can browse all tables (Tasks, Users, Departments, Recommendations, AuditLogs) and run SQL queries. This is the PostgreSQL instance that Debezium watches via logical replication.</p>
 
 </body>
 </html>
