@@ -917,11 +917,11 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (!userId) throw new Error('Employee not found.');
 
-                // Activate/deactivate BEFORE updating personal details
-                // (backend blocks PUT on deactivated users)
-                if (form.accountStatus !== employee.accountStatus) {
-                    const isActive = form.accountStatus === 'Active';
-                    await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
+                // When deactivating: update personal details FIRST (while user is still active),
+                // then deactivate. When activating: activate first so PUT can succeed.
+                const statusChanged = form.accountStatus !== employee.accountStatus;
+                if (statusChanged && form.accountStatus === 'Active') {
+                    await api.patch(`/api/User/${userId}/activate`);
                 }
 
                 await api.put(`/api/User/${userId}`, {
@@ -932,6 +932,10 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                     contactNumber: form.contactNumber,
                     email: form.email.trim(),
                 });
+
+                if (statusChanged && form.accountStatus !== 'Active') {
+                    await api.patch(`/api/User/${userId}/deactivate`);
+                }
                 const newRoleVal = toBackendRole(form.role);
                 const oldRoleVal = typeof employee.role === 'number' ? employee.role : parseInt(employee.role, 10);
                 if (newRoleVal !== oldRoleVal) {

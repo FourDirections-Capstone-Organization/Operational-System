@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
     XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
-    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2,
+    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2, AlertCircle,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
@@ -165,6 +165,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     const [showCancel, setShowCancel] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
     const [cancelling, setCancelling] = useState(false);
+    const [downloadError, setDownloadError] = useState('');
 
     const token = localStorage.getItem('authToken');
 
@@ -213,7 +214,7 @@ const TaskView: React.FC<TaskViewProps> = ({
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch {
-            // silently fail
+            setDownloadError('Unable to download attachment. The file may no longer be available.');
         }
     };
 
@@ -618,6 +619,11 @@ const TaskView: React.FC<TaskViewProps> = ({
                                     ))}
                                 </div>
                             )}
+                            {downloadError && (
+                                <div className="tv-text-box" style={{ color: 'var(--status-failed)', fontSize: 12, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <AlertCircle size={12} /> {downloadError}
+                                </div>
+                            )}
                         </div>
 
                         {/* Review history */}
@@ -682,7 +688,7 @@ const TaskView: React.FC<TaskViewProps> = ({
                         <div className="tv-comments-panel">
                             {rightPanelTab === 'recommendations'
                                 ? <TaskRecommendations taskId={task.taskId} />
-                                : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} />}
+                                : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} taskReferenceNumber={task.taskId} />}
                         </div>
                     </div>
                 </div>

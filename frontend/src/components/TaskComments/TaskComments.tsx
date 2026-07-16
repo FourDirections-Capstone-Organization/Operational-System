@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Send, X, Paperclip, Loader2, AlertCircle, CheckCircle2,
-    Pencil, Trash2, FileText, XCircle,
+    Pencil, Trash2, FileText, Download,
 } from 'lucide-react';
 import { useToast } from '../Toast/Toast';
 import EmptyState from '../ui/EmptyState';
 import api from '../../api';
+import axios from 'axios';
 import './TaskComments.css';
 
 interface CommentDTO {
@@ -15,7 +16,7 @@ interface CommentDTO {
     accountId?: string;
     authorName: string;
     message: string;
-    attachmentUrl?: string;
+    attachmentFileName?: string;
     createdAt: string;
     updatedAt?: string;
 }
@@ -77,7 +78,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                 accountId: c.authorId ?? c.accountId ?? '',
                 authorName: c.authorName ?? '',
                 message: c.content ?? c.message ?? '',
-                attachmentUrl: c.attachmentFileName ?? c.attachmentUrl ?? '',
+                attachmentFileName: c.attachmentFileName ?? '',
                 createdAt: c.createdAt ?? '',
                 updatedAt: c.updatedAt ?? undefined,
             })));
@@ -91,13 +92,6 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
 
     useEffect(() => { fetchComments(); }, [fetchComments]);
 
-    // Scroll the thread container itself to its bottom. We deliberately avoid
-    // scrollIntoView() on a sentinel element here: without an explicit
-    // `block: 'nearest'`/'end', it defaults to aligning the target to the
-    // *top* of the scroll container, which over-scrolls past the last
-    // message and leaves a blank gap above it (cutting off whichever
-    // message lands at the boundary). Setting scrollTop directly avoids
-    // that overshoot entirely.
     useEffect(() => {
         const el = threadRef.current;
         if (!el) return;
@@ -115,6 +109,27 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         }
         setAttachment(file);
         setError('');
+    };
+
+    const handleDownloadAttachment = async (commentId: string, fileName: string) => {
+        const token = localStorage.getItem('authToken');
+        try {
+            const res = await axios.get(`/api/attachments/${commentId}/download`, {
+                responseType: 'blob',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const blob = res.data;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch {
+            setError('Unable to download attachment. The file may no longer be available.');
+        }
     };
 
     const handleSend = async () => {
@@ -233,15 +248,14 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                                         <div className={`tc-bubble${isMe ? ' tc-bubble-mine' : ' tc-bubble-theirs'}`}>
                                             {c.message}
                                         </div>
-                                        {c.attachmentUrl && (
-                                            <a
-                                                href={c.attachmentUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
+                                        {c.attachmentFileName && (
+                                            <button
                                                 className="tc-attachment-link"
+                                                onClick={() => handleDownloadAttachment(c.taskCommentId, c.attachmentFileName!)}
+                                                title="Download attachment"
                                             >
-                                                <Paperclip size={12} /> View Attachment
-                                            </a>
+                                                <Paperclip size={12} /> {c.attachmentFileName}
+                                            </button>
                                         )}
                                         <div className="tc-meta">
                                             <span className="tc-time">{fmtDateTime(c.createdAt)}</span>
@@ -269,6 +283,12 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             </div>
 
             <div className="tc-input-area">
+                {taskReferenceNumber && (
+                    <div className="tc-task-ref" style={{ padding: '8px 12px', marginBottom: 8, background: '#f8f9fa', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 600 }}>Task ID:</span>
+                        <span style={{ fontFamily: 'monospace', color: '#1e293b' }}>{taskReferenceNumber}</span>
+                    </div>
+                )}
                 <div className="tc-input-row">
                     <div className="tc-self-avatar">
                         {localStorage.getItem('employeeName')?.charAt(0)?.toUpperCase() ?? 'U'}
