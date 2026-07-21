@@ -1404,7 +1404,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                                 const q = searchQuery.toLowerCase();
                                 return getEmployeeDisplayName(emp).toLowerCase().includes(q)
                                     || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
-                                    || (emp.role && emp.role.toLowerCase().includes(q));
+                                    || (emp.role != null && String(emp.role).toLowerCase().includes(q));
                             }).slice(0, 7).map(emp => {
                                 const name = getEmployeeDisplayName(emp);
                                 return (
@@ -1440,7 +1440,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                             ? <EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." />
                             : activityLogs.length === 0
                                 ? <EmptyState icon={<ClipboardList size={22} />} message="No recent activity" />
-                                : activityLogs.filter(log => {
+                                : (activityLogs || []).filter(log => {
                                     if (!searchQuery) return true;
                                     const q = searchQuery.toLowerCase();
                                     return log.description.toLowerCase().includes(q)
@@ -2452,7 +2452,7 @@ export default function Dashboard() {
 
     // Re-fetch activity logs when the tab becomes active or any filter changes
     useEffect(() => {
-        if (activeTab === 'activity_logs') {
+        if (activeTab === 'activity_logs' || activeTab === 'dashboard') {
             const timer = setTimeout(() => fetchActivityLogs(1), 400);
             return () => clearTimeout(timer);
         }
@@ -2659,7 +2659,7 @@ export default function Dashboard() {
                     <div className="dashboard-content">
                         <div className="card">
                             <div className="card-header-layout">
-                                <h3><Bell size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Notifications</h3>
+                                <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Notifications</h3>
                             </div>
                             {notifLoading ? (
                                 <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
@@ -2748,7 +2748,7 @@ export default function Dashboard() {
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: 0 }}>
                         <DataTable
-                            title="System Activity Logs"
+                            title=""
                             headers={['Date & Time', 'Activity Type', 'Employee', 'Description']}
                             searchQuery={activityLogSearch}
                             onSearchChange={val => setActivityLogSearch(val)}

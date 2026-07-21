@@ -1621,7 +1621,7 @@ export default function EmployeeDashboard() {
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>
                         <DataTable
-                            title="My Activity Logs"
+                            title=""
                             headers={['Date & Time', 'Activity Type', 'Description']}
                             loading={false}
                             emptyMessage="No activity logs found."

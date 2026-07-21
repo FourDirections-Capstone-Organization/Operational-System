@@ -3008,7 +3008,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />KPI Tracking</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>KPI Tracking</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">
@@ -3080,7 +3080,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
 
                             <div className="card" style={{ marginTop: 16 }}>
                                 <div className="card-header-layout">
-                                    <h3>Per-Employee Breakdown</h3>
+                                    <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Per-Employee Breakdown</h3>
                                     {kpiData.employeeKpis && <span className="badge badge-blue">{kpiData.employeeKpis.length} employees</span>}
                                 </div>
                                 {kpiData.employeeKpis && kpiData.employeeKpis.length > 0 ? (
@@ -3140,7 +3140,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Performance Report</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Performance Report</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">
@@ -3280,7 +3280,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><Download size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />FOMS Export</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>FOMS Export</h3>
                             <span className="badge badge-blue">CSV</span>
                         </div>
                         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, padding: '0 24px' }}>
@@ -3379,7 +3379,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><FileText size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Task Completion Reports</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Task Completion Reports</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">

@@ -579,3 +579,35 @@
 /* ── Dark mode legacy support ────────────────────────────────────────────── */
 
 html.dark .sidebar { border-right-color: var(--border); }
+
+/* ── Role Badge ──────────────────────────────────────────────── */
+.sidebar-role-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 16px;
+    margin: 8px 16px 4px;
+    background: rgba(0, 181, 116, 0.15);
+    border-radius: var(--r-full, 9999px);
+    color: #05cd99;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.role-dot-inner {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #05cd99;
+    flex-shrink: 0;
+}
+
+.collapsed .sidebar-role-badge {
+    display: none;
+}

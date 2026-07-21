@@ -219,6 +219,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <i className={collapsed ? "ti ti-chevron-right" : "ti ti-chevron-left"} />
         </button>
       </div>
+        {profile && (
+          <div className="sidebar-role-badge">
+            <span className="role-dot-inner" />
+            {profile.role}
+          </div>
+        )}
 
       {/* Navigation Links */}
       <nav className="sidebar-nav" aria-label="Main navigation">
