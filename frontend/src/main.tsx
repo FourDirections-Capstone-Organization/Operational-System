@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import './index.css'
+import './global.css'
 import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import axios from 'axios'
 
@@ -178,3 +178,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </React.StrictMode>
 )
 // Trigger language stats refresh
+

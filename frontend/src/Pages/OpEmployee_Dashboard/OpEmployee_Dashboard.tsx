@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     LayoutDashboard,
     ClipboardList,
@@ -33,11 +34,11 @@ import {
     Search,
 } from 'lucide-react';
 import './OpEmployee_Dashboard.css';
-import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import { useToast } from '../../components/Toast/Toast';
-import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import Sidebar from '../../components/Sidebar/Sidebar';
+import StatusCard from '../../components/StatusCard/StatusCard';
 
 import FormModal from '../../components/FormModal/FormModal';
 import EmptyState from '../../components/ui/EmptyState';
@@ -45,7 +46,7 @@ import DataTable from '../../components/ui/DataTable';
 import TaskComments from '../../components/TaskComments/TaskComments';
 import api from '../../api';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 const getAccountIdFromToken = (): string => {
     try {
@@ -56,7 +57,7 @@ const getAccountIdFromToken = (): string => {
     } catch { return ''; }
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types --------------------------------------------------------------------
 
 type Priority = 'high' | 'medium' | 'low';
 type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
@@ -119,6 +120,8 @@ interface UserProfile {
     presenceStatus?: string;
 }
 
+
+
 const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
 const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
 
@@ -162,10 +165,10 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
     };
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 const fmtDate = (d: string): string => {
-    if (!d) return '—';
+    if (!d) return '�';
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric',
     });
@@ -198,7 +201,7 @@ const getInitials = (name: string): string => {
     return name.slice(0, 2).toUpperCase();
 };
 
-// ─── Meta Maps ────────────────────────────────────────────────────────────────
+// --- Meta Maps ----------------------------------------------------------------
 
 const statusMeta: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
     pending: { label: 'Pending', cls: 'badge-blue', icon: <Clock size={11} /> },
@@ -224,7 +227,7 @@ const priorityMeta: Record<Priority, { cls: string; bar: string }> = {
     low: { cls: 'prio-low', bar: 'bar-green' },
 };
 
-// ─── Nav Config ───────────────────────────────────────────────────────────────
+// --- Nav Config ---------------------------------------------------------------
 
 const NAV_GROUPS: { label: string; items: { tab: NavTab; icon: React.FC<any>; label: string }[] }[] = [
     {
@@ -249,7 +252,7 @@ const NAV_GROUPS: { label: string; items: { tab: NavTab; icon: React.FC<any>; la
     },
 ];
 
-// ─── Task Detail Modal ────────────────────────────────────────────────────────
+// --- Task Detail Modal --------------------------------------------------------
 
 interface TaskDetailProps {
     task: Task;
@@ -265,7 +268,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
     const accountId = getAccountIdFromToken();
 
     return (
-        <FormModal isOpen onClose={onClose} title={task.isConfidential ? `🔒 ${task.name}` : task.name} subtitle={sm.label} size="md"
+        <FormModal isOpen onClose={onClose} title={task.isConfidential ? `?? ${task.name}` : task.name} subtitle={sm.label} size="md"
             footer={
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose}>Close</button>
@@ -355,7 +358,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
     );
 };
 
-// ─── Progress Update Modal ────────────────────────────────────────────────────
+// --- Progress Update Modal ----------------------------------------------------
 
 interface ProgressModalProps {
     task: Task;
@@ -413,7 +416,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                        {saving ? <><Loader2 size={13} className="spin" /> Saving…</> : <><Save size={13} /> Save</>}
+                        {saving ? <><Loader2 size={13} className="spin" /> Saving�</> : <><Save size={13} /> Save</>}
                     </button>
                 </div>
             }
@@ -436,7 +439,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
             ) : (
                 <>
                     <div className="field">
-                        <label>Status — <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>current: {statusMeta[baseStatus]?.label ?? baseStatus}</span></label>
+                        <label>Status � <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>current: {statusMeta[baseStatus]?.label ?? baseStatus}</span></label>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {statusOptions.map(opt => (
                                 <button
@@ -451,7 +454,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                     </div>
 
                     <div className="field">
-                        <label>Progress — {progress}%</label>
+                        <label>Progress � {progress}%</label>
                         <input
                             type="range" min={0} max={100} step={5} value={progress}
                             onChange={e => setProgress(Number(e.target.value))}
@@ -471,7 +474,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                 <label>Remarks <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
                 <textarea
                     className="leave-reason-textarea" rows={3} maxLength={300}
-                    placeholder="Add any notes about your progress…"
+                    placeholder="Add any notes about your progress�"
                     value={remarks}
                     onChange={e => setRemarks(e.target.value)}
                 />
@@ -481,7 +484,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
     );
 };
 
-// ─── Task Card ────────────────────────────────────────────────────────────────
+// --- Task Card ----------------------------------------------------------------
 
 interface TaskCardProps {
     task: Task;
@@ -516,7 +519,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onUpdate }) => {
             <p className="tc-desc">{task.description}</p>
             <div className="tc-meta">
                 <span className={`tc-deadline${od ? ' overdue-text' : daysLeft !== null && daysLeft <= 2 ? ' warning-text' : ''}`}>
-                    {od ? '⚠ Overdue'
+                    {od ? '? Overdue'
                         : daysLeft !== null
                             ? daysLeft === 0 ? 'Due today'
                                 : daysLeft === 1 ? 'Due tomorrow'
@@ -540,7 +543,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onUpdate }) => {
     );
 };
 
-// ─── Dashboard Tab ────────────────────────────────────────────────────────────
+// --- Dashboard Tab ------------------------------------------------------------
 
 interface DashboardTabProps {
     tasks: Task[];
@@ -569,7 +572,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                 <div className="wb-left">
                     <div className="wb-avatar">{initials}</div>
                     <div>
-                        <h2 className="wb-name">Good day, {firstName} 👋</h2>
+                        <h2 className="wb-name">Good day, {firstName} ??</h2>
                         <p className="wb-sub">{toDisplayRole(user.role)}</p>
                     </div>
                 </div>
@@ -600,7 +603,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
                 <div style={{ position: 'relative', width: 300 }}>
                     <Search size={14} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input type="text" placeholder="Search task…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    <input type="text" placeholder="Search task�" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                         style={{ width: '100%', height: 46, borderRadius: 999, border: '1px solid #dbe3f0', background: '#f8fafc', padding: '0 20px 0 42px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                         onFocus={e => { e.target.style.background = '#ffffff'; e.target.style.borderColor = '#14b8a6'; e.target.style.boxShadow = '0 0 0 4px rgba(20,184,166,0.08)'; }}
                         onBlur={e => { e.target.style.background = '#f8fafc'; e.target.style.borderColor = '#dbe3f0'; e.target.style.boxShadow = 'none'; }} />
@@ -609,12 +612,12 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
 
             <div className="stats-row">
                 {[
-                    { label: 'My Tasks', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary', subtext: 'Assigned to me' },
+                    { label: 'My Tasks', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal', subtext: 'Assigned to me' },
                     { label: 'In Progress', value: inProg, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning', subtext: 'Currently active' },
                     { label: 'Completed', value: done, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', subtext: 'Finished tasks' },
                     { label: 'Overdue', value: overdue, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger', subtext: 'Needs attention' },
                 ].map(s => (
-                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                    <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                 ))}
             </div>
 
@@ -625,7 +628,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                         <button className="link-btn" onClick={onGoTasks}>All tasks <ChevronRight size={13} /></button>
                     </div>
                     {urgent.length === 0 ? (
-                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks — great work!</p></div>
+                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks � great work!</p></div>
                     ) : urgent.map(t => (
                         <div key={t.id} className="dash-task-row" onClick={() => onView(t.id)}>
                             <div className="dtr-left">
@@ -675,7 +678,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     );
 };
 
-// ─── My Tasks Tab ─────────────────────────────────────────────────────────────
+// --- My Tasks Tab -------------------------------------------------------------
 
 interface MyTasksTabProps {
     tasks: Task[];
@@ -709,7 +712,7 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
                 <div className="card">
                     <div className="empty-state">
                         <Loader2 size={22} className="spin" />
-                        <p>Loading your tasks…</p>
+                        <p>Loading your tasks�</p>
                     </div>
                 </div>
             </div>
@@ -760,7 +763,7 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
 
 
 
-// ─── Profile Tab ──────────────────────────────────────────────────────────────
+// --- Profile Tab --------------------------------------------------------------
 
 interface ProfileTabProps {
     user: UserProfile;
@@ -942,7 +945,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                         <button className="btn" onClick={() => setPasswordGate(false)} disabled={gateLoading}>Cancel</button>
                         <button className="btn btn-primary" onClick={handleGateConfirm} disabled={gateLoading || !gatePassword}>
                             {gateLoading
-                                ? <><Loader2 size={13} className="spin" /> Verifying…</>
+                                ? <><Loader2 size={13} className="spin" /> Verifying�</>
                                 : <><Shield size={13} /> Confirm & Save</>
                             }
                         </button>
@@ -977,7 +980,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             <div className="profile-hero card">
                 <div className="ph-avatar">{initials}</div>
                 <div className="ph-info">
-                    <h2 className="ph-name">{user.fullName || '—'}</h2>
+                    <h2 className="ph-name">{user.fullName || '�'}</h2>
                     <p className="ph-role">{toDisplayRole(user.role)}</p>
                     <div className="ph-badges">
                         <span className="badge badge-blue">{user.employeeId}</span>
@@ -1015,7 +1018,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                         {editMode && (
                             <button className="btn btn-primary" onClick={requestSave} disabled={profileSaving}>
                                 {profileSaving
-                                    ? <><Loader2 size={13} className="spin" /> Saving…</>
+                                    ? <><Loader2 size={13} className="spin" /> Saving�</>
                                     : <><Save size={13} /> Save</>
                                 }
                             </button>
@@ -1026,7 +1029,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             <label>Employee ID</label>
                             <div className="if-value">
                                 <span className="if-icon"><Hash size={15} /></span>
-                                <span className="read-only-val">{user.employeeId || '—'}</span>
+                                <span className="read-only-val">{user.employeeId || '�'}</span>
                             </div>
                         </div>
                         {editMode ? (
@@ -1061,7 +1064,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                 <label>Full Name</label>
                                 <div className="if-value">
                                     <span className="if-icon"><User size={15} /></span>
-                                    <span>{user.fullName || '—'}</span>
+                                    <span>{user.fullName || '�'}</span>
                                 </div>
                             </div>
                         )}
@@ -1078,7 +1081,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             ) : (
                                 <div className="if-value">
                                     <span className="if-icon"><Mail size={15} /></span>
-                                    <span>{form.email || '—'}</span>
+                                    <span>{form.email || '�'}</span>
                                 </div>
                             )}
                         </div>
@@ -1095,7 +1098,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             ) : (
                                 <div className="if-value">
                                     <span className="if-icon"><Phone size={15} /></span>
-                                    <span>{user.phone || '—'}</span>
+                                    <span>{user.phone || '�'}</span>
                                 </div>
                             )}
                         </div>
@@ -1110,7 +1113,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             <label>Role</label>
                             <div className="if-value">
                                 <span className="if-icon"><Shield size={15} /></span>
-                                <span className="read-only-val">{toDisplayRole(user.role) || '—'}</span>
+                                <span className="read-only-val">{toDisplayRole(user.role) || '�'}</span>
                             </div>
                         </div>
                         <div className="info-field">
@@ -1183,7 +1186,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                                 color: pwd.next === pwd.confirm ? '#05cd99' : 'var(--danger)',
                                                 marginTop: 3, display: 'block',
                                             }}>
-                                                {pwd.next === pwd.confirm ? '✓ Passwords match' : 'Passwords do not match'}
+                                                {pwd.next === pwd.confirm ? '? Passwords match' : 'Passwords do not match'}
                                             </span>
                                         )}
                                     </div>
@@ -1195,7 +1198,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                     disabled={pwdSaving}
                                 >
                                     {pwdSaving
-                                        ? <><Loader2 size={13} className="spin" /> Saving…</>
+                                        ? <><Loader2 size={13} className="spin" /> Saving�</>
                                         : <><Lock size={13} /> Update Password</>
                                     }
                                 </button>
@@ -1208,7 +1211,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     );
 };
 
-// ─── Task Progress Review Tab ─────────────────────────────────────────────────
+// --- Task Progress Review Tab -------------------------------------------------
 
 const TaskProgressReviewTab: React.FC<{
     tasks: Task[];
@@ -1228,7 +1231,7 @@ const TaskProgressReviewTab: React.FC<{
                 <div className="card">
                     <div className="empty-state">
                         <Loader2 size={22} className="spin" />
-                        <p>Loading review data…</p>
+                        <p>Loading review data�</p>
                     </div>
                 </div>
             </div>
@@ -1335,7 +1338,7 @@ const TaskProgressReviewTab: React.FC<{
     return (
         <div className="tab-content">
 
-            {/* ── Pending Review ── */}
+            {/* -- Pending Review -- */}
             {pendingReview.length > 0 && (
                 <SectionCard title="Pending Review" icon={<Eye size={16} />} count={pendingReview.length} badgeCls="badge-purple">
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -1345,7 +1348,7 @@ const TaskProgressReviewTab: React.FC<{
                 </SectionCard>
             )}
 
-            {/* ── Pushed Back ── */}
+            {/* -- Pushed Back -- */}
             {pushedBack.length > 0 && (
                 <SectionCard title="Pushed Back / Needs Revision" icon={<RefreshCw size={16} />} count={pushedBack.length} badgeCls="badge-amber">
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -1363,7 +1366,7 @@ const TaskProgressReviewTab: React.FC<{
                 </SectionCard>
             )}
 
-            {/* ── Approved / Completed ── */}
+            {/* -- Approved / Completed -- */}
             {completed.length > 0 && (
                 <SectionCard title="Approved / Completed" icon={<CheckCircle2 size={16} />} count={completed.length} badgeCls="badge-green">
                     <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -1381,19 +1384,44 @@ const TaskProgressReviewTab: React.FC<{
     );
 };
 
-// ─── Root Component ───────────────────────────────────────────────────────────
+// --- Root Component -----------------------------------------------------------
 
 export default function EmployeeDashboard() {
     const navigate = useNavigate();
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
+        {
+        label: null,
+        items: [
+        {
+        label: 'Task Allocation and Review System',
+        icon: 'ti ti-clipboard-list',
+        subItems: [
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
+        { label: 'My Tasks', onClick: () => setActiveTab('my-tasks') },
+        { label: 'Task Progress Review', onClick: () => setActiveTab('task-progress-review') },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        ],
+        },
+        {
+        label: 'General',
+        icon: 'ti ti-settings',
+        subItems: [
+        { label: 'Profile', onClick: () => setActiveTab('profile') },
+        ],
+        },
+        ],
+        },
+    ], [setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [tasksError, setTasksError] = useState('');
     const [viewingId, setViewingId] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
+
 
     const [user, setUser] = useState<UserProfile>({
         employeeId: localStorage.getItem('employeeId') ?? '',
@@ -1540,69 +1568,29 @@ export default function EmployeeDashboard() {
     return (
         <div className="dashboard-container">
 
-            {/* ── Sidebar ── */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="sidebar-logo-img" />
-                </div>
+            {/* -- Sidebar -- */}
+            <Sidebar
+                logoUrl={SpeedexLogo}
+                logoText="SPEEDEX"
+                navGroups={SIDEBAR_NAV_GROUPS}
+                profile={{
+                    name: user.fullName || 'Employee',
+                    role: toDisplayRole(user.role) || 'Employee',
+                    avatarInitials: initials,
+                }}
+            />
 
-                <div className="sidebar-role-section">
-                    <div className="sidebar-role-badge">
-                        <div className="role-dot-inner" />
-                        {toDisplayRole(user.role) || 'Encoder'}
-                    </div>
-                </div>
-
-                <nav className="sidebar-nav">
-                    {NAV_GROUPS.map(group => (
-                        <div key={group.label} className="nav-section">
-                            <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon: Icon, label }) => (
-                                <div
-                                    key={tab}
-                                    className={`nav-item${activeTab === tab ? ' nav-item-active' : ''}`}
-                                    onClick={() => setActiveTab(tab)}
-                                >
-                                    <Icon size={18} />
-                                    <span className="nav-item-label">{label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </nav>
-
-                <div className="sidebar-footer-profile">
-                    <div className="profile-card">
-                        <div style={{ position: 'relative', display: 'inline-block' }}>
-                            <div className="profile-avatar">
-                                {loadingUser ? <Loader2 size={16} className="spin" /> : initials}
-                            </div>
-                            <span style={{
-                                position: 'absolute', bottom: 1, right: 1,
-                                width: 9, height: 9, borderRadius: '50%',
-                                background: user.presenceStatus === 'Online' ? '#05cd99' : '#a3aed0',
-                                border: '2px solid var(--sidebar-bg, #1b2559)',
-                                display: 'block',
-                            }} />
-                        </div>
-                        <div className="profile-info">
-                            <span className="profile-name">{user.fullName || 'Employee'}</span>
-                            <span className="profile-role">{(toDisplayRole(user.role) || 'Encoder').toUpperCase()}</span>
-                        </div>
-                        <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
-                            <LogOut size={16} />
-                        </button>
-                    </div>
-                </div>
-            </aside>
-
-            {/* ── Main ── */}
+            {/* -- Main -- */}
             <main className="main-viewport">
-                <DashboardHeader
+                <GlobalHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/Notification"
-                    userInitials={initials}
-                    onSettingsClick={() => setActiveTab('profile')}
+                    breadcrumbs={[{ label: 'Employee' }, { label: pageTitles[activeTab] }]}
+                    profile={{
+                        name: user.fullName || 'Employee',
+                        role: toDisplayRole(user.role) || 'Employee',
+                        avatarInitials: initials,
+                    }}
+                    onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
                 />
 
@@ -1667,7 +1655,7 @@ export default function EmployeeDashboard() {
                 )}
             </main>
 
-            {/* ── Modals ── */}
+            {/* -- Modals -- */}
             {viewingTask && (
                 <TaskDetail
                     task={viewingTask}

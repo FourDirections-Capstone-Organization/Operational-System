@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     ClipboardList,
     CheckCircle2,
@@ -46,13 +47,13 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
 import { useNavigate } from 'react-router-dom';
-import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
 
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
-import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import Sidebar from '../../components/Sidebar/Sidebar';
+import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import FormModal from '../../components/FormModal/FormModal';
 import ActionButton from '../../components/ActionButton/ActionButton';
@@ -316,7 +317,10 @@ const TASK_STATUSES_FILTER = [
 ];
 
 const PER_PAGE = 10;
+
 const PRIORITY_LEVELS = ['Urgent', 'High', 'Medium', 'Low'];
+
+
 
 // --- Task Template Types -------------------------------------------------------
 
@@ -1675,14 +1679,14 @@ const DashboardTab: React.FC<{
                     </div>
                     <div className="stats-row">
                         {[
-                            { label: 'TOTAL', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: `${total} task${total !== 1 ? 's' : ''}` },
+                            { label: 'TOTAL', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: `${total} task${total !== 1 ? 's' : ''}` },
                             { label: 'ACTIVE', value: totalActive, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning' as const, subtext: 'In Progress / Assigned' },
-                            { label: 'PENDING REVIEW', value: pendingReview, icon: <Eye size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Awaiting admin' },
+                            { label: 'PENDING REVIEW', value: pendingReview, icon: <Eye size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: 'Awaiting admin' },
                             { label: 'COMPLETED TODAY', value: completedToday, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success' as const, subtext: 'Today' },
-                            { label: 'ON HOLD', value: onHold, icon: <Clock size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Paused' },
+                            { label: 'ON HOLD', value: onHold, icon: <Clock size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: 'Paused' },
                             { label: 'OVERDUE', value: overdue, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger' as const, subtext: 'Past deadline' },
                         ].map(s => (
-                            <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                            <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                         ))}
                     </div>
 
@@ -3066,11 +3070,11 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                         <>
                             <div className="stats-row" style={{ marginTop: 16 }}>
                                 {[
-                                    { label: 'Total Completed', value: kpiData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary', subtext: 'Completed tasks' },
+                                    { label: 'Total Completed', value: kpiData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'teal', subtext: 'Completed tasks' },
                                     { label: 'On-Time', value: kpiData.totalOnTimeTasks, icon: <CheckCircle2 size={18} />, variant: 'success', subtext: `${kpiData.overallOnTimeRate}% rate` },
                                     { label: 'Late', value: kpiData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger', subtext: `${kpiData.overallLateRate}% rate` },
                                 ].map(s => (
-                                    <StatCard key={s.label} icon={s.icon} variant={s.variant as any} label={s.label} value={s.value} subtext={s.subtext} />
+                                    <StatusCard key={s.label} icon={s.icon} variant={s.variant as any} label={s.label} value={s.value} subtext={s.subtext} />
                                 ))}
                             </div>
 
@@ -3197,11 +3201,11 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                         <>
                             <div className="stats-row" style={{ marginTop: 16 }}>
                                 {[
-                                    { label: 'Total Completed', value: prData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary' as const, subtext: 'Completed tasks' },
+                                    { label: 'Total Completed', value: prData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'teal' as const, subtext: 'Completed tasks' },
                                     { label: 'On-Time', value: prData.totalCompletedTasks - prData.totalLateTasks, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: `${prData.overallOnTimeRate}% rate` },
                                     { label: 'Late', value: prData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger' as const, subtext: `${prData.overallLateRate}% rate` },
                                 ].map(s => (
-                                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                                    <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                                 ))}
                             </div>
 
@@ -3459,13 +3463,13 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                     {tcReport && (
                         <>
                             <div className="report-summary-grid">
-                                <StatCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="primary" label="ASSIGNED" value={String(tcReport.totalTasksAssigned)} subtext="Total tasks" />
-                                <StatCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(tcReport.totalTasksCompleted)} subtext="Tasks finished" />
-                                <StatCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="IN PROGRESS" value={String(tcReport.totalTasksInProgress)} subtext="Ongoing" />
-                                <StatCard icon={<Eye size={20} strokeWidth={2.3} />} variant="primary" label="PENDING REVIEW" value={String(tcReport.totalTasksPendingReview)} subtext="Awaiting review" />
-                                <StatCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(tcReport.totalOverdueTasks)} subtext="Past deadline" />
-                                <StatCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${tcReport.taskCompletionRate}%`} subtext="Overall rate" />
-                                <StatCard icon={<Calendar size={20} strokeWidth={2.3} />} variant="warning" label="AVG TIME" value={`${tcReport.averageTaskCompletionTimeHours.toFixed(1)}h`} subtext="Per task" />
+                                <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant='teal' label="ASSIGNED" value={String(tcReport.totalTasksAssigned)} subtext="Total tasks" />
+                                <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(tcReport.totalTasksCompleted)} subtext="Tasks finished" />
+                                <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="IN PROGRESS" value={String(tcReport.totalTasksInProgress)} subtext="Ongoing" />
+                                <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant='teal' label="PENDING REVIEW" value={String(tcReport.totalTasksPendingReview)} subtext="Awaiting review" />
+                                <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(tcReport.totalOverdueTasks)} subtext="Past deadline" />
+                                <StatusCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${tcReport.taskCompletionRate}%`} subtext="Overall rate" />
+                                <StatusCard icon={<Calendar size={20} strokeWidth={2.3} />} variant="warning" label="AVG TIME" value={`${tcReport.averageTaskCompletionTimeHours.toFixed(1)}h`} subtext="Per task" />
                             </div>
                             <div className="card">
                                 <DataTable title="Employee Performance Summary"
@@ -3584,11 +3588,11 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                     {opReport && (
                         <>
                             <div className="report-summary-grid">
-                                <StatCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="primary" label="TOTAL TASKS" value={String(opReport.totalTasks)} subtext="All tasks" />
-                                <StatCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(opReport.completedTasks)} subtext="Tasks finished" />
-                                <StatCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="PENDING" value={String(opReport.pendingTasks)} subtext="Not yet completed" />
-                                <StatCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(opReport.overdueTasks)} subtext="Past deadline" />
-                                <StatCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${opReport.taskCompletionRate.toFixed(1)}%`} subtext="Overall rate" />
+                                <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant='teal' label="TOTAL TASKS" value={String(opReport.totalTasks)} subtext="All tasks" />
+                                <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(opReport.completedTasks)} subtext="Tasks finished" />
+                                <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="PENDING" value={String(opReport.pendingTasks)} subtext="Not yet completed" />
+                                <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(opReport.overdueTasks)} subtext="Past deadline" />
+                                <StatusCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${opReport.taskCompletionRate.toFixed(1)}%`} subtext="Overall rate" />
                             </div>
 
                             <div className="card">
@@ -4450,9 +4454,9 @@ const ReopenTab: React.FC<{
                     { label: 'PENDING REQUESTS', value: pending.length, icon: <RotateCcw size={20} strokeWidth={2.3} />, variant: 'warning', subtext: 'Awaiting review' },
                     { label: 'APPROVED', value: history.filter(r => r.status === 'Approved').length, icon: <ThumbsUp size={20} strokeWidth={2.3} />, variant: 'success', subtext: 'Task reopened' },
                     { label: 'REJECTED', value: history.filter(r => r.status === 'Rejected').length, icon: <ThumbsDown size={20} strokeWidth={2.3} />, variant: 'danger', subtext: 'Declined requests' },
-                    { label: 'TOTAL', value: requests.length, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary', subtext: 'All time' },
+                    { label: 'TOTAL', value: requests.length, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal', subtext: 'All time' },
                 ].map(s => (
-                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                    <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                 ))}
             </div>
 
@@ -4579,7 +4583,34 @@ export default function OpsAdminDashboard() {
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
+
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
+        {
+        label: null,
+        items: [
+        {
+        label: 'Task Allocation and Review System',
+        icon: 'ti ti-clipboard-list',
+        subItems: [
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
+        { label: 'Tasks', onClick: () => setActiveTab('tasks') },
+        { label: 'Team', onClick: () => setActiveTab('team') },
+        { label: 'Task Templates', onClick: () => setActiveTab('templates') },
+        { label: 'Reports', onClick: () => setActiveTab('reports') },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        ],
+        },
+        {
+        label: 'General',
+        icon: 'ti ti-settings',
+        subItems: [
+        { label: 'Profile', onClick: () => setActiveTab('profile') },
+        ],
+        },
+        ],
+        },
+    ], [setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const CLASSIFICATION_MAP: Record<number, string> = { 0: 'routine', 1: 'special' };
     const tmTasks = useMemo(() => tasks.map(t => ({
@@ -5128,79 +5159,30 @@ export default function OpsAdminDashboard() {
 
     return (
         <div className="dashboard-container">
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="logo-image" />
-                </div>
-
-                <div className="sidebar-role-section">
-                    <div className="sidebar-role-badge super-admin">
-                        <div className="role-dot-inner" />
-                        COORDINATOR
-                    </div>
-                </div>
-
-                <nav className="sidebar-nav">
-                    {NAV_GROUPS.map(group => (
-                        <div key={group.label} className="nav-section">
-                            <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon: Icon, label }) => {
-                                const isActive = activeTab === tab;
-                                return (
-                                    <div
-                                        key={tab}
-                                        className={`nav-item${isActive ? ' nav-item-active' : ''}`}
-                                        onClick={() => {
-                                            if (activeTab === tab) return;
-                                            setViewingTask(null); setEditingTask(null); setDetailTask(null);
-                                            setOverrideTask(null); setReviewTask(null); setReviewingRequest(null);
-                                            setActiveTab(tab);
-                                        }}
-                                    >
-                                        <Icon size={18} />
-                                        <span className="nav-item-label">{label}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                </nav>
-
-                <div className="sidebar-footer-profile">
-                    <div className="profile-card">
-                        <div style={{ position: 'relative', display: 'inline-block' }}>
-                            <div className="profile-avatar">
-                                {getInitials(employeeName || 'Coordinator')}
-                            </div>
-                            <span style={{
-                                position: 'absolute', bottom: 1, right: 1,
-                                width: 9, height: 9, borderRadius: '50%',
-                                background: userPresenceStatus === 'Online' ? 'var(--status-active)' : 'var(--text-secondary)',
-                                border: '2px solid var(--sidebar-bg, #1b2559)',
-                                display: 'block'
-                            }} />
-                        </div>
-                        <div className="profile-info">
-                            <span className="profile-name">{employeeName || 'Coordinator'}</span>
-                            <span className="profile-role">COORDINATOR</span>
-                        </div>
-                        <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
-                            <LogOut size={18} />
-                        </button>
-                    </div>
-                </div>
-            </aside>
+            <Sidebar
+                logoUrl={SpeedexLogo}
+                logoText="SPEEDEX"
+                navGroups={SIDEBAR_NAV_GROUPS}
+                profile={{
+                    name: employeeName || 'Op Admin',
+                    role: 'Operations Admin',
+                    avatarInitials: getInitials(employeeName || 'Op Admin'),
+                }}
+            />
 
             {/* -- Main -- */}
             <main className="main-viewport">
-                <DashboardHeader
+                <GlobalHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/Notification"
-                    userInitials={getInitials(employeeName || 'Operation Admin')}
-                    onSettingsClick={() => setActiveTab('profile')}
+                    breadcrumbs={[{ label: 'Ops Admin' }, { label: pageTitles[activeTab] }]}
+                    profile={{
+                        name: employeeName || 'Op Admin',
+                        role: 'Operations Admin',
+                        avatarInitials: getInitials(employeeName || 'Op Admin'),
+                    }}
+                    onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
-                >
-                </DashboardHeader>
+                />
 
                 {activeTab === 'dashboard' && (
                     <DashboardTab

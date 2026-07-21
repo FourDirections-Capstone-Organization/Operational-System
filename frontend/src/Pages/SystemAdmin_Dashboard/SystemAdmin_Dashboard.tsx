@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     Users,
     ClipboardList,
@@ -41,7 +42,6 @@ import {
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
 import { useNavigate } from 'react-router-dom';
-import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import { useToast } from '../../components/Toast/Toast';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
@@ -55,8 +55,9 @@ import EmployeeDetailPanel from './EmployeeDetailPanel/EmployeeDetailPanel';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import ConfirmationModal from '../../components/ConfirmationModal/ConfirmationModal';
 import RoleManagementTab, { DepartmentResponseDTO, JobPositionResponseDTO } from './RoleManagementTab/RoleManagementTab';
-import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import Sidebar from '../../components/Sidebar/Sidebar';
+import StatusCard from '../../components/StatusCard/StatusCard';
 import ActionButton from '../../components/ActionButton/ActionButton';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import SubTabNav from '../../components/ui/SubTabNav';
@@ -247,10 +248,9 @@ const NAV_GROUPS = [
     },
 ];
 
-const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
-    LayoutDashboard, Users, FileText, ClipboardList, BarChart3,
-    Megaphone, Settings, Shield, GitBranch, Bell, Activity,
-};
+
+
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1234,8 +1234,8 @@ interface DashboardTabProps {
 
 function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onEditEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
     const [searchQuery, setSearchQuery] = useState('');
-    const activeCount = employees.filter(e => e.accountStatus === 'Active').length;
-    const deactivatedCount = employees.filter(e => e.accountStatus === 'Deactivated').length;
+    const activeCount = (employees || []).filter(e => e.accountStatus === 'Active').length;
+    const deactivatedCount = (employees || []).filter(e => e.accountStatus === 'Deactivated').length;
 
     const roleDistribution = Object.entries(
         employees.reduce<Record<string, number>>((acc, emp) => {
@@ -1288,12 +1288,12 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
             </div>
             <div className="stats-row">
                 {[
-                    { icon: <Users size={20} strokeWidth={2.3} />, variant: 'primary', label: 'TOTAL EMPLOYEES', value: employees.length, subtext: 'All registered staff' },
+                    { icon: <Users size={20} strokeWidth={2.3} />, variant: 'teal', label: 'TOTAL EMPLOYEES', value: employees.length, subtext: 'All registered staff' },
                     { icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', label: 'ACTIVE', value: activeCount, subtext: 'Currently active accounts' },
                     { icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger', label: 'DEACTIVATED', value: deactivatedCount, subtext: 'Accounts needing review' },
                     { icon: <Shield size={20} strokeWidth={2.3} />, variant: 'warning', label: 'ROLES', value: rolesCount ?? SYSTEM_ROLES.length, subtext: 'Available role types' },
                 ].map(({ icon, variant, label, value, subtext }) => (
-                    <StatCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
+                    <StatusCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
                 ))}
             </div>
 
@@ -1399,7 +1399,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                         <EmptyState message="No data available" />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            {recentEmployees.filter(emp => {
+                            {(recentEmployees || []).filter(emp => {
                                 if (!searchQuery) return true;
                                 const q = searchQuery.toLowerCase();
                                 return getEmployeeDisplayName(emp).toLowerCase().includes(q)
@@ -1998,6 +1998,49 @@ export default function Dashboard() {
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
+        {
+        label: null,
+        items: [
+        {
+        label: 'Task Allocation and Review System',
+        icon: 'ti ti-clipboard-list',
+        subItems: [
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
+        { label: 'Manage Employee', onClick: () => setActiveTab('employees') },
+        { label: 'Task Management', onClick: () => setActiveTab('tasks') },
+        { label: 'Reports', onClick: () => setActiveTab('reports') },
+        { label: 'Role Management', onClick: () => setActiveTab('roles') },
+        { label: 'Org Structure', onClick: () => setActiveTab('org-structure') },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        ],
+        },
+        {
+        label: 'Delivery Management System',
+        icon: 'ti ti-truck-delivery',
+        subItems: [
+        { label: 'Delivery Summary', onClick: () => setActiveTab('delivery') },
+        ],
+        },
+        {
+        label: 'Financial Management System',
+        icon: 'ti ti-currency-dollar',
+        subItems: [
+        { label: 'Finance', onClick: () => setActiveTab('finance') },
+        ],
+        },
+        {
+        label: 'General',
+        icon: 'ti ti-settings',
+        subItems: [
+        { label: 'Announcements', onClick: () => setActiveTab('announcements') },
+        { label: 'Settings', onClick: () => setActiveTab('settings') },
+        { label: 'Notifications', onClick: () => setActiveTab('notifications') },
+        ],
+        },
+        ],
+        },
+    ], [setActiveTab]);
     const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
@@ -2006,9 +2049,9 @@ export default function Dashboard() {
     const [archiveSubmitting, setarchiveSubmitting] = useState(false);
     const [selectedPanelEmployee, setSelectedPanelEmployee] = useState<RecentEmployee | null>(null);
     const [detailPanelInitialSection, setDetailPanelInitialSection] = useState<'overview'>('overview');
-    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [logoutConfirm, setLogoutConfirm] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
+
 
     // ── Employees ──
     const [employees, setEmployees] = useState<RecentEmployee[]>([]);
@@ -2532,47 +2575,30 @@ export default function Dashboard() {
 
     return (
         <div className="dashboard-container">
-            {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-            <aside className={`sidebar${sidebarOpen ? ' sidebar--open' : ''}`}>
-                <div className="sidebar-logo"><img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="logo-image" /></div>
-                 <div className="sidebar-role-section"><div className="sidebar-role-badge super-admin"><div className="role-dot-inner" />MANAGER</div></div>
-                <nav className="sidebar-nav">
-                    {NAV_GROUPS.map(group => (
-                        <div key={group.label} className="nav-section">
-                            <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon, label }) => {
-                                const Icon = NAV_ICONS[icon];
-                                return (
-                                    <div key={tab} className={`nav-item${activeTab === tab ? ' nav-item-active' : ''}`} onClick={() => { setActiveTab(tab); setSelectedPanelEmployee(null); }}>
-                                        {Icon && <Icon size={18} />}<span className="nav-item-label">{label}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                </nav>
-                <div className="sidebar-footer-profile">
-                    <div className="profile-card">
-                        <div className="profile-avatar">{getInitials(employeeName || 'Manager')}</div>
-                        <div className="profile-info"><span className="profile-name">{employeeName || 'Manager'}</span><span className="profile-role">MANAGER</span></div>
-                        <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout"><LogOut size={18} /></button>
-                    </div>
-                </div>
-            </aside>
+            <Sidebar
+                logoUrl={SpeedexLogo}
+                logoText="SPEEDEX"
+                navGroups={SIDEBAR_NAV_GROUPS}
+                profile={{
+                    name: employeeName || 'Manager',
+                    role: 'MANAGER',
+                    avatarInitials: getInitials(employeeName || 'Manager'),
+                }}
+            />
 
             <main className="main-viewport">
                 {!(activeTab === 'employees' && selectedPanelEmployee) && (
-                    <DashboardHeader
+                    <GlobalHeader
                         title={pageTitles[activeTab]}
-                        userInitials={getInitials(employeeName)}
-                        onSettingsClick={() => setActiveTab('settings')}
-                        onLogout={handleLogout}
-                        onMenuToggle={() => setSidebarOpen(v => !v)}
-                        onViewNotification={(taskId) => {
-                            const found = tmTasks.find(t => t.id === taskId);
-                            if (found) setTmDetailTask(mapManagerTaskToView(found));
+                        breadcrumbs={[{ label: 'System Admin' }, { label: pageTitles[activeTab] }]}
+                        profile={{
+                            name: employeeName || 'Manager',
+                            role: 'MANAGER',
+                            avatarInitials: getInitials(employeeName || 'Manager'),
                         }}
-                        onViewMoreNotifications={() => setActiveTab('notifications')}
+                        onSettings={() => setActiveTab('settings')}
+                        onLogout={handleLogout}
+                        onViewAllNotifications={() => setActiveTab('notifications')}
                     />
                 )}
 
@@ -2704,7 +2730,17 @@ export default function Dashboard() {
                         />
                     </div>
                 )}
-                {activeTab === 'reports' && <ReportsTab teamMembers={[]} />}
+                {activeTab === 'reports' && (
+                <div className="dashboard-content">
+                    <div className="card" style={{ padding: 24, minHeight: 300 }}>
+                        <div style={{ marginBottom: 16 }}>
+                            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Reports</h3>
+                            <p style={{ fontSize: 13, color: "var(--ts)", margin: "4px 0 0" }}>View task completion, performance, and operational reports.</p>
+                        </div>
+                        <ReportsTab teamMembers={[]} />
+                    </div>
+                </div>
+            )}
 
                 {activeTab === 'delivery' && <div className="dashboard-content"><div className="card"><EmptyState icon={<Truck size={32} />} message="Delivery module coming soon." /></div></div>}
                 {activeTab === 'finance' && <div className="dashboard-content"><div className="card"><EmptyState icon={<BarChart3 size={32} />} message="Finance module coming soon." /></div></div>}

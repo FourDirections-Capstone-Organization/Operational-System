@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock } from 'lucide-react';
 import DataTable from '../ui/DataTable';
 import StatusBadge from '../ui/StatusBadge';
-import StatCard from '../StatCard/StatCard';
+import StatusCard from '../StatusCard/StatusCard';
 
 export interface TMTask {
     id: string;
@@ -180,7 +180,7 @@ export default function TaskManager({
         <div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeStats.length}, 1fr)`, gap: 12, marginBottom: 16 }}>
                 {activeStats.map(s => (
-                    <StatCard key={s.label} icon={s.icon} label={s.label} value={s.value} subtext={s.subtext} variant={s.variant} />
+                    <StatusCard key={s.label} icon={s.icon} label={s.label} value={s.value} subtext={s.subtext} variant={s.variant} />
                 ))}
             </div>
             <DataTable
