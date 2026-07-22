@@ -1,6 +1,6 @@
-# Operational System — STARS
+# Speedex Task Allocation and Recommendation System
 
-A full-stack operational task management system built with modern web technologies. The backend provides a RESTful API with PostgreSQL persistence and OpenAPI/Scalar documentation. The frontend is a React SPA with real-time communication via SignalR. Includes a Change Data Capture (CDC) pipeline with Neo4j for graph-based employee suitability analysis.
+A full-stack Speedex Task Allocation and Recommendation System built with modern web technologies. The backend provides a RESTful API with PostgreSQL persistence and OpenAPI/Scalar documentation. The frontend is a React SPA with real-time communication via SignalR. Includes a Change Data Capture (CDC) pipeline with Neo4j for graph-based employee suitability analysis.
 
 ## Tech Stack
 
@@ -45,7 +45,6 @@ This becomes increasingly slow and complex as data grows. Each suitability query
 3. [Change Data Capture (CDC)](#change-data-capture-cdc)
 4. [Setup Guide](#setup-guide)
 5. [Team](#team)
-6. [Guides](#guides)
 
 ---
 
@@ -390,13 +389,3 @@ Remove-Item -Recurse -Force neo4j-data
 | **Frontend Developer** | Hermione Benitez |
 | **Backend Developer** | John Angelo Mikhail Reveche |
 | **Integrator** | Hermione Benitez & John Angelo Mikhail Reveche |
-
-## Guides
-
-| Guide | Description |
-|---|---|
-| [Backend Guide](./guide/backend-guide.md) | Setup, Docker, API docs, and CI/CD pipeline |
-| [JWT Authentication Guide](./guide/jwt-authentication-guide.md) | Auth flows, models, tokens, and production deployment |
-| [CI Issue Lifecycle](./guide/ci-issue-lifecycle.md) | How CI failures create/close issues, fixing flows, and edge cases |
-| [pgAdmin Usage](./guide/pgadmin-usage.md) | Connecting, querying, and managing PostgreSQL via pgAdmin 4 |
-| [Centralized Auth & Integration](./guide/centralized-auth-integration.md) | Shared JWT auth, service accounts, and cross-system API integration |
