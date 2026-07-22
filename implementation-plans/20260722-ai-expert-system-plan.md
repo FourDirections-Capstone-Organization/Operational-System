@@ -470,14 +470,14 @@ Each scenario should be documented in `Test Reports/` following the existing `.h
 
 ```mermaid
 flowchart LR
-    C[Coordinator] -->|GET /tasks/{id}/suitability| SC[SuitabilityController]
+    C[Coordinator] -->|GET /tasks/:id/suitability| SC[SuitabilityController]
     SC --> SS[SuitabilityService]
     SS -->|Cypher query| NEO[(Neo4j)]
     SS -.->|Reads weights| CFG[ExpertSystemConfig\nin IOptions]
     NEO -->|Ranked employees| SS
     SS -->|Top 5 + scores| SC
     SC -->|JSON response| C
-    C -->|GET .../suitability/{empId}/explain| SC
+    C -->|GET .../suitability/:empId/explain| SC
     SC --> SS
     SS -->|Factor breakdown| SC
     SC -->|JSON explanation| C
@@ -495,7 +495,7 @@ flowchart LR
         TS -->|PredictRiskAsync| SR[SlaRiskPredictionService]
         SR -.->|Loads model| MODEL[(sla-risk-model.zip)]
         SR -->|Sets SlaRiskLevel| PG
-        CO -->|GET /tasks/{id}/sla-risk| RC[SlaRiskController]
+        CO -->|GET /tasks/:id/sla-risk| RC[SlaRiskController]
         RC --> SR
         SR -->|RiskLevel + Confidence + Factors| RC
         RC -->|JSON response| CO
