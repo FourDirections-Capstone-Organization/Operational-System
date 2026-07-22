@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, User, Lock, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/Toast/Toast';
+import api from '../../api';
 import './login.css';
 
 /* ── Types ── */
@@ -62,6 +63,8 @@ export default function Login() {
     const [mounted, setMounted] = useState(false);
     const [employeeIdError, setEmployeeIdError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [pendingVerification, setPendingVerification] = useState(false);
+    const [resending, setResending] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
@@ -97,38 +100,31 @@ export default function Login() {
         setPasswordError(pwErr);
         if (idErr || pwErr) return;
 
+        setPendingVerification(false);
+        setResending(false);
         setIsLoading(true);
         updateStatus('Authenticating...', 'info');
 
         try {
-            const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    identifier: employeeId.trim(),
-                    password,
-                }),
+            const response = await api.post<any>('/api/Auth/login', {
+                identifier: employeeId.trim(),
+                password,
             });
 
-            let data: any = null;
-            try {
-                data = await response.json();
-            } catch {
-                // Non-JSON response — use status text if available
-            }
+            const data = response.data;
 
-            if (!response.ok) {
-                const msg = data?.message ?? data?.Message ?? (response.statusText || '');
+            if (!data.isSuccess) {
+                const msg = data.message ?? data.Message ?? 'Login failed.';
                 const msgLower = msg.toLowerCase();
 
                 if (msgLower.includes('on leave') || msgLower.includes('onleave')) {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
+                            employeeName: data.employeeName ?? data.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
-                            overrideToken: data?.overrideToken,
-                            leaveId: data?.leaveId,
+                            overrideToken: data.overrideToken,
+                            leaveId: data.leaveId,
                         }
                     });
                     return;
@@ -138,7 +134,7 @@ export default function Login() {
                     navigate('/account_locked', {
                         state: {
                             employeeNumber: employeeId.trim(),
-                            employeeName: data?.employeeName ?? data?.EmployeeName ?? `Employee #${employeeId.trim()}`,
+                            employeeName: data.employeeName ?? data.EmployeeName ?? `Employee #${employeeId.trim()}`,
                             reason: msg,
                         }
                     });
@@ -146,7 +142,8 @@ export default function Login() {
                 }
 
                 if (msgLower.includes('verified') || msgLower.includes('unverified') || msgLower.includes('verification') || msgLower.includes('verify your email') || msgLower.includes('email not verified')) {
-                    updateStatus('Your account is not yet verified. Please check your email for the verification link.', 'error');
+                    updateStatus('Your account is not yet verified. Please check your email for the verification link, or request a new one below.', 'error');
+                    setPendingVerification(true);
                     return;
                 }
 
@@ -155,7 +152,7 @@ export default function Login() {
             }
 
             // Unwrap ApiResponseDTO wrapper
-            const d = data?.data ?? data;
+            const d = data.data ?? data;
 
             const roleMap: Record<number, string> = { 0: 'Manager', 1: 'Coordinator', 2: 'Dispatcher', 3: 'Encoder', 4: 'Courier', 5: 'Accountant' };
             const roleStr = roleMap[d.role] ?? d.role?.toString?.() ?? '';
@@ -170,18 +167,26 @@ export default function Login() {
             localStorage.setItem('userRole', normalizedRole);
             localStorage.setItem('employeeId', d.employeeNumber ?? employeeId.trim());
             localStorage.setItem('isPasswordChanged', (d.isPasswordChanged ?? false).toString());
-            localStorage.setItem('contactNumber', d.contactNumber ?? d.contact ?? d.phoneNumber ?? '');
             localStorage.setItem('email', d.email ?? '');
-            localStorage.setItem('firstName', d.firstName ?? '');
-            localStorage.setItem('middleName', d.middleName ?? '');
-            localStorage.setItem('lastName', d.lastName ?? '');
-            localStorage.setItem('suffix', d.suffix ?? '');
 
-            const fullName = [d.firstName, d.middleName, d.lastName, d.suffix]
-                .map(s => (s ?? '').trim())
-                .filter(Boolean)
-                .join(' ');
-            localStorage.setItem('employeeName', fullName || d.employeeName || '');
+            // Fetch full profile to populate localStorage
+            try {
+                const meRes = await api.get<any>('/api/Auth/me');
+                const me = meRes.data?.data ?? meRes.data;
+                if (me) {
+                    localStorage.setItem('contactNumber', me.contactNumber ?? '');
+                    localStorage.setItem('firstName', me.firstName ?? '');
+                    localStorage.setItem('middleName', me.middleName ?? '');
+                    localStorage.setItem('lastName', me.lastName ?? '');
+                    localStorage.setItem('suffix', me.suffix ?? '');
+                    const fullName = [me.firstName, me.middleName, me.lastName, me.suffix]
+                        .filter(Boolean).join(' ');
+                    localStorage.setItem('employeeName', fullName || d.fullName || me.fullName || d.employeeName || '');
+                }
+            } catch {
+                // Fallback: use login response values
+                localStorage.setItem('employeeName', d.fullName || d.employeeName || '');
+            }
 
             updateStatus('Login successful. Redirecting...', 'success');
             success('Login successful! Welcome back.');
@@ -205,6 +210,19 @@ export default function Login() {
             updateStatus('System not available at the moment. Please try again later.', 'error');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setResending(true);
+        try {
+            await api.post('/api/email-verification/resend', { employeeID: employeeId.trim() });
+            updateStatus('A new verification link has been sent to your email.', 'success');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err.message || 'Failed to resend verification email.';
+            updateStatus(msg, 'error');
+        } finally {
+            setResending(false);
         }
     };
 
@@ -275,6 +293,23 @@ export default function Login() {
                             <StatusIcon type={statusType} />
                             {statusMessage}
                         </div>
+                    )}
+                    {pendingVerification && (
+                        <button
+                            type="button"
+                            className="resend-btn"
+                            onClick={handleResendVerification}
+                            disabled={resending}
+                            style={{
+                                display: 'block', margin: '8px auto 0', padding: '8px 20px',
+                                fontSize: 13, fontWeight: 600, borderRadius: 8,
+                                border: '1px solid var(--primary)', background: 'transparent',
+                                color: 'var(--primary)', cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                        >
+                            {resending ? <Loader2 size={14} className="spin" style={{ marginRight: 6 }} /> : null}
+                            {resending ? 'Sending...' : 'Resend Verification Email'}
+                        </button>
                     )}
 
                     {/* Form */}

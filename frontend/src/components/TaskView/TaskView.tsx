@@ -7,6 +7,8 @@ import {
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
 import StatusBadge from '../ui/StatusBadge';
+import api from '../../api';
+import axios from 'axios';
 import './TaskView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -170,12 +172,10 @@ const TaskView: React.FC<TaskViewProps> = ({
         if (!task.taskId) return;
         setAttachmentsLoading(true);
         try {
-            const res = await fetch(`/api/tasks/${task.taskId}/attachments`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                const json = await res.json();
-                const raw = json?.data ?? json;
+            const res = await api.get<any>(`/api/tasks/${task.taskId}/attachments`);
+            const json = res.data;
+            if (res.status === 200) {
+                const raw = json?.data?.items ?? json?.data ?? json;
                 setAttachments(Array.isArray(raw) ? raw.map((a: any) => ({
                     id: a.id,
                     fileName: a.fileName,
@@ -199,11 +199,11 @@ const TaskView: React.FC<TaskViewProps> = ({
 
     const handleDownload = async (attachmentId: string, fileName: string) => {
         try {
-            const res = await fetch(`/api/attachments/${attachmentId}/download`, {
+            const res = await axios.get(`/api/attachments/${attachmentId}/download`, {
+                responseType: 'blob',
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error('Download failed');
-            const blob = await res.blob();
+            const blob = res.data;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -243,6 +243,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     const currentUser = localStorage.getItem('employeeName') ?? 'Admin';
     const userRole = localStorage.getItem('userRole') ?? '';
     const isCoordOrManager = userRole === 'Coordinator' || userRole === 'Manager';
+    const isCoordinator = userRole === 'Coordinator';
     const isEmployee = ['Dispatcher', 'Encoder', 'Courier', 'Accountant'].includes(userRole);
     const isAssignedToMe = task.assignedTo === localStorage.getItem('employeeId');
 
@@ -262,12 +263,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     // ── Review actions ──
     const handleRequestReview = async () => {
         try {
-            const res = await fetch(`/api/task/${task.taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify({ newStatus: 'DonePendingReview' }),
-            });
-            if (!res.ok) return;
+            await api.patch(`/api/Task/${task.taskId}/status`, { newStatus: 'DonePendingReview' });
             setReviewState('pending_review');
             setLocalStatus('Done/Pending Review');
             setReviewHistory(prev => [...prev, {
@@ -435,12 +431,12 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <RotateCcw size={13} /> Push Back
                             </button>
                         )}
-                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
+                        {isCoordinator && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
                             <button className="tv-btn tv-btn-outline" onClick={() => setShowHold(true)}>
                                 <Clock size={13} /> Hold
                             </button>
                         )}
-                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'Done/Pending Review' && effectiveStatus !== 'Pending Admin Review' && (
+                        {isCoordinator && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'Done/Pending Review' && effectiveStatus !== 'Pending Admin Review' && (
                             <button className="tv-btn tv-btn-outline-danger" onClick={() => setShowCancel(true)}>
                                 <XCircle size={13} /> Cancel
                             </button>
@@ -764,14 +760,8 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 onClick={async () => {
                                     if (!holdReason.trim()) return;
                                     setHolding(true);
-                                    const token = localStorage.getItem('authToken');
                                     try {
-                                        const res = await fetch(`/api/task/${task.taskId}/hold`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ holdReason: holdReason.trim() }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Hold failed.'); }
+                                        await api.patch(`/api/Task/${task.taskId}/hold`, { holdReason: holdReason.trim() });
                                         setLocalStatus('On Hold');
                                         setShowHold(false);
                                         setHoldReason('');
@@ -815,14 +805,8 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 onClick={async () => {
                                     if (!revisedDeadline) return;
                                     setResuming(true);
-                                    const token = localStorage.getItem('authToken');
                                     try {
-                                        const res = await fetch(`/api/task/${task.taskId}/resume`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ revisedDeadline: new Date(revisedDeadline).toISOString() }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Resume failed.'); }
+                                        await api.patch(`/api/Task/${task.taskId}/resume`, { revisedDeadline: new Date(revisedDeadline).toISOString() });
                                         setLocalStatus(task.taskStatus === 'On Hold' ? task.taskStatus : 'In Progress');
                                         setShowResume(false);
                                     } catch (err: any) {
@@ -859,27 +843,22 @@ const TaskView: React.FC<TaskViewProps> = ({
                         />
                         <div className="tv-modal-actions">
                             <button className="tv-btn tv-btn-outline" onClick={() => { setShowCancel(false); setCancelReason(''); }} disabled={cancelling}>Keep Task</button>
-                            <button className="tv-btn tv-btn-danger"
-                                onClick={async () => {
-                                    if (!cancelReason.trim()) return;
-                                    setCancelling(true);
-                                    const token = localStorage.getItem('authToken');
-                                    try {
-                                        const res = await fetch(`/api/task/${task.taskId}/cancel`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ cancellationReason: cancelReason.trim(), isConfirmed: true }),
-                                        });
-                                        if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Cancellation failed.'); }
-                                        setLocalStatus('Cancelled');
-                                        setShowCancel(false);
-                                        setCancelReason('');
-                                    } catch (err: any) {
-                                        console.error(err);
-                                    } finally { setCancelling(false); }
-                                }}
-                                disabled={!cancelReason.trim() || cancelling}>
-                                {cancelling ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancel Task
+                                                    <button className="tv-btn tv-btn-danger"
+                                                        onClick={async () => {
+                                                            if (!cancelReason.trim()) return;
+                                                            setCancelling(true);
+                                                            try {
+                                                                await api.patch(`/api/Task/${task.taskId}/cancel`, { cancellationReason: cancelReason.trim(), isConfirmed: true });
+                                                                setLocalStatus('Cancelled');
+                                                                setShowCancel(false);
+                                                                setCancelReason('');
+                                                            } catch (err: any) {
+                                                                const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to cancel task.';
+                                                                alert(msg);
+                                                            } finally { setCancelling(false); }
+                                                        }}
+                                                        disabled={!cancelReason.trim() || cancelling}>
+                                                        {cancelling ? <Loader2 size={13} className="spin" /> : <XCircle size={13} />} Cancel Task
                             </button>
                         </div>
                     </div>

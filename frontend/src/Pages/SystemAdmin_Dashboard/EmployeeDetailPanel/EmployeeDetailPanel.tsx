@@ -10,29 +10,28 @@ import {
     Pencil,
     Save,
     X,
-    Truck,
     ClipboardList,
-    Package,
     ToggleLeft,
     ToggleRight,
     Trash2,
-    Calendar,
-    Clock,
     ChevronLeft,
-    Mail,
-    FileText,
-    Download,
     Eye,
     EyeOff,
     Lock,
+    Mail,
+    Download,
+    FileText,
+    Clock,
+    Package,
+    Truck,
     Activity,
 } from 'lucide-react';
 import './EmployeeDetailPanel.css';
 import { useToast } from '../../../components/Toast/Toast';
 import FormModal from '../../../components/FormModal/FormModal';
-import Digital201FileView from './../Digital201FileView/Digital201FileView';
 import ConfirmationModal from '../../../components/ConfirmationModal/ConfirmationModal';
 import DataTable from '../../../components/ui/DataTable';
+import api from '../../../api';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -199,8 +198,6 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
     const doSave = async () => {
         setSubmitting(true);
         try {
-            const token = localStorage.getItem('authToken');
-
             const nameParts = form.employeeName.trim().split(/\s+/);
             let firstName = '';
             let middleName = '';
@@ -228,64 +225,32 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
             }
 
             // Look up user GUID by employee number
-            const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(profile.employeeNumber)}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!lookupRes.ok) throw new Error('Employee not found.');
-            const lookupData = await lookupRes.json();
+            const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
+            const lookupData = lookupRes.data;
             const userId = lookupData?.data?.id ?? lookupData?.id;
             if (!userId) throw new Error('Employee not found.');
 
-            // 1. Update personal details
-            const updateRes = await fetch(`/api/user/${userId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    firstName,
-                    middleName,
-                    lastName,
-                    suffix,
-                    contactNumber: form.contactNumber,
-                    email: form.email.trim(),
-                }),
-            });
-            if (!updateRes.ok) {
-                const errData = await updateRes.json().catch(() => ({}));
-                throw new Error(errData.message || errData.Message || 'Failed to update employee details.');
-            }
-
-            // 2. Update status in database if changed
+            // 1. Update status FIRST (backend blocks PUT on deactivated users)
             if (form.accountStatus !== profile.accountStatus) {
                 const isActive = form.accountStatus === 'Active';
-                const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
-                    method: 'PATCH',
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                if (!statusRes.ok) {
-                    const errData = await statusRes.json().catch(() => ({}));
-                    throw new Error(errData.message || errData.Message || 'Failed to update account status.');
-                }
+                await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
             }
+
+            // 2. Update personal details
+            await api.put(`/api/User/${userId}`, {
+                firstName,
+                middleName,
+                lastName,
+                suffix,
+                contactNumber: form.contactNumber,
+                email: form.email.trim(),
+            });
 
             // 3. Update role if changed
             const newRoleVal = toBackendRole(form.role);
             const oldRoleVal = typeof profile.role === 'number' ? profile.role : parseInt(profile.role, 10);
             if (newRoleVal !== oldRoleVal) {
-                const roleRes = await fetch(`/api/role/user/${userId}/role`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({ newRole: newRoleVal, reason: 'Role updated via admin panel' }),
-                });
-                if (!roleRes.ok) {
-                    const errData = await roleRes.json().catch(() => ({}));
-                    throw new Error(errData.message || errData.Message || 'Failed to update role.');
-                }
+                await api.patch(`/api/Role/user/${userId}/role`, { newRole: newRoleVal, reason: 'Role updated via admin panel' });
             }
 
             onSaved({
@@ -299,8 +264,9 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
             success('Employee details updated successfully!');
             onClose();
         } catch (err: any) {
-            error(err.message ?? 'Something went wrong.');
-            setApiError(err.message ?? 'Something went wrong.');
+            const msg = err?.response?.data?.message || err.message;
+            error(msg ?? 'Something went wrong.');
+            setApiError(msg ?? 'Something went wrong.');
         } finally {
             setSubmitting(false);
             setConfirmModal(CONFIRM_CLOSED);
@@ -333,19 +299,15 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
                 try {
-                    const token = localStorage.getItem('authToken');
                     const adminId = localStorage.getItem('employeeId') ?? '';
-                    const res = await fetch('/api/auth/verify-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeID: adminId, password: pw }),
-                    });
-                    const verifyData = await res.json().catch(() => ({}));
+                    const verifyRes = await api.post('/api/Auth/verify-password', { employeeID: adminId, password: pw });
+                    const verifyData = verifyRes.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
                     setConfirmModal(CONFIRM_CLOSED);
                     await doSave();
                 } catch (err: any) {
-                    setGateError(err.message ?? 'Incorrect password. Please try again.');
+                    const msg = err?.response?.data?.message || err.message;
+                    setGateError(msg ?? 'Incorrect password. Please try again.');
                     setConfirmModal(prev => ({ ...prev, isLoading: false }));
                 }
             },
@@ -447,7 +409,7 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
 
 interface EmployeeDetailPanelProps {
     employee: RecentEmployee;
-    initialSection?: 'overview' | 'deliveries' | 'activity' | 'digital_201';
+    initialSection?: 'overview' | 'activity';
     onBack: () => void;
     onEmployeeUpdated: (updated: RecentEmployee) => void;
     rolesList?: string[];
@@ -461,16 +423,16 @@ export default function EmployeeDetailPanel({
     rolesList,
 }: EmployeeDetailPanelProps) {
     const [profile, setProfile] = useState<RecentEmployee>(employee);
-    const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [activityLogPage, setActivityLogPage] = useState(1);
     const activityLogPageSize = 10;
 
-    const [loadingDeliveries, setLoadingDeliveries] = useState(true);
     const [loadingLogs, setLoadingLogs] = useState(true);
     const [showEdit, setShowEdit] = useState(false);
     const [deleting, setDeleting] = useState(false);
-    const [activeSection, setActiveSection] = useState<'overview' | 'deliveries' | 'activity' | 'digital_201'>(initialSection);
+    const [activeSection, setActiveSection] = useState<'overview' | 'activity'>(initialSection);
+    const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
+    const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
@@ -484,35 +446,34 @@ export default function EmployeeDetailPanel({
         setProfile(employee);
     }, [employee]);
 
-    // Fetch Deliveries
-    useEffect(() => {
-        const token = localStorage.getItem('authToken');
-        setLoadingDeliveries(true);
-        fetch(`/api/systemadmin/employee/${encodeURIComponent(profile.employeeNumber)}/deliveries`, {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then(res => (res.ok ? res.json() : []))
-            .then(data => setDeliveries(Array.isArray(data) ? data : []))
-            .catch(() => setDeliveries([]))
-            .finally(() => setLoadingDeliveries(false));
-    }, [profile.employeeNumber]);
-
     // Fetch Activity Logs
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
-        setLoadingLogs(true);
-        fetch(`/api/activity-logs/employee/${encodeURIComponent(profile.employeeNumber)}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            cache: 'no-store'
-        })
-            .then(res => (res.ok ? res.json() : []))
-            .then(data => setActivityLogs(Array.isArray(data) ? data.map((log: any) => ({
-                id: log.activityLogId,
-                description: log.description,
-                timestamp: log.createdAt,
-            })) : []))
-            .catch(() => setActivityLogs([]))
-            .finally(() => setLoadingLogs(false));
+        const fetchLogs = async () => {
+            setLoadingLogs(true);
+            try {
+                // Look up user GUID first
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
+                const lookupData = lookupRes.data;
+                const userId = lookupData?.data?.id ?? lookupData?.id;
+                if (userId) {
+                    const res = await api.get('/api/audit-logs', { params: { userId, pageSize: 50 } });
+                    const json = res.data;
+                    const items = json?.isSuccess && json?.data?.items ? json.data.items : [];
+                    setActivityLogs(items.map((log: any) => ({
+                        id: log.id ?? log.activityLogId,
+                        description: log.description ?? '',
+                        timestamp: log.timestamp ?? log.createdAt ?? '',
+                    })));
+                } else {
+                    setActivityLogs([]);
+                }
+            } catch {
+                setActivityLogs([]);
+            } finally {
+                setLoadingLogs(false);
+            }
+        };
+        fetchLogs();
     }, [profile.employeeNumber]);
 
     // Password gate helpers
@@ -540,55 +501,48 @@ export default function EmployeeDetailPanel({
                 setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
                 try {
-                    const token = localStorage.getItem('authToken');
                     const adminId = localStorage.getItem('employeeId') ?? '';
-                    const verifyRes = await fetch('/api/auth/verify-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ employeeID: adminId, password: pw }),
-                    });
-                    const verifyData = await verifyRes.json().catch(() => ({}));
+                    const verifyRes = await api.post('/api/Auth/verify-password', { employeeID: adminId, password: pw });
+                    const verifyData = verifyRes.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password.'); }
                     setConfirmModal(CONFIRM_CLOSED);
-                    const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(profile.employeeNumber)}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-                    const lookupData = lookupRes.ok ? await lookupRes.json() : null;
+                    const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
+                    const lookupData = lookupRes.data;
                     const userId = lookupData?.data?.id ?? lookupData?.id;
                     if (!userId) throw new Error('Employee not found.');
 
                     if (action.type === 'archive') {
                         setDeleting(true);
                         try {
-                            const delRes = await fetch(`/api/user/${userId}/deactivate`, {
-                                method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (!delRes.ok) {
-                                const errData = await delRes.json().catch(() => ({}));
-                                throw new Error(errData.message || errData.Message || 'Failed to archive employee.');
-                            }
+                            await api.patch(`/api/User/${userId}/deactivate`);
                             success(`Successfully archived ${profile.employeeName}.`);
                             onEmployeeUpdated({ ...profile, accountStatus: '__deleted__' });
-                        } catch (err: any) { error(err.message); } finally { setDeleting(false); }
+                        } catch (err: any) {
+                            const msg = err?.response?.data?.message || err.message;
+                            error(msg);
+                        } finally {
+                            setDeleting(false);
+                        }
                     } else {
                         const next = action.nextStatus!;
                         const isActive = next === 'Active';
                         try {
-                            const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
-                                method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (!statusRes.ok) {
-                                const errData = await statusRes.json().catch(() => ({}));
-                                throw new Error(errData.message || errData.Message || `Failed to ${isActive ? 'activate' : 'deactivate'} employee.`);
-                            }
+                            await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
                             const updatedProfile = { ...profile, accountStatus: next };
                             setProfile(updatedProfile);
                             onEmployeeUpdated(updatedProfile);
                             success(`Successfully ${next === 'Active' ? 'activated' : 'deactivated'} ${profile.employeeName}.`);
-                        } catch (err: any) { error(err.message); }
+                        } catch (err: any) {
+                            const msg = err?.response?.data?.message || err.message;
+                            error(msg);
+                        }
                     }
-                } catch (err: any) { setGateError(err.message ?? 'Incorrect password.'); }
-                finally { setConfirmModal(prev => ({ ...prev, isLoading: false })); }
+                } catch (err: any) {
+                    const msg = err?.response?.data?.message || err.message;
+                    setGateError(msg ?? 'Incorrect password.');
+                } finally {
+                    setConfirmModal(prev => ({ ...prev, isLoading: false }));
+                }
             },
         });
     };
@@ -690,9 +644,8 @@ export default function EmployeeDetailPanel({
             <div className="ed-section-tabs">
                 {([
                     { key: 'overview', icon: User, label: 'Overview' },
-                    { key: 'deliveries', icon: Truck, label: 'Delivery History' },
+                    { key: 'deliveries', icon: Truck, label: 'Deliveries' },
                     { key: 'activity', icon: ClipboardList, label: 'Activity Logs' },
-                    { key: 'digital_201', icon: FileText, label: 'Digital 201 File' },
                 ] as const).map(({ key, icon: Icon, label }) => (
                     <button
                         key={key}
@@ -830,50 +783,16 @@ export default function EmployeeDetailPanel({
                             <h3>
                                 <Truck size={15} /> Delivery History
                             </h3>
-                            <span className="ed-badge-count">{deliveries.length} records</span>
                         </div>
-                        {loadingDeliveries ? (
-                            <div className="ed-empty">
-                                <Loader2 size={22} className="spin" />
-                                <p>Loading deliveries…</p>
-                            </div>
-                        ) : deliveries.length === 0 ? (
-                            <div className="ed-empty">
-                                <Package size={24} />
-                                <p>No delivery records found</p>
-                            </div>
-                        ) : (
-                            <div style={{ overflowX: 'auto' }}>
-                                <table className="ed-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tracking #</th>
-                                            <th>Recipient</th>
-                                            <th>Destination</th>
-                                            <th>Status</th>
-                                            <th>Assigned</th>
-                                            <th>Delivered</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {deliveries.map(d => (
-                                            <tr key={d.deliveryId}>
-                                                <td className="ed-tracking-num">{d.trackingNumber}</td>
-                                                <td>{d.recipient}</td>
-                                                <td>{d.destination}</td>
-                                                <td>
-                                                    <span className={`ed-delivery-badge ${deliveryStatusClass(d.status)}`}>
-                                                        {d.status}
-                                                    </span>
-                                                </td>
-                                                <td>{fmtDate(d.assignedAt)}</td>
-                                                <td>{fmtDate(d.deliveredAt)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                        <div className="ed-empty" style={{ padding: '48px 24px' }}>
+                            <Package size={32} style={{ opacity: 0.4, marginBottom: 8 }} />
+                            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                Delivery tracking is coming soon.
+                            </p>
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                This feature will be available in a future update.
+                            </p>
+                        </div>
                     </div>
                 )}
 
@@ -916,26 +835,6 @@ export default function EmployeeDetailPanel({
                     </div>
                 )}
 
-                {activeSection === 'digital_201' && (
-                    <Digital201FileView
-                        employeeNumber={profile.employeeNumber}
-                        readOnly={true}
-                        onAttachmentsChanged={(attachments) => {
-                            const updatedProfile = {
-                                ...profile,
-                                attachments: attachments.map(a => ({
-                                    employeeAttachmentId: a.employeeAttachmentId,
-                                    fileName: a.fileName,
-                                    fileUrl: a.fileUrl,
-                                    contentType: a.contentType,
-                                    fileSize: a.fileSize
-                                }))
-                            };
-                            setProfile(updatedProfile);
-                            onEmployeeUpdated(updatedProfile);
-                        }}
-                    />
-                )}
             </div>
 
             {showEdit && (

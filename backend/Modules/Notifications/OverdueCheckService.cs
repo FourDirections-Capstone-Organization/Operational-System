@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.Enums;
+using Backend.Modules.Email;
+using Backend.Modules.TaskManagement;
 using Task = System.Threading.Tasks.Task;
 using TaskStatus = Backend.Models.Enums.TaskStatus;
 
@@ -45,6 +47,8 @@ public class OverdueCheckService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+        var auditLogService = scope.ServiceProvider.GetRequiredService<IAuditLogService>();
 
         var now = DateTime.UtcNow;
 
@@ -85,16 +89,48 @@ public class OverdueCheckService : BackgroundService
             recipientIds = recipientIds.Distinct().ToList();
 
             var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+            var deadlineStr = task.Deadline.ToString("MMM dd, yyyy h:mm tt");
 
+            // Send in-app notifications
             await notificationService.SendBulkNotificationAsync(
                 recipientIds,
                 NotificationType.TaskOverdue,
                 "Task Overdue",
-                $"Task '{taskTitle}' is overdue. Deadline was {task.Deadline:MMM dd, yyyy h:mm tt}.",
+                $"Task '{taskTitle}' is overdue. Deadline was {deadlineStr}.",
                 task.Id);
 
-            _logger.LogInformation("Overdue escalation sent for task {TaskId}: {TaskTitle}",
-                task.Id, task.Title);
+            // Send email escalation to each recipient (req 4)
+            var recipients = await db.Users
+                .Where(u => recipientIds.Contains(u.Id))
+                .ToListAsync(stoppingToken);
+
+            foreach (var recipient in recipients)
+            {
+                try
+                {
+                    var fullName = $"{recipient.FirstName} {recipient.LastName}".Trim();
+                    await emailService.SendOverdueEscalationEmailAsync(
+                        recipient.Email, fullName, taskTitle, task.Deadline);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send escalation email to {Email} for task {TaskId}",
+                        recipient.Email, task.Id);
+                }
+            }
+
+            // Record in audit log (req 5)
+            await auditLogService.LogAsync(
+                null,
+                AuditActionType.StatusChange,
+                "Task",
+                task.Id,
+                null,
+                $"Overdue escalation sent for task '{taskTitle}'. Deadline was {deadlineStr}. Notified {recipientIds.Count} user(s).",
+                "Escalation");
+
+            _logger.LogInformation("Overdue escalation sent for task {TaskId}: {TaskTitle} — notified {Count} user(s)",
+                task.Id, task.Title, recipientIds.Count);
         }
     }
 

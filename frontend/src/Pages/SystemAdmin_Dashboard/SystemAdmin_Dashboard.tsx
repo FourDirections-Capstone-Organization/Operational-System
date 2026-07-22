@@ -27,8 +27,6 @@ import {
     Clock,
     Filter,
     Copy,
-    ShieldAlert,
-    ShieldCheck,
     LogOut,
     Settings,
     Activity,
@@ -37,6 +35,8 @@ import {
     Download,
     RefreshCw,
     GitBranch,
+    Bell,
+    Megaphone,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
@@ -60,11 +60,12 @@ import StatCard from '../../components/StatCard/StatCard';
 import ActionButton from '../../components/ActionButton/ActionButton';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import SubTabNav from '../../components/ui/SubTabNav';
-import EmployeeDocumentsTab from './EmployeeDocumentsTab/EmployeeDocumentsTab';
 import OrgStructureTab from './OrgStructureTab/OrgStructureTab';
 import { ReportsTab } from '../OpAdmin_Dashboard/OpAdmin_Dashboard';
 import TaskManager from '../../components/TaskManager/TaskManager';
+import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
+import api from '../../api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,8 +77,9 @@ type NavTab =
     | 'settings'
     | 'roles'
     | 'reports'
+    | 'announcements'
+    | 'notifications'
     | 'activity_logs'
-    | 'government_records'
     | 'tasks'
     | 'profile'
     | 'org-structure';
@@ -157,22 +159,7 @@ interface RecentEmployee {
     }>;
 }
 
-interface EmploymentContract {
-    employeeAttachmentId: string;
-    fileName: string;
-    fileUrl: string;
-    contentType: string;
-    fileSize: number;
-    version: number;
-    documentType: string;
-    isArchived: boolean;
-    uploadedAt: string;
-    employeeNumber: string;
-    firstName: string;
-    lastName: string;
-    departmentName?: string;
-    jobPositionTitle?: string;
-}
+
 
 // ─── ConfirmModal state shape ─────────────────────────────────────────────────
 
@@ -248,17 +235,13 @@ const NAV_GROUPS = [
         ],
     },
     {
-        label: 'COMPLIANCE',
-        items: [
-            { tab: 'government_records' as NavTab, icon: ShieldCheck, label: 'Government Records' },
-        ],
-    },
-    {
         label: 'SYSTEM',
         items: [
+            { tab: 'announcements' as NavTab, icon: Megaphone, label: 'Announcements' },
             { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
             { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
             { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
+            { tab: 'notifications' as NavTab, icon: Bell, label: 'Notifications' },
             { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
         ],
     },
@@ -422,41 +405,36 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
         const loadOrgData = async () => {
             setLoadingOrg(true);
             try {
-                const token = localStorage.getItem('authToken');
-                const headers = { 'Authorization': `Bearer ${token}` };
-
                 const [dRes, pRes, rRes] = await Promise.all([
-                    fetch('/api/department', { headers }),
-                    fetch('/api/job-positions', { headers }),
-                    fetch('/api/role', { headers })
+                    api.get('/api/Department'),
+                    api.get('/api/job-positions'),
+                    api.get('/api/Role')
                 ]);
 
-                if (dRes.ok && pRes.ok && rRes.ok) {
-                    const deptsData = await dRes.json();
-                    const posData = await pRes.json();
-                    const rolesData = await rRes.json();
+                const deptsData = dRes.data;
+                const posData = pRes.data;
+                const rolesData = rRes.data;
 
-                    const rawDepts = Array.isArray(deptsData) ? deptsData : deptsData.data ?? deptsData.$values ?? [];
-                    const rawPos = Array.isArray(posData) ? posData : posData.data ?? posData.$values ?? [];
-                    const rawRoles = Array.isArray(rolesData) ? rolesData : rolesData.data ?? rolesData.$values ?? [];
+                const rawDepts = Array.isArray(deptsData) ? deptsData : (deptsData.data?.items ?? (Array.isArray(deptsData.data) ? deptsData.data : deptsData.$values ?? []));
+                const rawPos = Array.isArray(posData) ? posData : (posData.data?.items ?? (Array.isArray(posData.data) ? posData.data : posData.$values ?? []));
+                const rawRoles = Array.isArray(rolesData) ? rolesData : (rolesData.data?.items ?? (Array.isArray(rolesData.data) ? rolesData.data : rolesData.$values ?? []));
 
-                    setDepartments(rawDepts.map((d: any) => ({
-                        departmentId: d.id ?? d.departmentId ?? d.DepartmentId,
-                        name: d.name ?? d.Name,
-                        isActive: d.isActive ?? d.IsActive ?? ((d.status ?? d.Status) === 'Active'),
-                        status: d.status ?? d.Status ?? 'Active'
-                    })).filter((d: any) => d.status === 'Active' || d.isActive !== false));
+                setDepartments(rawDepts.map((d: any) => ({
+                    departmentId: d.id ?? d.departmentId ?? d.DepartmentId,
+                    name: d.name ?? d.Name,
+                    isActive: d.isActive ?? d.IsActive ?? ((d.status ?? d.Status) === 'Active'),
+                    status: d.status ?? d.Status ?? 'Active'
+                })).filter((d: any) => d.status === 'Active' || d.isActive !== false));
 
-                    setJobPositions(rawPos.map((p: any) => ({
-                        jobPositionId: p.id ?? p.jobPositionId ?? p.JobPositionId,
-                        name: p.name ?? p.Name,
-                        departmentId: p.departmentId ?? p.DepartmentId,
-                        isActive: p.isActive ?? p.IsActive ?? ((p.status ?? p.Status) === 'Active'),
-                        status: p.status ?? p.Status ?? 'Active'
-                    })).filter((p: any) => p.status === 'Active' || p.isActive !== false));
+                setJobPositions(rawPos.map((p: any) => ({
+                    jobPositionId: p.id ?? p.jobPositionId ?? p.JobPositionId,
+                    name: p.name ?? p.Name,
+                    departmentId: p.departmentId ?? p.DepartmentId,
+                    isActive: p.isActive ?? p.IsActive ?? ((p.status ?? p.Status) === 'Active'),
+                    status: p.status ?? p.Status ?? 'Active'
+                })).filter((p: any) => p.status === 'Active' || p.isActive !== false));
 
-                    setAvailableRoles(rawRoles.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name)));
-                }
+                setAvailableRoles(rawRoles.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name)));
             } catch (err) {
                 console.error('Error loading organization data:', err);
             } finally {
@@ -471,21 +449,9 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
             setEmpNumLoading(true);
             setEmpNumError('');
             try {
-                const token = localStorage.getItem('authToken');
-                const res = await fetch('/api/user?PageNumber=1&PageSize=1000', {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const result = await res.json();
-                const employees: { employeeNumber: string }[] = Array.isArray(result.data) ? result.data : [];
-                const usedNumbers = new Set(
-                    employees
-                        .map(e => { const num = parseInt(e.employeeNumber, 10); return isNaN(num) ? null : num; })
-                        .filter((n): n is number => n !== null)
-                );
-                let next = 1;
-                while (usedNumbers.has(next)) next++;
-                setForm(prev => ({ ...prev, employeeNumber: String(next).padStart(4, '0') }));
+                const res = await api.get<any>('/api/User/next-employee-number');
+                const empNum = res.data?.data ?? res.data;
+                setForm(prev => ({ ...prev, employeeNumber: String(empNum).padStart(4, '0') }));
             } catch (err) {
                 console.error('Error generating employee number:', err);
                 setEmpNumError('Could not generate employee number. Please try again.');
@@ -552,9 +518,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
         setSubmitting(true);
         setApiError('');
         try {
-            const token = localStorage.getItem('authToken');
-
-            const body = JSON.stringify({
+            const res = await api.post('/api/User/register', {
                 employeeNumber: form.employeeNumber,
                 firstName: form.firstName.trim() || 'New',
                 middleName: form.middleName.trim() || null,
@@ -567,26 +531,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 jobPositionId: form.jobPositionId || null,
             });
 
-            const res = await fetch('/api/user/register', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body,
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                const validationMsg = errorData.errors
-                    ? Object.values(errorData.errors).flat().join('. ')
-                    : '';
-                const msg = errorData.message ?? errorData.Message ?? validationMsg
-                    ?? (typeof errorData === 'string' ? errorData : '');
-                throw new Error(msg || 'Employee registration failed. Please try again.');
-            }
-
-            const responseData = await res.json();
+            const responseData = res.data;
             if (!responseData.isSuccess || !responseData.data) {
                 throw new Error(responseData.message || 'Registration failed');
             }
@@ -608,7 +553,13 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
             });
             onClose();
         } catch (err: any) {
-            setApiError(err.message ?? 'Something went wrong. Please try again.');
+            const errorData = err.response?.data;
+            const validationMsg = errorData?.errors
+                ? Object.values(errorData.errors).flat().join('. ')
+                : '';
+            const msg = errorData?.message ?? errorData?.Message ?? validationMsg
+                ?? (typeof errorData === 'string' ? errorData : '');
+            setApiError(msg || err.message || 'Employee registration failed. Please try again.');
         } finally {
             setSubmitting(false);
         }
@@ -955,56 +906,31 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
             setSubmitting(true);
             setApiError('');
             try {
-                const token = localStorage.getItem('authToken');
-
                 // Look up user GUID by employee number
-                const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(employee.employeeNumber)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                });
-                if (!lookupRes.ok) throw new Error('Employee not found.');
-                const lookupData = await lookupRes.json();
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(employee.employeeNumber)}`);
+                const lookupData = lookupRes.data;
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (!userId) throw new Error('Employee not found.');
 
-                const updateRes = await fetch(`/api/user/${userId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({
-                        firstName: form.firstName.trim(),
-                        middleName: form.middleName.trim(),
-                        lastName: form.lastName.trim(),
-                        suffix: form.suffix.trim(),
-                        contactNumber: form.contactNumber,
-                        email: form.email.trim(),
-                    }),
-                });
-                if (!updateRes.ok) {
-                    const err = await updateRes.json().catch(() => ({}));
-                    throw new Error(err.message || 'Failed to update employee details. Please try again.');
-                }
+                // Activate/deactivate BEFORE updating personal details
+                // (backend blocks PUT on deactivated users)
                 if (form.accountStatus !== employee.accountStatus) {
                     const isActive = form.accountStatus === 'Active';
-                    const statusRes = await fetch(`/api/user/${userId}/${isActive ? 'activate' : 'deactivate'}`, {
-                        method: 'PATCH',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                    });
-                    if (!statusRes.ok) {
-                        const err = await statusRes.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to update account status. Please try again.');
-                    }
+                    await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
                 }
+
+                await api.put(`/api/User/${userId}`, {
+                    firstName: form.firstName.trim(),
+                    middleName: form.middleName.trim(),
+                    lastName: form.lastName.trim(),
+                    suffix: form.suffix.trim(),
+                    contactNumber: form.contactNumber,
+                    email: form.email.trim(),
+                });
                 const newRoleVal = toBackendRole(form.role);
                 const oldRoleVal = typeof employee.role === 'number' ? employee.role : parseInt(employee.role, 10);
                 if (newRoleVal !== oldRoleVal) {
-                    const roleRes = await fetch(`/api/role/user/${userId}/role`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ newRole: newRoleVal, reason: 'Role updated via admin panel' }),
-                    });
-                    if (!roleRes.ok) {
-                        const err = await roleRes.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to update role. Please try again.');
-                    }
+                    await api.patch(`/api/Role/user/${userId}/role`, { newRole: newRoleVal, reason: 'Role updated via admin panel' });
                 }
                 onUpdated({
                     ...employee,
@@ -1023,8 +949,9 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 success('Employee details updated successfully!');
                 onClose();
             } catch (err: any) {
-                error(err.message ?? 'Something went wrong. Please try again.');
-                setApiError(err.message ?? 'Something went wrong. Please try again.');
+                const msg = err.response?.data?.message || err.response?.data?.Message || err.message || 'Something went wrong. Please try again.';
+                error(msg);
+                setApiError(msg);
             } finally {
                 setSubmitting(false);
                 setConfirmModal(CONFIRM_CLOSED);
@@ -1096,18 +1023,13 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 setGateLoading(true);
                 setGateError('');
                 try {
-                    const token = localStorage.getItem('authToken');
                     const adminId = localStorage.getItem('employeeId') ?? '';
-                    const res = await fetch('/api/auth/verify-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeID: adminId, password: pw }),
-                    });
-                    const verifyData = await res.json().catch(() => ({}));
+                    const res = await api.post('/api/Auth/verify-password', { employeeID: adminId, password: pw });
+                    const verifyData = res.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
                     await doSave();
                 } catch (err: any) {
-                    setGateError(err.message ?? 'Incorrect password. Please try again.');
+                    setGateError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Incorrect password. Please try again.');
                 } finally {
                     setGateLoading(false);
                 }
@@ -1133,27 +1055,16 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 setSubmitting(true);
                 setApiError('');
                 try {
-                    const token = localStorage.getItem('authToken');
-                    const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(employee.employeeNumber)}`, {
-                        headers: { 'Authorization': `Bearer ${token}` },
-                    });
-                    if (!lookupRes.ok) throw new Error('Employee not found.');
-                    const lookupData = await lookupRes.json();
+                    const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(employee.employeeNumber)}`);
+                    const lookupData = lookupRes.data;
                     const userId = lookupData?.data?.id ?? lookupData?.id;
                     if (!userId) throw new Error('Employee not found.');
-                    const res = await fetch(`/api/user/${userId}/deactivate`, {
-                        method: 'PATCH',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to Archive employee. Please try again.');
-                    }
+                    await api.patch(`/api/User/${userId}/deactivate`);
                     success(`${displayName} has been archived.`);
                     onUpdated({ ...employee, accountStatus: '__deleted__' });
                     onClose();
                 } catch (err: any) {
-                    setApiError(err.message ?? 'Something went wrong. Please try again.');
+                    setApiError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Something went wrong. Please try again.');
                 } finally {
                     setSubmitting(false);
                     setConfirmModal(CONFIRM_CLOSED);
@@ -1303,6 +1214,7 @@ interface DashboardTabProps {
     activityLogs: ActivityLog[];
     loading: boolean;
     onSelectEmployee: (emp: RecentEmployee) => void;
+    onEditEmployee?: (emp: RecentEmployee) => void;
     onViewAll: () => void;
     onAddEmployee: () => void;
     rolesCount?: number;
@@ -1311,7 +1223,7 @@ interface DashboardTabProps {
     onActivityLogPageChange?: (page: number) => void;
 }
 
-function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
+function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onEditEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const activeCount = employees.filter(e => e.accountStatus === 'Active').length;
     const deactivatedCount = employees.filter(e => e.accountStatus === 'Deactivated').length;
@@ -1472,48 +1384,45 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
             <div className="dashboard-grid">
                 <div className="card">
                     <div className="card-header-layout"><span className="text-link">Recent Employees</span><button className="view-all-link" onClick={onViewAll}>View more →</button></div>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>NAME</th>
-                                <th>ID</th>
-                                <th>ROLE</th>
-                                <th>STATUS</th>
-                                <th>ACTIONS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading
-                                ? <tr><td colSpan={5}><EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." /></td></tr>
-                                : recentEmployees.length === 0
-                                    ? <tr><td colSpan={5}><EmptyState message="No data available" /></td></tr>
-                                    : recentEmployees.filter(emp => {
-                                        if (!searchQuery) return true;
-                                        const q = searchQuery.toLowerCase();
-                                        return getEmployeeDisplayName(emp).toLowerCase().includes(q)
-                                            || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
-                                            || (emp.role && emp.role.toLowerCase().includes(q));
-                                    }).slice(0, 7).map(emp => {
-                                        const name = getEmployeeDisplayName(emp);
-                                        return (
-                                            <tr key={emp.employeeNumber}>
-                                                <td>
-                                                    <div className="emp-name-cell">
-                                                        <div className="emp-avatar">{name.charAt(0).toUpperCase()}</div>
-                                                        <span className="cell-name">{name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="cell-id">{emp.employeeNumber}</td>
-                                                <td><RoleBadge role={toDisplayRole(emp.role)} size="sm" /></td>
-                                                <td><StatusBadge status={emp.accountStatus || 'Active'} size="sm" /></td>
-                                                <td className="cell-actions">
-                                                    <button className="action-icon-btn" title="Edit" onClick={() => onSelectEmployee(emp)}><Pencil size={14} /></button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                        </tbody>
-                    </table>
+                    {loading ? (
+                        <EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." />
+                    ) : recentEmployees.length === 0 ? (
+                        <EmptyState message="No data available" />
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {recentEmployees.filter(emp => {
+                                if (!searchQuery) return true;
+                                const q = searchQuery.toLowerCase();
+                                return getEmployeeDisplayName(emp).toLowerCase().includes(q)
+                                    || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
+                                    || (emp.role && emp.role.toLowerCase().includes(q));
+                            }).slice(0, 7).map(emp => {
+                                const name = getEmployeeDisplayName(emp);
+                                return (
+                                    <div key={emp.employeeNumber} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s' }} onClick={() => onSelectEmployee(emp)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-main)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                                            <div className="emp-avatar">{name.charAt(0).toUpperCase()}</div>
+                                            <span style={{ position: 'absolute', bottom: 1, right: 1, width: 9, height: 9, borderRadius: '50%', background: emp.presenceStatus === 'Online' ? 'var(--status-active)' : 'var(--text-secondary)', border: '2px solid var(--bg-card)', display: 'block' }} title={emp.presenceStatus ?? 'Offline'} />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{name}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{emp.employeeNumber}</span>
+                                                <RoleBadge role={toDisplayRole(emp.role)} size="sm" />
+                                                <StatusBadge status={emp.accountStatus || 'Active'} size="sm" />
+                                            </div>
+                                        </div>
+                                        <div className="cell-actions" onClick={e => e.stopPropagation()}>
+                                            <button className="action-icon-btn" title="View Details" onClick={() => onSelectEmployee(emp)}><Eye size={14} /></button>
+                                            {onEditEmployee && (
+                                                <button className="action-icon-btn" title="Edit" onClick={() => onEditEmployee(emp)}><Pencil size={14} /></button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
                 <div className="card activity-card">
                     <div className="card-header-layout"><span className="text-link">Recent Activity</span></div>
@@ -1559,7 +1468,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
 
 // ─── Manage Employees Tab ─────────────────────────────────────────────────────
 
-type EmployeeSubTab = 'employees' | 'documents' | 'archived';
+type EmployeeSubTab = 'employees' | 'archived';
 
 interface ManageEmployeesTabProps {
     employees: RecentEmployee[];
@@ -1572,19 +1481,13 @@ interface ManageEmployeesTabProps {
     onEditEmployee: (emp: RecentEmployee) => void;
     onArchiveEmployee: (emp: RecentEmployee) => void;
     onViewEmployee: (emp: RecentEmployee) => void;
-    onOpenDigital201: (emp: RecentEmployee) => void;
-    contracts: EmploymentContract[];
-    contractsLoading: boolean;
-    contractsPage: number;
-    contractsTotalPages: number;
-    onContractsPageChange: (page: number, filters: { search: string; isArchived: boolean }) => void;
     rolesList?: string[];
 }
 
 function ManageEmployeesTab({
     employees, loading, onSelectEmployee, onAddEmployee,
     empPage, empTotalPages, onEmpPageChange,
-    onEditEmployee, onArchiveEmployee, onViewEmployee, onOpenDigital201,
+    onEditEmployee, onArchiveEmployee, onViewEmployee,
     rolesList = SYSTEM_ROLES,
 }: ManageEmployeesTabProps) {
     const [subTab, setSubTab] = useState<EmployeeSubTab>('employees');
@@ -1601,10 +1504,9 @@ function ManageEmployeesTab({
         <div className="dashboard-content">
             {/* ── Unified sub-tab nav ── */}
             <SubTabNav
-                tabs={[
-                    { key: 'employees', label: 'All Employees', icon: <Users size={14} /> },
-                    { key: 'documents', label: 'Employee Documents', icon: <FileText size={14} /> },
-                ]}
+                    tabs={[
+                        { key: 'employees', label: 'All Employees', icon: <Users size={14} /> },
+                    ]}
                 activeTab={subTab}
                 onTabChange={(key) => setSubTab(key as EmployeeSubTab)}
             />
@@ -1652,7 +1554,6 @@ function ManageEmployeesTab({
                                 <td onClick={e => e.stopPropagation()}>
                                     <ActionsDropdown actions={[
                                         { label: 'View Details', icon: <Eye size={12} />, onClick: () => onViewEmployee(emp) },
-                                        { label: 'Digital 201 File', icon: <FileText size={12} />, onClick: () => onOpenDigital201(emp) },
                                         { label: 'Edit', icon: <Pencil size={12} />, onClick: () => onEditEmployee(emp) },
                                         { label: 'Archive', icon: <Trash2 size={12} />, onClick: () => onArchiveEmployee(emp), variant: 'danger' },
                                     ]} />
@@ -1663,13 +1564,7 @@ function ManageEmployeesTab({
                 </DataTable>
             )}
 
-            {/* ── Employee Documents ── */}
-            {subTab === 'documents' && (
-                <EmployeeDocumentsTab
-                    employees={employees}
-                    onOpenDigital201={onOpenDigital201}
-                />
-            )}
+
         </div>
     );
 }
@@ -1708,13 +1603,9 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
     const [profileSaving, setProfileSaving] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => res.ok ? res.json() : null)
-            .then(result => {
+        api.get('/api/Auth/me')
+            .then(res => {
+                const result = res.data;
                 if (!result || !result.isSuccess || !result.data) return;
                 const p = result.data;
                 const contact = p.contactNumber ?? '';
@@ -1846,13 +1737,8 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                 setGateLoading(true);
                 setGateError('');
                 try {
-                    const token = localStorage.getItem('authToken');
-                    const res = await fetch('/api/auth/verify-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ employeeID: employeeId, password: pw }),
-                    });
-                    const verifyData = await res.json().catch(() => ({}));
+                    const res = await api.post('/api/Auth/verify-password', { employeeID: employeeId, password: pw });
+                    const verifyData = res.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
                     // Verified — now save
                     setProfileSaving(true);
@@ -1863,15 +1749,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                     fd.append('suffix', profileForm.suffix.trim());
                     fd.append('contactNumber', profileForm.contactNumber.trim());
                     fd.append('email', profileForm.email.trim());
-                    const saveRes = await fetch('/api/profile/update-profile', {
-                        method: 'PUT',
-                        headers: { Authorization: `Bearer ${token}` },
-                        body: fd,
-                    });
-                    if (!saveRes.ok) {
-                        const err = await saveRes.json().catch(() => ({}));
-                        throw new Error(err.message || 'Profile update failed.');
-                    }
+                    await api.uploadPut('/api/Profile/update-profile', fd);
                     localStorage.setItem('firstName', profileForm.firstName.trim());
                     localStorage.setItem('middleName', profileForm.middleName.trim());
                     localStorage.setItem('lastName', profileForm.lastName.trim());
@@ -1887,7 +1765,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                     setEditingProfile(false);
                     setConfirmModal(CONFIRM_CLOSED);
                 } catch (err: any) {
-                    setGateError(err.message ?? 'Incorrect password. Please try again.');
+                    setGateError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Incorrect password. Please try again.');
                 } finally {
                     setGateLoading(false);
                     setProfileSaving(false);
@@ -1924,16 +1802,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
             onConfirm: async () => {
                 setPwSaving(true);
                 try {
-                    const token = localStorage.getItem('authToken');
-                    const res = await fetch('/api/auth/change-password', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Password update failed.');
-                    }
+                    await api.patch('/api/Auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next });
                     setEditingPassword(false);
                     setPwForm({ current: '', next: '', confirm: '' });
                     setConfirmModal(CONFIRM_CLOSED);
@@ -2102,445 +1971,7 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
 
 // ─── Government Records Tab ────────────────────────────────────────────────────
 
-const SSS_REGEX = /^\d{2}-\d{7}-\d{1}$/;
-const PHILHEALTH_REGEX = /^\d{2}-\d{9}-\d{1}$/;
-const PAGIBIG_REGEX = /^\d{4}-\d{4}-\d{4}$/;
-const TIN_REGEX = /^\d{3}-\d{3}-\d{3}(-\d{3})?$/;
-
-const FORMAT_LABELS: Record<string, string> = {
-    sssNumber: 'XX-XXXXXXX-X',
-    philhealthNumber: 'XX-XXXXXXXXX-X',
-    pagibigNumber: 'XXXX-XXXX-XXXX',
-    tinNumber: 'XXX-XXX-XXX-XXX',
-};
-
-const GovernmentRecordsTab: React.FC = () => {
-    const { success, error } = useToast();
-    const [employees, setEmployees] = useState<RecentEmployee[]>([]);
-    const [selectedEmployeeNumber, setSelectedEmployeeNumber] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [fetchingData, setFetchingData] = useState(false);
-
-    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-    const [showPasswordGate, setShowPasswordGate] = useState(false);
-    const [gatePassword, setGatePassword] = useState('');
-    const [gateError, setGateError] = useState('');
-    const [gateLoading, setGateLoading] = useState(false);
-    const [showGatePw, setShowGatePw] = useState(false);
-
-    const [form, setForm] = useState({
-        sssNumber: '',
-        philhealthNumber: '',
-        pagibigNumber: '',
-        tinNumber: '',
-    });
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const [apiError, setApiError] = useState('');
-    const [complianceLoaded, setComplianceLoaded] = useState(false);
-    const [editMode, setEditMode] = useState(false);
-
-    const [syncRecords, setSyncRecords] = useState<any[]>([]);
-    const [syncRecordsLoading, setSyncRecordsLoading] = useState(false);
-
-    const resetToViewMode = () => {
-        setEditMode(false);
-        setApiError('');
-        setErrors({});
-    };
-
-    const handleCancelEdit = () => {
-        const hasChanges = form.sssNumber || form.philhealthNumber || form.pagibigNumber || form.tinNumber;
-        if (hasChanges) {
-            setShowCancelConfirm(true);
-        } else {
-            resetToViewMode();
-        }
-    };
-
-    useEffect(() => {
-        const fetchEmployees = async () => {
-            try {
-                const token = localStorage.getItem('authToken');
-                const res = await fetch('/api/user?PageNumber=1&PageSize=200', {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                if (res.ok) {
-                    const body = await res.json();
-                    const list = body.data?.data ?? body.data ?? body ?? [];
-                    setEmployees(list);
-                }
-            } catch (e) { console.error('GovRecords fetch employees error:', e); }
-        };
-        fetchEmployees();
-    }, []);
-
-    const loadEmployeeData = async (empNumber: string) => {
-        if (!empNumber) return;
-        resetToViewMode();
-        setFetchingData(true);
-        setComplianceLoaded(false);
-        setApiError('');
-        setSyncRecords([]);
-
-        try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`/api/systemadmin/digital-201-file?employeeNumber=${encodeURIComponent(empNumber)}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error('Failed to load employee compliance data.');
-            const body = await res.json();
-            const compliance = body.data?.compliance ?? body?.compliance;
-            if (compliance) {
-                setForm({
-                    sssNumber: compliance.sssNumber ?? '',
-                    philhealthNumber: compliance.philhealthNumber ?? '',
-                    pagibigNumber: compliance.pagibigNumber ?? '',
-                    tinNumber: compliance.tinNumber ?? '',
-                });
-            } else {
-                setForm({ sssNumber: '', philhealthNumber: '', pagibigNumber: '', tinNumber: '' });
-            }
-            setComplianceLoaded(true);
-            setErrors({});
-        } catch (err: any) {
-            setApiError(err.message);
-            setForm({ sssNumber: '', philhealthNumber: '', pagibigNumber: '', tinNumber: '' });
-        } finally {
-            setFetchingData(false);
-        }
-    };
-
-    useEffect(() => {
-        loadEmployeeData(selectedEmployeeNumber);
-    }, [selectedEmployeeNumber]);
-
-    const validate = (): boolean => {
-        const e: Record<string, string> = {};
-        if (!SSS_REGEX.test(form.sssNumber)) e.sssNumber = `Invalid SSS Number format detected. Expected: ${FORMAT_LABELS.sssNumber}`;
-        if (!PHILHEALTH_REGEX.test(form.philhealthNumber)) e.philhealthNumber = `Invalid PhilHealth Number format detected. Expected: ${FORMAT_LABELS.philhealthNumber}`;
-        if (!PAGIBIG_REGEX.test(form.pagibigNumber)) e.pagibigNumber = `Invalid Pag-IBIG Number format detected. Expected: ${FORMAT_LABELS.pagibigNumber}`;
-        if (form.tinNumber.trim() && !TIN_REGEX.test(form.tinNumber)) e.tinNumber = `Invalid TIN format detected. Expected: ${FORMAT_LABELS.tinNumber}`;
-        setErrors(e);
-        return Object.keys(e).length === 0;
-    };
-
-    const applyAutoFormat = (field: string, value: string) => {
-        const digits = value.replace(/\D/g, '');
-        if (field === 'sssNumber') {
-            if (digits.length <= 2) return digits;
-            if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-            return `${digits.slice(0, 2)}-${digits.slice(2, 9)}-${digits.slice(9, 10)}`;
-        }
-        if (field === 'philhealthNumber') {
-            if (digits.length <= 2) return digits;
-            if (digits.length <= 11) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-            return `${digits.slice(0, 2)}-${digits.slice(2, 11)}-${digits.slice(11, 12)}`;
-        }
-        if (field === 'pagibigNumber') {
-            if (digits.length <= 4) return digits;
-            if (digits.length <= 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-            return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8, 12)}`;
-        }
-        if (field === 'tinNumber') {
-            if (digits.length <= 3) return digits;
-            if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-            if (digits.length <= 9) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-            return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9, 12)}`;
-        }
-        return value;
-    };
-
-    const handleFieldChange = (field: string, raw: string) => {
-        const formatted = applyAutoFormat(field, raw);
-        setForm(prev => ({ ...prev, [field]: formatted }));
-        setErrors(prev => ({ ...prev, [field]: '' }));
-        setApiError('');
-    };
-
-    const loadSyncRecords = async (empNumber: string) => {
-        setSyncRecordsLoading(true);
-        try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`/api/systemadmin/${encodeURIComponent(empNumber)}/statutory-sync-records`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-                const body = await res.json();
-                setSyncRecords(body.data ?? []);
-            }
-        } catch { /* ignore */ }
-        finally { setSyncRecordsLoading(false); }
-    };
-
-    const doSubmit = async () => {
-        setSaving(true);
-        setApiError('');
-        try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch('/api/systemadmin/update-statutory-records', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    employeeNumber: selectedEmployeeNumber,
-                    sssNumber: form.sssNumber,
-                    philhealthNumber: form.philhealthNumber,
-                    pagibigNumber: form.pagibigNumber,
-                    tinNumber: form.tinNumber,
-                }),
-            });
-            const body = await res.json();
-            if (!res.ok || !body.isSuccess) {
-                throw new Error(body.message || 'Failed to save government records.');
-            }
-            success('Government records saved successfully. Statutory identifiers synchronized with FOMS.');
-            await loadEmployeeData(selectedEmployeeNumber);
-            await loadSyncRecords(selectedEmployeeNumber);
-        } catch (err: any) {
-            setApiError(err.message);
-            error(err.message);
-            setShowPasswordGate(false);
-            throw err;
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleSubmit = () => {
-        if (!validate()) return;
-        setGatePassword('');
-        setGateError('');
-        setShowPasswordGate(true);
-    };
-
-    return (
-        <div className="dashboard-content">
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)' }}>
-                    <div className="field" style={{ margin: 0 }}>
-                        <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Select Employee</label>
-                        <Select
-                            value={selectedEmployeeNumber}
-                            onChange={setSelectedEmployeeNumber}
-                            placeholder="— Choose an employee —"
-                            options={employees.map(emp => ({
-                                value: emp.employeeNumber,
-                                label: `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() + ` (${emp.employeeNumber})`,
-                            }))}
-                        />
-                    </div>
-                </div>
-
-                <div style={{ padding: '20px 22px' }}>
-                    {!selectedEmployeeNumber && (
-                        <div>
-                            <h3 style={{ margin: '0 0 12px', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <ShieldCheck size={18} /> All Employees
-                            </h3>
-                            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-secondary)' }}>Select an employee from the dropdown above or click a row below to view or update their government records.</p>
-                            <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
-                                <table className="data-table" style={{ margin: 0 }}>
-                                    <thead>
-                                        <tr>
-                                            <th>Employee</th>
-                                            <th>ID</th>
-                                            <th>Department / Role</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {employees.map(emp => (
-                                            <tr key={emp.employeeNumber} onClick={() => setSelectedEmployeeNumber(emp.employeeNumber)} style={{ cursor: 'pointer' }}
-                                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-input)')}
-                                                onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                                                <td style={{ fontWeight: 600 }}>{`${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber}</td>
-                                                <td style={{ color: 'var(--text-secondary)' }}>{emp.employeeNumber}</td>
-                                                <td style={{ color: 'var(--text-secondary)' }}>{emp.role || '—'}</td>
-                                            </tr>
-                                        ))}
-                                        {employees.length === 0 && (
-                                            <tr><td colSpan={3} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No employees found.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedEmployeeNumber && fetchingData && (
-                        <EmptyState icon={<Loader2 size={24} className="spin" />} message="Loading compliance data..." />
-                    )}
-
-                    {selectedEmployeeNumber && !fetchingData && (
-                        <>
-                            {apiError && <ErrorBanner message={apiError} />}
-
-                            <div className="card-header-layout" style={{ margin: 0 }}>
-                                <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <ShieldCheck size={18} /> Government IDs Form
-                                </h3>
-                                {!editMode && (
-                                    <button className="btn btn-primary" onClick={() => setEditMode(true)} style={{ fontSize: 12, padding: '6px 14px' }}>
-                                        <Pencil size={12} /> Edit
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="field" style={{ marginTop: 16 }}>
-                                <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Employee ID <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(System Generated Reference)</span></label>
-                                <div style={{ position: 'relative', marginTop: 6 }}>
-                                    <Hash size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                                    <input type="text" value={selectedEmployeeNumber} readOnly
-                                        style={{ width: '100%', paddingLeft: 36, height: 38, borderRadius: 9, border: '1px solid var(--border)', fontSize: 13, background: 'var(--bg-input)', color: 'var(--text-secondary)', boxSizing: 'border-box' }} />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-                                {(['sssNumber', 'philhealthNumber', 'pagibigNumber', 'tinNumber'] as const).map(field => (
-                                    <div className="field" key={field}>
-                                        <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                                            {field === 'sssNumber' ? 'SSS Number' :
-                                                field === 'philhealthNumber' ? 'PhilHealth Number' :
-                                                    field === 'pagibigNumber' ? 'Pag-IBIG Number' : 'TIN'} {field !== 'tinNumber' && <span style={{ color: 'var(--status-failed)' }}>*</span>}
-                                            {field === 'tinNumber' && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)' }}> (optional)</span>}
-                                        </label>
-                                        {editMode ? (
-                                            <>
-                                                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 4, marginBottom: 4 }}>
-                                                    Format: {FORMAT_LABELS[field]}
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    value={form[field]}
-                                                    onChange={e => handleFieldChange(field, e.target.value)}
-                                                    placeholder={FORMAT_LABELS[field]}
-                                                    maxLength={field === 'sssNumber' ? 12 : field === 'philhealthNumber' ? 14 : field === 'pagibigNumber' ? 14 : 14}
-                                                    style={{
-                                                        width: '100%', height: 38, borderRadius: 9, padding: '0 12px', fontSize: 13,
-                                                        border: `1px solid ${errors[field] ? 'var(--status-failed)' : 'var(--border)'}`,
-                                                        background: 'var(--bg-primary,#fff)', color: 'var(--text-primary)',
-                                                        boxSizing: 'border-box',
-                                                    }}
-                                                />
-                                                {errors[field] && <span style={{ fontSize: 11, color: 'var(--status-failed)', marginTop: 4, display: 'block' }}>{errors[field]}</span>}
-                                            </>
-                                        ) : (
-                                            <div style={{ position: 'relative', marginTop: 6 }}>
-                                                <Hash size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                                                <input type="text" value={form[field] || '—'} readOnly
-                                                    style={{ width: '100%', paddingLeft: 36, height: 38, borderRadius: 9, border: '1px solid var(--border)', fontSize: 13, background: 'var(--bg-input)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {editMode && (
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-                                    <button className="btn" onClick={handleCancelEdit} disabled={saving} style={{ fontSize: 12, padding: '6px 14px' }}>Cancel</button>
-                                    <button className="btn btn-primary" onClick={handleSubmit} disabled={saving} style={{ fontSize: 12, padding: '6px 14px' }}>
-                                        {saving
-                                            ? <><Loader2 size={12} className="spin" /> Saving…</>
-                                            : <><Save size={12} /> Update Statutory Records</>
-                                        }
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Sync Records */}
-                            <div style={{ marginTop: 32 }}>
-                                <div className="card-header-layout" style={{ margin: '0 0 16px' }}>
-                                    <h3 style={{ margin: 0, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <Activity size={18} /> Synchronization Record
-                                    </h3>
-                                </div>
-                                {syncRecordsLoading ? (
-                                    <EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading sync records..." />
-                                ) : syncRecords.length === 0 ? (
-                                    <EmptyState message="No synchronization records yet. Submit the form to generate one." />
-                                ) : (
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Target System</th>
-                                                <th>Sync Timestamp</th>
-                                                <th>Sync Status</th>
-                                                <th>Error Message</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {syncRecords.map((r: any) => (
-                                                <tr key={r.syncRecordId ?? r.statutorySyncRecordId}>
-                                                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.targetSystem ?? 'FOMS'}</td>
-                                                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{r.syncTimestamp ? new Date(r.syncTimestamp).toLocaleString() : '—'}</td>
-                                                    <td><StatusBadge status={r.syncStatus || 'Pending'} /></td>
-                                                    <td style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{r.errorMessage || '—'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-            <ConfirmationModal
-                isOpen={showCancelConfirm}
-                variant="warning"
-                title="Discard changes?"
-                description="You have unsaved changes. Are you sure you want to discard them?"
-                confirmLabel="Discard"
-                onConfirm={() => { setShowCancelConfirm(false); setForm({ sssNumber: '', philhealthNumber: '', pagibigNumber: '', tinNumber: '' }); resetToViewMode(); }}
-                onCancel={() => setShowCancelConfirm(false)}
-            />
-            {showPasswordGate && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => { if (!saving) setShowPasswordGate(false); }}>
-                    <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: 380, maxWidth: '90vw', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                        <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Confirm Your Identity</h3>
-                        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#64748b' }}>Enter your password to update government records.</p>
-                        <div style={{ position: 'relative' }}>
-                            <input type={showGatePw ? 'text' : 'password'} placeholder="Enter your current password" value={gatePassword} autoFocus
-                                onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
-                                onKeyDown={e => { if (e.key === 'Enter' && !gateLoading) { (document.getElementById('gov-gate-confirm') as HTMLButtonElement)?.click(); } }}
-                                style={{ width: '100%', height: 42, borderRadius: 10, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 44px 0 14px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                            <button type="button" onClick={() => setShowGatePw(p => !p)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>
-                                {showGatePw ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                        {gateError && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626', marginTop: 8 }}><AlertCircle size={12} />{gateError}</div>}
-                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
-                            <button className="btn" onClick={() => setShowPasswordGate(false)} disabled={gateLoading} style={{ padding: '9px 18px', borderRadius: 10 }}>Cancel</button>
-                            <button id="gov-gate-confirm" className="btn btn-primary" disabled={gateLoading} onClick={async () => {
-                                if (!gatePassword) { setGateError('Please enter your password.'); return; }
-                                setGateLoading(true);
-                                setGateError('');
-                                try {
-                                    const token = localStorage.getItem('authToken');
-                                    const adminId = localStorage.getItem('employeeId') ?? '';
-                                    const verifyRes = await fetch('/api/auth/verify-password', {
-                                        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                        body: JSON.stringify({ employeeID: adminId, password: gatePassword }),
-                                    });
-                                    const verifyData = await verifyRes.json().catch(() => ({}));
-                                    if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password.'); }
-                                    await doSubmit();
-                                    setShowPasswordGate(false);
-                                } catch (err: any) {
-                                    setGateError(err.message || err.Message || 'Incorrect password.');
-                                } finally { setGateLoading(false); }
-                            }} style={{ padding: '9px 24px', borderRadius: 10 }}>
-                                {gateLoading ? <><Loader2 size={13} className="spin" /> Verifying…</> : <>Verify & Update</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+// [GovernmentRecordsTab — removed per system update]
 
 // ─── Root Dashboard ───────────────────────────────────────────────────────────
 
@@ -2565,7 +1996,7 @@ export default function Dashboard() {
     const [archiveConfirmEmp, setarchiveConfirmEmp] = useState<RecentEmployee | null>(null);
     const [archiveSubmitting, setarchiveSubmitting] = useState(false);
     const [selectedPanelEmployee, setSelectedPanelEmployee] = useState<RecentEmployee | null>(null);
-    const [detailPanelInitialSection, setDetailPanelInitialSection] = useState<'overview' | 'digital_201'>('overview');
+    const [detailPanelInitialSection, setDetailPanelInitialSection] = useState<'overview'>('overview');
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [logoutConfirm, setLogoutConfirm] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -2635,11 +2066,9 @@ export default function Dashboard() {
     const fetchManagerTasks = async () => {
         setTmLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch('/api/task', { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) { setTmTasks([]); return; }
-            const json = await res.json();
-            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.data) ? json.data.data : (Array.isArray(json?.data) ? json.data : []));
+            const res = await api.get('/api/Task', { pageNumber: 1, pageSize: 500 });
+            const json = res.data;
+            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             setTmTasks(raw.map((t: any) => ({
                 id: t.id ?? t.taskId,
                 name: t.title ?? t.taskTitle ?? '',
@@ -2662,23 +2091,21 @@ export default function Dashboard() {
     useEffect(() => { if (activeTab === 'tasks') { fetchManagerTasks(); } }, [activeTab]);
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        fetch('/api/department', { headers: { Authorization: `Bearer ${token}` } })
-            .then(res => res.ok ? res.json() : null)
-            .then(json => {
-                if (json?.isSuccess && Array.isArray(json.data)) {
-                    setDepartments(json.data.map((d: any) => ({ id: d.id, name: d.name })));
+        api.get('/api/Department')
+            .then(res => {
+                const json = res.data;
+                const items = json?.data?.items ?? (Array.isArray(json.data) ? json.data : []);
+                if (json?.isSuccess && items.length > 0) {
+                    setDepartments(items.map((d: any) => ({ id: d.id, name: d.name })));
                 }
             })
             .catch(() => {});
     }, []);
 
     const handleManagerTaskArchive = async (ids: string[]) => {
-        const token = localStorage.getItem('authToken');
         for (const id of ids) {
             try {
-                await fetch(`/api/task/${id}/archive`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
+                await api.patch(`/api/Task/${id}/archive`);
             } catch { /* ignore individual failures */ }
         }
         success(`${ids.length} task${ids.length !== 1 ? 's' : ''} archived.`);
@@ -2686,10 +2113,9 @@ export default function Dashboard() {
     };
 
     const handleManagerTaskRestore = async (ids: string[]) => {
-        const token = localStorage.getItem('authToken');
         for (const id of ids) {
             try {
-                await fetch(`/api/task/${id}/restore`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } });
+                await api.patch(`/api/Task/${id}/restore`);
             } catch { /* ignore individual failures */ }
         }
         success(`${ids.length} task${ids.length !== 1 ? 's' : ''} restored.`);
@@ -2697,10 +2123,9 @@ export default function Dashboard() {
     };
 
     const handleManagerTaskDelete = async (ids: string[]) => {
-        const token = localStorage.getItem('authToken');
         for (const id of ids) {
             try {
-                await fetch(`/api/task/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                await api.delete(`/api/Task/${id}`);
             } catch { /* ignore individual failures */ }
         }
         success(`${ids.length} task${ids.length !== 1 ? 's' : ''} deleted.`);
@@ -2708,14 +2133,9 @@ export default function Dashboard() {
     };
 
     const handleManagerTaskMarkDone = async (ids: string[]) => {
-        const token = localStorage.getItem('authToken');
         for (const id of ids) {
             try {
-                await fetch(`/api/task/${id}/status`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 3 }),
-                });
+                await api.patch(`/api/Task/${id}/status`, { status: 3 });
             } catch { /* ignore individual failures */ }
         }
         success(`${ids.length} task${ids.length !== 1 ? 's' : ''} marked done.`);
@@ -2727,10 +2147,9 @@ export default function Dashboard() {
         if (!found) return;
         // The list view flattens the task; reconstruct a TaskViewTask from the raw data
         // by re-fetching the full record so we get description, remarks, etc.
-        const token = localStorage.getItem('authToken');
-        fetch(`/api/task/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.ok ? r.json() : null)
-            .then(json => {
+        api.get(`/api/Task/${id}`)
+            .then(res => {
+                const json = res.data;
                 const raw = json?.data ?? json;
                 if (raw) {
                     setTmDetailTask(mapManagerTaskToView(raw));
@@ -2814,7 +2233,6 @@ export default function Dashboard() {
 
         setNewTaskSubmitting(true);
         setNewTaskApiError('');
-        const token = localStorage.getItem('authToken');
         try {
             const createPayload: Record<string, any> = {
                 title: t,
@@ -2828,20 +2246,12 @@ export default function Dashboard() {
             if (newTaskForm.priority !== 'Urgent') {
                 createPayload.deadline = new Date(newTaskForm.deadline).toISOString();
             }
-            const res = await fetch('/api/task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(createPayload),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to create task.');
-            }
+            await api.post('/api/Task', createPayload);
             success('Task created successfully.');
             setShowNewTask(false);
             fetchManagerTasks();
         } catch (err: any) {
-            setNewTaskApiError(err.message || err.Message || 'Failed to create task.');
+            setNewTaskApiError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to create task.');
         } finally {
             setNewTaskSubmitting(false);
         }
@@ -2869,7 +2279,6 @@ export default function Dashboard() {
 
         setEditSubmitting(true);
         setEditApiError('');
-        const token = localStorage.getItem('authToken');
         try {
             const updatePayload: Record<string, any> = {
                 title: t,
@@ -2883,22 +2292,14 @@ export default function Dashboard() {
             if (!tmEditingTask.isSLALocked) {
                 updatePayload.deadline = new Date(editForm.deadline).toISOString();
             }
-            const res = await fetch(`/api/task/${tmEditingTask.taskId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(updatePayload),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to update task.');
-            }
+            await api.put(`/api/Task/${tmEditingTask.taskId}`, updatePayload);
             success(editForm.isConfidential !== (tmEditingTask.isConfidential ?? false)
                 ? 'Confidentiality updated successfully.'
                 : 'Task updated successfully.');
             setTmEditingTask(null);
             fetchManagerTasks();
         } catch (err: any) {
-            setEditApiError(err.message || err.Message || 'Failed to update task.');
+            setEditApiError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to update task.');
         } finally {
             setEditSubmitting(false);
         }
@@ -2911,37 +2312,90 @@ export default function Dashboard() {
     const [activityLogLoading, setActivityLogLoading] = useState(false);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
     const [activityLogSearch, setActivityLogSearch] = useState('');
+
+    // ── Notifications Tab ──
+    const NOTIF_TYPE_MAP: Record<number, string> = { 0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning', 4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold', 8: 'TaskCompleted', 9: 'TemplateTaskUnassigned' };
+    const [allNotifications, setAllNotifications] = useState<any[]>([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [notifPage, setNotifPage] = useState(1);
+    const [notifTotalPages, setNotifTotalPages] = useState(1);
+    const NOTIF_PAGE_SIZE = 20;
+
+    const fetchAllNotifications = async (page: number) => {
+        setNotifLoading(true);
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setAllNotifications(d.items.map((n: any) => ({
+                    notificationId: n.id ?? n.notificationId,
+                    taskId: n.relatedTaskId ?? n.taskId ?? null,
+                    notificationType: typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '',
+                    message: n.message ?? n.title ?? '',
+                    isRead: n.isRead ?? false,
+                    createdAt: n.createdAt ?? '',
+                })));
+                setNotifPage(d.pageNumber || page);
+                setNotifTotalPages(d.totalPages || 1);
+            } else {
+                setAllNotifications([]);
+            }
+        } catch {
+            setAllNotifications([]);
+        } finally {
+            setNotifLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'notifications') {
+            fetchAllNotifications(1);
+        }
+    }, [activeTab]);
     const [activityLogEmployee, setActivityLogEmployee] = useState('');
     const [activityLogType, setActivityLogType] = useState('');
     const [activityLogDateFrom, setActivityLogDateFrom] = useState('');
     const [activityLogDateTo, setActivityLogDateTo] = useState('');
 
-    const fetchActivityLogs = (page: number) => {
+    const fetchActivityLogs = async (page: number) => {
         setActivityLogLoading(true);
-        const token = localStorage.getItem('authToken');
-        const params = new URLSearchParams({ page: String(page), pageSize: String(ACTIVITY_LOG_PAGE_SIZE) });
-        if (activityLogSearch) params.append('search', activityLogSearch);
-        if (activityLogEmployee) params.append('employeeId', activityLogEmployee);
-        if (activityLogType) params.append('activityType', activityLogType);
-        if (activityLogDateFrom) params.append('dateFrom', activityLogDateFrom);
-        if (activityLogDateTo) params.append('dateTo', activityLogDateTo);
-        fetch(`/api/activity-logs/recent?${params}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
-            .then(res => { if (!res.ok) return null; return res.json(); })
-            .then(data => {
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else if (Array.isArray(data)) {
-                    setActivityLogs(data);
-                    setActivityLogPage(1);
-                    setActivityLogTotalPages(1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]))
-            .finally(() => setActivityLogLoading(false));
+        try {
+            const params: Record<string, any> = { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE };
+            if (activityLogSearch) params.search = activityLogSearch;
+            if (activityLogEmployee) {
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(activityLogEmployee)}`).catch(() => null);
+                const lookupData = lookupRes?.data;
+                const empUserId = lookupData?.data?.id ?? lookupData?.id;
+                if (empUserId) params.userId = empUserId;
+            }
+            if (activityLogType) params.actionType = activityLogType;
+            if (activityLogDateFrom) params.dateRangeStart = activityLogDateFrom;
+            if (activityLogDateTo) params.dateRangeEnd = activityLogDateTo;
+            const res = await api.get('/api/audit-logs', { params });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items.map((log: any) => ({
+                    activityLogId: log.id ?? log.activityLogId,
+                    accountId: log.userId ?? log.accountId ?? '',
+                    firstName: log.actorName?.split(' ')[0] ?? log.firstName ?? '',
+                    middleName: log.middleName ?? '',
+                    lastName: log.actorName?.split(' ').slice(1).join(' ') ?? log.lastName ?? '',
+                    activityType: log.actionType ?? log.activityType ?? '',
+                    description: log.description ?? '',
+                    createdAt: log.timestamp ?? log.createdAt ?? '',
+                })));
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        } finally {
+            setActivityLogLoading(false);
+        }
     };
 
     // Re-fetch activity logs when the tab becomes active or any filter changes
@@ -2952,41 +2406,29 @@ export default function Dashboard() {
         }
     }, [activeTab, activityLogSearch, activityLogEmployee, activityLogType, activityLogDateFrom, activityLogDateTo]);
 
-    // ── Employment Contracts / Documents ──
-    const [contracts, setContracts] = useState<EmploymentContract[]>([]);
-    const [contractsLoading, setContractsLoading] = useState(true);
-    const [contractsPage, setContractsPage] = useState(1);
-    const [contractsTotalPages, setContractsTotalPages] = useState(1);
-
     const fetchBackendRoles = async () => {
         try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch('/api/role', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const raw = Array.isArray(data) ? data : data.data ?? data.$values ?? [];
-                const roleNames = raw.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name));
-                setRolesList(roleNames);
-            }
+            const res = await api.get('/api/Role');
+            const data = res.data;
+            const raw = Array.isArray(data) ? data : data.data ?? data.$values ?? [];
+            const roleNames = raw.map((r: any) => toDisplayRole(r.displayName ?? r.DisplayName ?? r.name ?? r.Name));
+            setRolesList(roleNames);
         } catch (err) {
             console.error('Failed to fetch backend roles:', err);
         }
     };
 
     const fetchEmployees = (page: number = 1, filters: { search: string; role: string; status: string } = { search: '', role: '', status: '' }) => {
-        const token = localStorage.getItem('authToken');
         setEmpLoading(true);
-        const params = new URLSearchParams({ PageNumber: String(page), PageSize: String(PAGE_SIZE) });
-        if (filters.search) params.append('search', filters.search);
-        if (filters.role) params.append('role', toBackendRole(filters.role));
-        if (filters.status) params.append('status', filters.status);
-        fetch(`/api/user?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
-            .then(result => {
+        const params: Record<string, any> = { PageNumber: String(page), PageSize: String(PAGE_SIZE) };
+        if (filters.search) params.search = filters.search;
+        if (filters.role) params.role = toBackendRole(filters.role);
+        if (filters.status) params.status = filters.status;
+        api.get('/api/User', params)
+            .then(res => {
+                const result = res.data;
                 if (!result.isSuccess) throw new Error(result.message ?? 'Failed to fetch');
-                const raw: any[] = Array.isArray(result.data) ? result.data : [];
+                const raw: any[] = Array.isArray(result.data?.items) ? result.data.items : (Array.isArray(result.data) ? result.data : []);
                 const list: RecentEmployee[] = raw.map((e: any) => ({
                     employeeNumber: e.employeeNumber,
                     firstName: e.firstName ?? '',
@@ -3003,10 +2445,10 @@ export default function Dashboard() {
                 })).filter((e: RecentEmployee) => e.accountStatus !== 'Deleted' && e.employeeNumber !== currentEmployeeId);
                 setEmployees(list);
                 setRecentEmployees(list);
-                setEmpTotalPages(result.totalPages ?? 1);
+                setEmpTotalPages(result.data?.totalPages ?? 1);
                 setEmpPage(page);
             })
-            .catch((err) => {
+            .catch((err: any) => {
                 console.error('Error fetching employees:', err);
                 setEmployees([]);
                 setRecentEmployees([]);
@@ -3014,44 +2456,13 @@ export default function Dashboard() {
             .finally(() => setEmpLoading(false));
     };
 
-    const fetchContracts = (page: number = 1, filters: { search: string; isArchived?: boolean } = { search: '', isArchived: false }) => {
-        const token = localStorage.getItem('authToken');
-        setContractsLoading(true);
-        const params = new URLSearchParams({ PageNumber: String(page), PageSize: String(PAGE_SIZE) });
-        if (filters.search) params.append('search', filters.search);
-        if (filters.isArchived !== undefined) params.append('isArchived', String(filters.isArchived));
-
-        fetch(`/api/systemadmin/contracts?${params}`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.ok ? res.json() : { isSuccess: false, data: { data: [] } })
-            .then((result: any) => {
-                if (result.isSuccess && result.data) {
-                    const raw: any[] = Array.isArray(result.data.data) ? result.data.data : [];
-                    setContracts(raw);
-                    setContractsTotalPages(result.data.totalPages ?? 1);
-                    setContractsPage(page);
-                } else {
-                    setContracts([]);
-                    setContractsTotalPages(1);
-                    setContractsPage(1);
-                }
-            })
-            .catch(() => {
-                setContracts([]);
-                setContractsTotalPages(1);
-                setContractsPage(1);
-            })
-            .finally(() => setContractsLoading(false));
-    };
-
     useEffect(() => {
         fetchEmployees(1);
-        fetchContracts(1, { search: '', isArchived: false });
-        const token = localStorage.getItem('authToken');
 
         // Fetch profile to sync name/contact info to localStorage
-        fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.ok ? res.json() : null)
-            .then(result => {
+        api.get('/api/Auth/me')
+            .then(res => {
+                const result = res.data;
                 if (!result || !result.isSuccess || !result.data) return;
                 const p = result.data;
                 const firstName = p.firstName ?? '';
@@ -3083,13 +2494,7 @@ export default function Dashboard() {
     const doLogout = async () => {
         setLogoutLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                }).catch(() => { });
-            }
+            await api.post('/api/Auth/logout').catch(() => { });
             ['employeeId', 'refreshToken', 'authToken', 'employeeName', 'firstName', 'middleName', 'lastName', 'suffix', 'contactNumber', 'role'].forEach(k => localStorage.removeItem(k));
             navigate('/');
         } finally {
@@ -3111,8 +2516,8 @@ export default function Dashboard() {
     const pageTitles: Record<NavTab, string> = {
         dashboard: 'Dashboard', employees: 'Manage Employee',
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
-        roles: 'Role Management', reports: 'Reports', activity_logs: 'Activity Logs', profile: 'My Profile',
-        government_records: 'Government Records', tasks: 'Task Manager',
+        roles: 'Role Management', reports: 'Reports', announcements: 'Announcements', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
+        tasks: 'Task Manager',
         'org-structure': 'Organizational Structure'
     };
 
@@ -3151,6 +2556,11 @@ export default function Dashboard() {
                         onSettingsClick={() => setActiveTab('settings')}
                         onLogout={handleLogout}
                         onMenuToggle={() => setSidebarOpen(v => !v)}
+                        onViewNotification={(taskId) => {
+                            const found = tmTasks.find(t => t.id === taskId);
+                            if (found) setTmDetailTask(mapManagerTaskToView(found));
+                        }}
+                        onViewMoreNotifications={() => setActiveTab('notifications')}
                     />
                 )}
 
@@ -3161,6 +2571,7 @@ export default function Dashboard() {
                         activityLogs={activityLogs}
                         loading={empLoading}
                         onSelectEmployee={emp => { setEmpModalEditMode(false); setSelectedEmployee(emp); }}
+                        onEditEmployee={emp => { setEmpModalEditMode(true); setSelectedEmployee(emp); }}
                         onViewAll={() => { setActiveTab('employees'); setSelectedPanelEmployee(null); }}
                         onAddEmployee={() => setShowAddModal(true)}
                         rolesCount={rolesList.length}
@@ -3192,12 +2603,7 @@ export default function Dashboard() {
                             onEditEmployee={emp => { setEmpModalEditMode(true); setSelectedEmployee(emp); }}
                             onArchiveEmployee={emp => setarchiveConfirmEmp(emp)}
                             onViewEmployee={emp => { setSelectedPanelEmployee(emp); setDetailPanelInitialSection('overview'); }}
-                            onOpenDigital201={emp => { setSelectedPanelEmployee(emp); setDetailPanelInitialSection('digital_201'); }}
-                            contracts={contracts}
-                            contractsLoading={contractsLoading}
-                            contractsPage={contractsPage}
-                            contractsTotalPages={contractsTotalPages}
-                            onContractsPageChange={fetchContracts}
+
                             rolesList={rolesList}
                         />
                     )
@@ -3208,6 +2614,63 @@ export default function Dashboard() {
                 {activeTab === 'roles' && <RoleManagementTab />}
 
                 {activeTab === 'org-structure' && <OrgStructureTab />}
+
+                {activeTab === 'announcements' && <AnnouncementsTab canCreate={true} />}
+
+                {activeTab === 'notifications' && (
+                    <div className="dashboard-content">
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3><Bell size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Notifications</h3>
+                            </div>
+                            {notifLoading ? (
+                                <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
+                            ) : allNotifications.length === 0 ? (
+                                <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
+                            ) : (
+                                <DataTable
+                                    headers={['Date', 'Type', 'Message', 'Status']}
+                                    loading={false}
+                                    emptyMessage="No notifications"
+                                    currentPage={notifPage}
+                                    totalPages={notifTotalPages}
+                                    onPageChange={p => fetchAllNotifications(p)}
+                                    totalRecords={allNotifications.length}
+                                >
+                                    {allNotifications.map(n => {
+                                        const badge = (() => {
+                                            const type = typeof n.notificationType === 'number' ? NOTIF_TYPE_MAP[n.notificationType] || 'Unknown' : n.notificationType || 'Unknown';
+                                            switch (type) {
+                                                case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
+                                                case 'TaskUpdated': return { label: 'Updated', cls: 'task-assigned' };
+                                                case 'TaskOverdue': return { label: 'Overdue', cls: 'deadline' };
+                                                case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
+                                                case 'PushBack': return { label: 'Pushed back', cls: 'default' };
+                                                case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                default: return { label: type, cls: 'default' };
+                                            }
+                                        })();
+                                        return (
+                                            <tr key={n.notificationId} onClick={() => {
+                                                if (n.taskId) {
+                                                    const found = tmTasks.find(t => t.id === n.taskId);
+                                                    if (found) setTmDetailTask(mapManagerTaskToView(found));
+                                                }
+                                            }} style={{ cursor: n.taskId ? 'pointer' : 'default' }}>
+                                                <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                    {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td><span className={`badge ${badge.cls}`} style={{ fontSize: 11 }}>{badge.label}</span></td>
+                                                <td style={{ fontSize: 13, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</td>
+                                                <td>{n.isRead ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Read</span> : <span className="badge badge-blue" style={{ fontSize: 11 }}>New</span>}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </DataTable>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {activeTab === 'tasks' && (
                     <div className="dashboard-content">
@@ -3233,8 +2696,6 @@ export default function Dashboard() {
 
                 {activeTab === 'delivery' && <div className="dashboard-content"><div className="card"><EmptyState icon={<Truck size={32} />} message="Delivery module coming soon." /></div></div>}
                 {activeTab === 'finance' && <div className="dashboard-content"><div className="card"><EmptyState icon={<BarChart3 size={32} />} message="Finance module coming soon." /></div></div>}
-
-                {activeTab === 'government_records' && <GovernmentRecordsTab />}
 
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: 0 }}>
@@ -3356,27 +2817,16 @@ export default function Dashboard() {
                     if (!archiveConfirmEmp) return;
                     setarchiveSubmitting(true);
                     try {
-                        const token = localStorage.getItem('authToken');
-                        const lookupRes = await fetch(`/api/user/employee-number/${encodeURIComponent(archiveConfirmEmp.employeeNumber)}`, {
-                            headers: { 'Authorization': `Bearer ${token}` },
-                        });
-                        if (!lookupRes.ok) throw new Error('Employee not found.');
-                        const lookupData = await lookupRes.json();
+                        const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(archiveConfirmEmp.employeeNumber)}`);
+                        const lookupData = lookupRes.data;
                         const userId = lookupData?.data?.id ?? lookupData?.id;
                         if (!userId) throw new Error('Employee not found.');
-                        const res = await fetch(`/api/user/${userId}/deactivate`, {
-                            method: 'PATCH',
-                            headers: { 'Authorization': `Bearer ${token}` },
-                        });
-                        if (!res.ok) {
-                            const err = await res.json().catch(() => ({}));
-                            throw new Error(err.message || 'Failed to Archive employee. Please try again.');
-                        }
+                        await api.patch(`/api/User/${userId}/deactivate`);
                         success(`${getEmployeeDisplayName(archiveConfirmEmp)} has been archived.`);
                         setEmployees(prev => prev.filter(e => e.employeeNumber !== archiveConfirmEmp.employeeNumber));
                         setRecentEmployees(prev => prev.filter(e => e.employeeNumber !== archiveConfirmEmp.employeeNumber));
                     } catch (err: any) {
-                        error(err.message ?? 'Failed to Archive employee.');
+                        error(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to Archive employee.');
                     } finally {
                         setarchiveSubmitting(false);
                         setarchiveConfirmEmp(null);
@@ -3408,13 +2858,8 @@ export default function Dashboard() {
                     }}
                     onClose={() => setTmDetailTask(null)}
                     onApprove={async (id) => {
-                        const token = localStorage.getItem('authToken');
                         try {
-                            await fetch(`/api/task/${id}/review`, {
-                                method: 'PATCH',
-                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ isApproved: true, remarks: null }),
-                            });
+                            await api.patch(`/api/Task/${id}/review`, { isApproved: true, remarks: null });
                             success('Task approved.');
                             setTmDetailTask(null);
                             fetchManagerTasks();
@@ -3423,13 +2868,8 @@ export default function Dashboard() {
                         }
                     }}
                     onReject={async (id, reason) => {
-                        const token = localStorage.getItem('authToken');
                         try {
-                            await fetch(`/api/task/${id}/review`, {
-                                method: 'PATCH',
-                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ isApproved: false, remarks: reason }),
-                            });
+                            await api.patch(`/api/Task/${id}/review`, { isApproved: false, remarks: reason });
                             success('Task returned for rework.');
                             setTmDetailTask(null);
                             fetchManagerTasks();

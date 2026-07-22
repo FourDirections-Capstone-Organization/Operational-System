@@ -51,13 +51,13 @@ public class AuthService : IAuthService
         if (user.IsDeactivated)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Account is deactivated. Please contact your administrator.");
 
+        // Check if email is verified (pending accounts fail here first)
+        if (!user.IsEmailVerified)
+            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please verify your email before logging in.");
+
         // Check if user is active
         if (!user.IsActive)
             return ApiResponseDTO<AuthResponseDTO>.Failure("Account is inactive. Please contact your administrator.");
-
-        // Check if email is verified
-        if (!user.IsEmailVerified)
-            return ApiResponseDTO<AuthResponseDTO>.Failure("Account is pending email verification. Please check your email.");
 
         // Verify password using PBKDF2 (PasswordHasher)
         if (!await VerifyPasswordAndRehashIfNeeded(user, dto.Password))
@@ -132,6 +132,15 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("Password reset requested for: {Email}", user.Email);
 
+        await _auditLogService.LogAsync(
+            user.Id,
+            AuditActionType.Update,
+            "User",
+            user.Id,
+            null,
+            $"Password reset requested for {fullName} ({user.EmployeeNumber})",
+            "Authentication");
+
         return ApiResponseDTO<bool>.Success(true, "If the email exists, a password reset link has been sent.");
     }
 
@@ -160,7 +169,18 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync();
 
+        var fullName = GetFullName(user);
+
         _logger.LogInformation("Password reset completed for: {Email}", user.Email);
+
+        await _auditLogService.LogAsync(
+            user.Id,
+            AuditActionType.Update,
+            "User",
+            user.Id,
+            null,
+            $"Password reset completed for {fullName} ({user.EmployeeNumber})",
+            "Authentication");
 
         return ApiResponseDTO<bool>.Success(true, "Password reset successfully");
     }
@@ -188,7 +208,18 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync();
 
+        var fullName = GetFullName(user);
+
         _logger.LogInformation("Password changed for user: {UserId}", userId);
+
+        await _auditLogService.LogAsync(
+            userId,
+            AuditActionType.Update,
+            "User",
+            userId,
+            null,
+            $"Password changed for {fullName} ({user.EmployeeNumber})",
+            "Authentication");
 
         return ApiResponseDTO<bool>.Success(true, "Password changed successfully");
     }

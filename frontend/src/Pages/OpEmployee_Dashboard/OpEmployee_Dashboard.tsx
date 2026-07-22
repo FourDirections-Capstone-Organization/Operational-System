@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { HubConnectionBuilder, HubConnection } from '@microsoft/signalr';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -39,12 +38,12 @@ import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import { useToast } from '../../components/Toast/Toast';
 import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
 import StatCard from '../../components/StatCard/StatCard';
-import Digital201FileView from '../SystemAdmin_Dashboard/Digital201FileView/Digital201FileView';
-import ApprovalTracker, { TrackerData } from '../../components/ApprovalTracker/ApprovalTracker';
+
 import FormModal from '../../components/FormModal/FormModal';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable from '../../components/ui/DataTable';
 import TaskComments from '../../components/TaskComments/TaskComments';
+import api from '../../api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@ const getAccountIdFromToken = (): string => {
 
 type Priority = 'high' | 'medium' | 'low';
 type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
-type NavTab = 'dashboard' | 'my-tasks' | 'profile' | 'digital_201' | 'activity_logs';
+type NavTab = 'dashboard' | 'my-tasks' | 'task-progress-review' | 'profile' | 'activity_logs';
 
 interface Task {
     id: string;
@@ -77,6 +76,9 @@ interface Task {
     supportingEvidenceUrl?: string;
     referenceNumber?: string;
     isConfidential?: boolean;
+    pushBackComment?: string;
+    reviewRemarks?: string;
+    isApproved?: boolean;
 }
 
 interface TaskResponseDTO {
@@ -102,6 +104,9 @@ interface TaskResponseDTO {
     supportingEvidenceUrl?: string;
     taskReferenceNumber?: string;
     isConfidential?: boolean;
+    pushBackComment?: string;
+    reviewRemarks?: string;
+    isApproved?: boolean;
 }
 
 interface UserProfile {
@@ -113,13 +118,6 @@ interface UserProfile {
     accountStatus: string;
     presenceStatus?: string;
 }
-
-// ─── API Helpers ──────────────────────────────────────────────────────────────
-
-const authHeader = (): HeadersInit => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
-});
 
 const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
 const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -158,6 +156,9 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
         supportingEvidenceUrl: dto.supportingEvidenceUrl,
         referenceNumber: dto.taskReferenceNumber,
         isConfidential: dto.isConfidential ?? false,
+        pushBackComment: dto.pushBackComment,
+        reviewRemarks: dto.reviewRemarks,
+        isApproved: dto.isApproved,
     };
 };
 
@@ -234,9 +235,14 @@ const NAV_GROUPS: { label: string; items: { tab: NavTab; icon: React.FC<any>; la
         ],
     },
     {
+        label: 'WORKFLOW',
+        items: [
+            { tab: 'task-progress-review', icon: Eye, label: 'Task Progress Review' },
+        ],
+    },
+    {
         label: 'PERSONAL',
         items: [
-            { tab: 'digital_201', icon: FileText, label: 'Digital 201 File' },
             { tab: 'profile', icon: UserCircle2, label: 'Profile' },
             { tab: 'activity_logs', icon: Activity, label: 'Activity Logs' },
         ],
@@ -311,6 +317,22 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
                 <div style={{ marginBottom: 12 }}>
                     <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Remarks</label>
                     <p style={{ margin: '4px 0 0', fontSize: 14 }}>{task.remarks}</p>
+                </div>
+            )}
+            {task.pushBackComment && (
+                <div style={{ marginBottom: 12, padding: 10, background: 'rgba(238,93,80,0.06)', borderRadius: 8, border: '1px solid rgba(238,93,80,0.15)' }}>
+                    <label style={{ fontSize: 12, color: 'var(--status-failed)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <RefreshCw size={12} /> Coordinator Push-Back Comment
+                    </label>
+                    <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-primary)' }}>"{task.pushBackComment}"</p>
+                </div>
+            )}
+            {task.reviewRemarks && (
+                <div style={{ marginBottom: 12, padding: 10, background: 'rgba(5,205,153,0.06)', borderRadius: 8, border: '1px solid rgba(5,205,153,0.15)' }}>
+                    <label style={{ fontSize: 12, color: 'var(--status-active)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} /> Review Remarks
+                    </label>
+                    <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--text-primary)' }}>{task.reviewRemarks}</p>
                 </div>
             )}
 
@@ -541,53 +563,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     const urgent = filteredTasks.filter(t => t.priority === 'high' && t.status !== 'completed');
     const firstName = user.fullName ? user.fullName.split(' ')[0] : 'Employee';
     const initials = getInitials(user.fullName);
-    const [recentTrackers, setRecentTrackers] = useState<TrackerData[]>([]);
-    const [activeTrackerCount, setActiveTrackerCount] = useState(0);
-    const [trackersLoading, setTrackersLoading] = useState(true);
-
-    const fetchRecentTrackers = async () => {
-        try {
-            const res = await fetch('/api/approvalrequests/my-trackers?pageSize=5', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (res.ok) {
-                const json = await res.json();
-                const list = json?.data?.data ?? json?.data ?? json ?? [];
-                setRecentTrackers(Array.isArray(list) ? list : []);
-                setActiveTrackerCount(json?.data?.activeCount ?? list.filter((t: any) => t.status === 'Pending').length);
-            }
-        } catch { /* silent */ }
-        finally { setTrackersLoading(false); }
-    };
-
-    useEffect(() => { fetchRecentTrackers(); }, []);
-
-    const trackerConnectionRef = useRef<HubConnection | null>(null);
-
-    useEffect(() => {
-        const accountId = localStorage.getItem('employeeId');
-        if (!accountId) return;
-
-        const conn = new HubConnectionBuilder()
-            .withUrl('/hubs/workflow')
-            .withAutomaticReconnect()
-            .build();
-
-        conn.on('TrackerUpdated', () => {
-            fetchRecentTrackers();
-        });
-
-        conn.start().then(() => {
-            conn.invoke('JoinUserGroup', accountId).catch(() => {});
-        }).catch(() => {});
-
-        trackerConnectionRef.current = conn;
-
-        return () => {
-            conn.stop().catch(() => {});
-        };
-    }, []);
-
     return (
         <div className="tab-content">
             <div className="welcome-banner">
@@ -694,27 +669,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                     </div>
                 </div>
 
-                <div className="card" style={{ marginTop: 16 }}>
-                    <div className="card-header-layout">
-                        <h3><Shield size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} />Pending Approvals</h3>
-                        {activeTrackerCount > 0 && (
-                            <span className="badge badge-purple" style={{ fontSize: 12 }}>{activeTrackerCount} active</span>
-                        )}
-                    </div>
-                    {trackersLoading ? (
-                        <EmptyState icon={<Loader2 size={18} className="spin" />} title="Loading trackers..." />
-                    ) : recentTrackers.length === 0 ? (
-                        <EmptyState icon={<Shield size={22} />} title="No approval requests yet" />
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 4px' }}>
-                            {recentTrackers.slice(0, 3).map(t => (
-                                <div key={t.approvalRequestId} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', background: t.status === 'Pending' ? 'rgba(67,24,255,0.03)' : 'transparent' }}>
-                                    <ApprovalTracker tracker={t} compact />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+
             </div>
         </div>
     );
@@ -872,12 +827,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
         setGateError('');
         try {
             const employeeId = localStorage.getItem('employeeId') ?? '';
-            const verifyRes = await fetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: authHeader(),
-                body: JSON.stringify({ employeeID: employeeId, password: gatePassword }),
-            });
-            const verifyData = await verifyRes.json().catch(() => ({}));
+            const verifyRes = await api.post('/api/Auth/verify-password', { employeeID: employeeId, password: gatePassword });
+            const verifyData = verifyRes.data;
             if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
             setPasswordGate(false);
             setGatePassword('');
@@ -904,18 +855,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             formData.append('contactNumber', form.contactNumber.trim());
             formData.append('email', form.email.trim());
 
-            const token = localStorage.getItem('authToken') ?? '';
-            const res = await fetch(`/api/profile/update-profile?employeeNumber=${encodeURIComponent(employeeId)}`, {
-                method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                body: formData,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Profile update failed.');
-            }
+            await api.uploadPut(`/api/Profile/update-profile?employeeNumber=${encodeURIComponent(employeeId)}`, formData);
             const newFullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
             localStorage.setItem('employeeName', newFullName);
             localStorage.setItem('firstName', firstName);
@@ -927,7 +867,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             success('Profile updated successfully.');
             setEditMode(false);
         } catch (err: any) {
-            error(err.message ?? 'Something went wrong.');
+            error(err?.response?.data?.message ?? 'Something went wrong.');
         } finally {
             setProfileSaving(false);
         }
@@ -972,23 +912,15 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     const handleChangePwd = async () => {
         setPwdError('');
         if (!pwd.current) { setPwdError('Current password is required.'); return; }
-        if (pwd.next.length < 6) { setPwdError('New password must be at least 6 characters.'); return; }
+        if (pwd.next.length < 15) { setPwdError('New password must be at least 15 characters.'); return; }
         if (pwd.next !== pwd.confirm) { setPwdError('Passwords do not match.'); return; }
         setPwdSaving(true);
         try {
-            const res = await fetch('/api/auth/change-password', {
-                method: 'PATCH',
-                headers: authHeader(),
-                body: JSON.stringify({ currentPassword: pwd.current, newPassword: pwd.next }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Password update failed.');
-            }
+            await api.post('/api/Auth/change-password', { currentPassword: pwd.current, newPassword: pwd.next, confirmPassword: pwd.confirm });
             setPwdMode(false);
             setPwd({ current: '', next: '', confirm: '' });
         } catch (err: any) {
-            setPwdError(err.message ?? 'Something went wrong.');
+            setPwdError(err?.response?.data?.message ?? 'Something went wrong.');
         } finally {
             setPwdSaving(false);
         }
@@ -1217,11 +1149,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                                 type={showPwd[k] ? 'text' : 'password'}
                                                 value={pwd[k]}
                                                 onChange={e => setPwd(p => ({ ...p, [k]: e.target.value }))}
-                                                placeholder={
-                                                    i === 0 ? 'Enter current password'
-                                                        : i === 1 ? 'At least 6 characters'
-                                                            : 'Re-enter new password'
-                                                }
+                                                    placeholder={
+                                                        i === 0 ? 'Enter current password'
+                                                            : i === 1 ? 'At least 15 characters'
+                                                                : 'Re-enter new password'
+                                                    }
                                             />
                                             <button className="pwd-toggle" onClick={() => toggleShow(k)} tabIndex={-1}>
                                                 {showPwd[k] ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -1276,6 +1208,179 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
     );
 };
 
+// ─── Task Progress Review Tab ─────────────────────────────────────────────────
+
+const TaskProgressReviewTab: React.FC<{
+    tasks: Task[];
+    loading: boolean;
+    error: string;
+    onView: (id: string) => void;
+    onUpdate: (id: string) => void;
+    onRetry: () => void;
+}> = ({ tasks, loading, error, onView, onUpdate, onRetry }) => {
+    const pendingReview = tasks.filter(t => t.status === 'pending-review' || t.status === 'done');
+    const pushedBack = tasks.filter(t => t.status === 'in-progress' && !!t.pushBackComment);
+    const completed = tasks.filter(t => t.status === 'completed');
+
+    if (loading) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <Loader2 size={22} className="spin" />
+                        <p>Loading review data…</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <AlertCircle size={22} style={{ color: 'var(--danger)' }} />
+                        <p>{error}</p>
+                        <button className="btn btn-primary" onClick={onRetry} style={{ marginTop: 8 }}>
+                            <RefreshCw size={13} /> Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const allEmpty = pendingReview.length === 0 && pushedBack.length === 0 && completed.length === 0;
+    if (allEmpty) {
+        return (
+            <div className="tab-content">
+                <div className="card">
+                    <div className="empty-state">
+                        <Eye size={22} />
+                        <p>No tasks have been submitted for review yet.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const SectionCard: React.FC<{
+        title: string;
+        icon: React.ReactNode;
+        count: number;
+        badgeCls: string;
+        children: React.ReactNode;
+    }> = ({ title, icon, count, badgeCls, children }) => (
+        <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header-layout" style={{ marginBottom: 12 }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    {icon}
+                    {title}
+                </h3>
+                <span className={`badge ${badgeCls}`}>{count}</span>
+            </div>
+            {children}
+        </div>
+    );
+
+    const renderTaskRow = (t: Task, extra?: React.ReactNode) => {
+        const es = effectiveStatus(t);
+        const sm = statusMeta[es];
+        const pm = priorityMeta[t.priority];
+        const od = es === 'overdue';
+        return (
+            <div
+                key={t.id}
+                className="dash-task-row"
+                onClick={() => onView(t.id)}
+                style={{ cursor: 'pointer', padding: '10px 0', borderBottom: '1px solid var(--border)' }}
+            >
+                <div className="dtr-left">
+                    <span className={`prio-dot ${pm.cls}`} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="dtr-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {t.name}
+                            {t.isConfidential && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap' }}>
+                                    CONFIDENTIAL
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                {t.referenceNumber ? `#${t.referenceNumber}` : ''}
+                            </span>
+                            {extra}
+                        </div>
+                    </div>
+                </div>
+                <div className="dtr-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className={`badge ${sm.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        {sm.icon}{sm.label}
+                    </span>
+                    {t.status !== 'completed' && (
+                        <button
+                            className="btn btn-xs btn-primary"
+                            onClick={e => { e.stopPropagation(); onUpdate(t.id); }}
+                        >
+                            Update
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="tab-content">
+
+            {/* ── Pending Review ── */}
+            {pendingReview.length > 0 && (
+                <SectionCard title="Pending Review" icon={<Eye size={16} />} count={pendingReview.length} badgeCls="badge-purple">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        These tasks are waiting for your coordinator's review.
+                    </p>
+                    {pendingReview.map(t => renderTaskRow(t))}
+                </SectionCard>
+            )}
+
+            {/* ── Pushed Back ── */}
+            {pushedBack.length > 0 && (
+                <SectionCard title="Pushed Back / Needs Revision" icon={<RefreshCw size={16} />} count={pushedBack.length} badgeCls="badge-amber">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        Your coordinator returned these tasks for revision. See their comments below.
+                    </p>
+                    {pushedBack.map(t =>
+                        <div key={t.id}>
+                            {renderTaskRow(t, t.pushBackComment ? (
+                                <span style={{ fontSize: 11, color: 'var(--status-failed)', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                    " {t.pushBackComment} "
+                                </span>
+                            ) : undefined)}
+                        </div>
+                    )}
+                </SectionCard>
+            )}
+
+            {/* ── Approved / Completed ── */}
+            {completed.length > 0 && (
+                <SectionCard title="Approved / Completed" icon={<CheckCircle2 size={16} />} count={completed.length} badgeCls="badge-green">
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                        These tasks have been reviewed and approved.
+                    </p>
+                    {completed.map(t => renderTaskRow(t, t.reviewRemarks ? (
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                            Remarks: {t.reviewRemarks}
+                        </span>
+                    ) : undefined))}
+                </SectionCard>
+            )}
+
+        </div>
+    );
+};
+
 // ─── Root Component ───────────────────────────────────────────────────────────
 
 export default function EmployeeDashboard() {
@@ -1305,30 +1410,27 @@ export default function EmployeeDashboard() {
     const [activityLogTotalPages, setActivityLogTotalPages] = useState(1);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
 
-    const fetchActivityLogs = (page: number) => {
-        const t = localStorage.getItem('authToken');
-        if (!t) return;
-        fetch(`/api/activity-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' })
-            .then(res => { if (!res.ok) return null; return res.json(); })
-            .then(data => {
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]));
+    const fetchActivityLogs = async (page: number) => {
+        try {
+            const res = await api.get('/api/audit-logs/my', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items);
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        }
     };
 
     const handleLogout = async () => {
         const token = localStorage.getItem('authToken');
         if (token) {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            }).catch(() => { });
+            await api.post('/api/Auth/logout').catch(() => { });
         }
         ['employeeId', 'refreshToken', 'authToken', 'employeeName', 'contactNumber', 'role']
             .forEach(k => localStorage.removeItem(k));
@@ -1339,14 +1441,9 @@ export default function EmployeeDashboard() {
         setTasksLoading(true);
         setTasksError('');
         try {
-            const res = await fetch('/api/task', { headers: authHeader() });
-            if (res.status === 401) { handleLogout(); return; }
-            if (!res.ok) {
-                setTasks([]);
-                return;
-            }
-            const json = await res.json();
-            const rawList: TaskResponseDTO[] = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+            const res = await api.get('/api/Task?pageNumber=1&pageSize=200');
+            const json = res.data;
+            const rawList: TaskResponseDTO[] = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             setTasks(rawList.map(dtoToTask));
         } catch {
             setTasks([]);
@@ -1360,9 +1457,9 @@ export default function EmployeeDashboard() {
         const employeeId = localStorage.getItem('employeeId');
         if (!token || !employeeId) { setLoadingUser(false); return; }
 
-        fetch('/api/auth/me', { headers: authHeader() })
-            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then((resJson: any) => {
+        api.get('/api/Auth/me')
+            .then((res: any) => {
+                const resJson = res.data;
                 if (!resJson || !resJson.isSuccess || !resJson.data) throw new Error('Invalid response structure');
                 const data = resJson.data;
                 const fetchedFullName = (data.firstName || data.lastName)
@@ -1410,18 +1507,11 @@ export default function EmployeeDashboard() {
         id: string, status: TaskStatus, progress: number, remarks: string
     ): Promise<void> => {
         const newStatus = STATUS_TO_BACKEND[status] ?? 1;
-        const res = await fetch(`/api/task/${id}/status`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
-            },
-            body: JSON.stringify({ newStatus, progressNotes: remarks.trim() || undefined }),
-        });
-        if (res.status === 401) { handleLogout(); return; }
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error((err as any).message || (err as any).Message || 'Failed to update task progress.');
+        try {
+            await api.patch(`/api/Task/${id}/status`, { newStatus, progressNotes: remarks.trim() || undefined });
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to update task progress.';
+            throw new Error(msg);
         }
         setTasks(ts => ts.map(t => t.id === id ? {
             ...t,
@@ -1438,8 +1528,8 @@ export default function EmployeeDashboard() {
     const pageTitles: Record<NavTab, string> = {
         dashboard: 'My Dashboard',
         'my-tasks': 'My Tasks',
+        'task-progress-review': 'Task Progress Review',
         profile: 'My Profile',
-        digital_201: 'My Digital 201 File',
         activity_logs: 'Activity Logs',
     };
 
@@ -1510,7 +1600,7 @@ export default function EmployeeDashboard() {
             <main className="main-viewport">
                 <DashboardHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/notification/my-notifications"
+                    notificationApi="/api/Notification"
                     userInitials={initials}
                     onSettingsClick={() => setActiveTab('profile')}
                     onLogout={handleLogout}
@@ -1530,16 +1620,15 @@ export default function EmployeeDashboard() {
                         onRetry={fetchTasks}
                     />
                 )}
+                {activeTab === 'task-progress-review' && (
+                    <TaskProgressReviewTab
+                        tasks={tasks} loading={tasksLoading} error={tasksError}
+                        onView={setViewingId} onUpdate={setUpdatingId}
+                        onRetry={fetchTasks}
+                    />
+                )}
                 {activeTab === 'profile' && (
                     <ProfileTab user={user} onUpdateUser={setUser} />
-                )}
-                {activeTab === 'digital_201' && (
-                    <div className="tab-content" style={{ padding: '0 28px 28px' }}>
-                        <Digital201FileView
-                            employeeNumber={user.employeeId}
-                            readOnly={false}
-                        />
-                    </div>
                 )}
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>

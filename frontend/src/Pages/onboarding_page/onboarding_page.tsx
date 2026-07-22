@@ -178,10 +178,10 @@ export default function OnboardingPage() {
         try {
             const empNo = localStorage.getItem('employeeId');
             if (!empNo) throw new Error('Session expired.');
-            const lookupRes = await axios.get(`/api/user/employee-number/${encodeURIComponent(empNo)}`);
+            const lookupRes = await axios.get(`/api/User/employee-number/${encodeURIComponent(empNo)}`);
             const userId = lookupRes.data?.data?.id ?? lookupRes.data?.id;
             if (!userId) throw new Error('Profile not found.');
-            await axios.put(`/api/user/${userId}`, {
+            await axios.put(`/api/User/${userId}`, {
                 firstName: profile.firstName.trim(), middleName: profile.middleName.trim(),
                 lastName: profile.lastName.trim(), suffix: profile.suffix.trim(), contactNumber: profile.contactNumber,
             });
@@ -229,7 +229,7 @@ export default function OnboardingPage() {
         setSaving(true);
         setApiError('');
         try {
-            const res = await axios.post('/api/auth/change-password', {
+            const res = await axios.post('/api/Auth/change-password', {
                 currentPassword: pw.current, newPassword: pw.next, confirmPassword: pw.confirm,
             });
             if (!res.data?.isSuccess) throw new Error(res.data?.message || 'Failed to set password.');

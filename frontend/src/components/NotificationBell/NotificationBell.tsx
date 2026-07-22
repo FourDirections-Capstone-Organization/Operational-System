@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import StatusBadge from '../ui/StatusBadge';
 import EmptyState from '../ui/EmptyState';
+import api from '../../api';
 import './NotificationBell.css';
 
 export interface NotificationItem {
@@ -16,14 +17,45 @@ export interface NotificationItem {
 
 interface NotificationBellProps {
     apiEndpoint: string;
+    onViewTask?: (taskId: string) => void;
+    onViewMore?: () => void;
 }
+
+const NOTIF_ENUM_MAP: Record<number, string> = {
+    0: 'TaskAssigned',
+    1: 'TaskUpdated',
+    2: 'TaskOverdue',
+    3: 'DeadlineWarning',
+    4: 'PushBack',
+    5: 'TaskCancelled',
+    6: 'TaskResumed',
+    7: 'TaskOnHold',
+    8: 'TaskCompleted',
+    9: 'TemplateTaskUnassigned',
+};
 
 function getTypeBadge(type: string): { label: string; cls: string } {
     switch (type) {
         case 'TaskAssigned':
             return { label: 'Task assigned', cls: 'task-assigned' };
-        case 'TaskDeadlineApproaching':
+        case 'TaskUpdated':
+            return { label: 'Task updated', cls: 'task-assigned' };
+        case 'TaskOverdue':
+            return { label: 'Overdue', cls: 'deadline' };
+        case 'DeadlineWarning':
             return { label: 'Deadline', cls: 'deadline' };
+        case 'PushBack':
+            return { label: 'Pushed back', cls: 'default' };
+        case 'TaskCancelled':
+            return { label: 'Cancelled', cls: 'default' };
+        case 'TaskResumed':
+            return { label: 'Resumed', cls: 'task-assigned' };
+        case 'TaskOnHold':
+            return { label: 'On hold', cls: 'default' };
+        case 'TaskCompleted':
+            return { label: 'Completed', cls: 'task-assigned' };
+        case 'TemplateTaskUnassigned':
+            return { label: 'Unassigned', cls: 'default' };
         default:
             return { label: type, cls: 'default' };
     }
@@ -39,7 +71,7 @@ function timeAgo(iso: string): string {
 
 type FilterTab = 'all' | 'unread';
 
-export default function NotificationBell({ apiEndpoint }: NotificationBellProps) {
+export default function NotificationBell({ apiEndpoint, onViewTask, onViewMore }: NotificationBellProps) {
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -59,29 +91,37 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         ? notifs.filter(n => !n.isRead)
         : notifs;
 
+    const fetchUnreadCount = async () => {
+        try {
+            const res = await api.get<any>(`${apiEndpoint}/unread-count`);
+            const json = res.data;
+            if (json.isSuccess && typeof json.data === 'number') {
+                setNotifTotalUnread(json.data);
+            }
+        } catch {
+            // non-fatal
+        }
+    };
+
     const fetchNotifs = async (page?: number) => {
         try {
             const p = page ?? notifPage;
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(apiEndpoint, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error();
-            const json = await res.json();
-            const rawList: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            const res = await api.get<any>(`${apiEndpoint}?pageNumber=${p}&pageSize=20`);
+            const json = res.data;
+            const rawList: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             const list: NotificationItem[] = rawList.map((n: any) => ({
                 notificationId: n.id ?? n.notificationId,
                 taskId: n.relatedTaskId ?? n.taskId ?? null,
-                notificationType: typeof n.type === 'string' ? n.type : (n.notificationType ?? ''),
+                notificationType: typeof n.type === 'string'
+                    ? n.type
+                    : (NOTIF_ENUM_MAP[n.type as number] ?? n.notificationType ?? ''),
                 message: n.message ?? n.title ?? '',
                 isRead: n.isRead ?? false,
                 createdAt: n.createdAt ?? '',
             }));
-            const totalRecords = list.length;
-            const totalUnread = list.filter(n => !n.isRead).length;
-            setNotifTotalPages(1);
+            const totalRecords = json.data?.totalCount ?? list.length;
+            setNotifTotalPages(json.data?.totalPages ?? 1);
             setNotifTotalRecords(totalRecords);
-            setNotifTotalUnread(totalUnread);
             setNotifPage(p);
             setNotifs(prev => {
                 const locallyRead = new Set(
@@ -101,7 +141,8 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
 
     useEffect(() => {
         fetchNotifs(1);
-        const interval = setInterval(() => fetchNotifs(notifPage), 5000);
+        fetchUnreadCount();
+        const interval = setInterval(() => { fetchNotifs(1); fetchUnreadCount(); }, 5000);
         return () => clearInterval(interval);
     }, [apiEndpoint]);
 
@@ -133,24 +174,14 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         setNotifs(prev => prev.map(n =>
             n.notificationId === id ? { ...n, isRead: true } : n
         ));
+        setNotifTotalUnread(prev => Math.max(0, prev - 1));
         try {
-            const token = localStorage.getItem('authToken');
-            const res = await fetch(`${apiEndpoint}/${id}/read`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-            if (!res.ok) {
-                setNotifs(prev => prev.map(n =>
-                    n.notificationId === id ? { ...n, isRead: false } : n
-                ));
-            }
+            await api.patch(`${apiEndpoint}/${id}/read`);
         } catch {
             setNotifs(prev => prev.map(n =>
                 n.notificationId === id ? { ...n, isRead: false } : n
             ));
+            setNotifTotalUnread(prev => prev + 1);
         }
     };
 
@@ -159,20 +190,9 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
         if (unread.length === 0) return;
 
         setNotifs(prev => prev.map(n => ({ ...n, isRead: true })));
+        setNotifTotalUnread(0);
 
-        const token = localStorage.getItem('authToken');
-
-        const res = await fetch(`${apiEndpoint}/read-all`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        });
-
-        if (!res.ok) {
-            setNotifs(prev => prev.map(n => ({ ...n, isRead: false })));
-        }
+        await api.patch(`${apiEndpoint}/read-all`);
     };
 
     return (
@@ -248,8 +268,11 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
                                 <div
                                     key={n.notificationId}
                                     className={`notif-item ${n.isRead ? 'read' : 'unread'}`}
-                                    onClick={() => !n.isRead && markAsRead(n.notificationId)}
-                                    style={{ cursor: n.isRead ? 'default' : 'pointer' }}
+                                    onClick={() => {
+                                        if (!n.isRead) markAsRead(n.notificationId);
+                                        if (n.taskId && onViewTask) onViewTask(n.taskId);
+                                    }}
+                                    style={{ cursor: n.taskId && onViewTask ? 'pointer' : n.isRead ? 'default' : 'pointer' }}
                                 >
                                     <div className={`notif-dot ${n.isRead ? 'read' : 'unread'}`} />
                                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -277,23 +300,31 @@ export default function NotificationBell({ apiEndpoint }: NotificationBellProps)
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                 {notifs.filter(n => n.isRead).length} read · {notifTotalRecords} total
                             </div>
-                            {notifTotalPages > 1 && (
-                                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                                    <button className="btn btn-sm" disabled={notifPage <= 1}
-                                        onClick={() => fetchNotifs(notifPage - 1)}
-                                        style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage <= 1 ? 0.4 : 1 }}>
-                                        ‹
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                {onViewMore && (
+                                    <button className="btn btn-sm btn-primary" onClick={() => { setOpen(false); onViewMore(); }}
+                                        style={{ fontSize: 11, padding: '4px 12px' }}>
+                                        View All
                                     </button>
-                                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                                        {notifPage} / {notifTotalPages}
-                                    </span>
-                                    <button className="btn btn-sm" disabled={notifPage >= notifTotalPages}
-                                        onClick={() => fetchNotifs(notifPage + 1)}
-                                        style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage >= notifTotalPages ? 0.4 : 1 }}>
-                                        ›
-                                    </button>
-                                </div>
-                            )}
+                                )}
+                                {notifTotalPages > 1 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <button className="btn btn-sm" disabled={notifPage <= 1}
+                                            onClick={() => fetchNotifs(notifPage - 1)}
+                                            style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage <= 1 ? 0.4 : 1 }}>
+                                            ‹
+                                        </button>
+                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                            {notifPage} / {notifTotalPages}
+                                        </span>
+                                        <button className="btn btn-sm" disabled={notifPage >= notifTotalPages}
+                                            onClick={() => fetchNotifs(notifPage + 1)}
+                                            style={{ fontSize: 10, padding: '2px 6px', opacity: notifPage >= notifTotalPages ? 0.4 : 1 }}>
+                                            ›
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>,

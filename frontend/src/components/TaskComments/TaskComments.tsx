@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../Toast/Toast';
 import EmptyState from '../ui/EmptyState';
+import api from '../../api';
 import './TaskComments.css';
 
 interface CommentDTO {
@@ -31,10 +32,6 @@ const fmtDateTime = (d: string): string => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
         ' · ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 };
-
-const authHeader = (): HeadersInit => ({
-    Authorization: `Bearer ${localStorage.getItem('authToken') ?? ''}`,
-});
 
 const getCurrentAccountId = (): string => {
     const token = localStorage.getItem('authToken');
@@ -70,14 +67,9 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`/api/tasks/${taskId}/comments`, { headers: authHeader() });
-            if (res.status === 404) {
-                setComments([]);
-                return;
-            }
-            if (!res.ok) throw new Error('Failed to load comments.');
-            const json = await res.json();
-            const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : [];
+            const res = await api.get<any>(`/api/tasks/${taskId}/comments`);
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             setComments(list.map((c: any) => ({
                 taskCommentId: c.id ?? c.taskCommentId,
                 taskId: c.taskId ?? taskId,
@@ -133,15 +125,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             const fd = new FormData();
             fd.append('content', newMessage.trim());
             if (attachment) fd.append('attachment', attachment);
-            const res = await fetch(`/api/tasks/${taskId}/comments`, {
-                method: 'POST',
-                headers: authHeader(),
-                body: fd,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to add comment.');
-            }
+            await api.upload(`/api/tasks/${taskId}/comments`, fd);
             setNewMessage('');
             setAttachment(null);
             success('Comment added successfully.');
@@ -174,15 +158,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         setError('');
         setSavingEdit(true);
         try {
-            const res = await fetch(`/api/tasks/${taskId}/comments/${editingId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', ...authHeader() },
-                body: JSON.stringify({ content: editMessage.trim() }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to update comment.');
-            }
+            await api.put(`/api/tasks/${taskId}/comments/${editingId}`, { content: editMessage.trim() });
             cancelEdit();
             success('Comment updated successfully.');
             await fetchComments();
@@ -196,14 +172,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     const deleteComment = async (commentId: string) => {
         if (!window.confirm('Are you sure you want to delete this comment?')) return;
         try {
-            const res = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: authHeader(),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to delete comment.');
-            }
+            await api.delete(`/api/tasks/${taskId}/comments/${commentId}`);
             success('Comment deleted successfully.');
             await fetchComments();
         } catch (err: any) {

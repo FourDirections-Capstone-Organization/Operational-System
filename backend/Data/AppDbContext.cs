@@ -16,6 +16,9 @@ public class AppDbContext : DbContext
     public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<Announcement> Announcements => Set<Announcement>();
+    public DbSet<AnnouncementAcknowledgment> AnnouncementAcknowledgments => Set<AnnouncementAcknowledgment>();
+    public DbSet<AnnouncementComment> AnnouncementComments => Set<AnnouncementComment>();
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();

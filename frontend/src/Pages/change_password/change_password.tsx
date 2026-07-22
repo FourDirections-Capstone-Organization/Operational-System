@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './change_password.css';
+import api from '../../api';
 
 export default function ChangePassword() {
     const navigate = useNavigate();
@@ -54,20 +55,9 @@ export default function ChangePassword() {
 
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('authToken');
-
-            const res = await fetch('/api/auth/change-password', {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ currentPassword, newPassword }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.message || 'Password change failed.');
+            const res = await api.patch<any>('/api/Auth/change-password', { currentPassword, newPassword });
+            if (!res.data.isSuccess) {
+                throw new Error(res.data.message || 'Password change failed.');
             }
             localStorage.setItem('isPasswordChanged', 'true'); 
 
@@ -80,7 +70,8 @@ export default function ChangePassword() {
             navigate(routes[role] ?? '/');
 
         } catch (err: any) {
-            setError(err.message ?? 'Something went wrong.');
+            const msg = err?.response?.data?.message || err.message || 'Something went wrong.';
+            setError(msg);
         } finally {
             setIsLoading(false);
         }

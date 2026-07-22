@@ -3,6 +3,7 @@ import '../forgotpassword_page/forgotpassword_page.css';
 import './resetpassword_page.css';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Package, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Loader2, XCircle } from 'lucide-react';
+import api from '../../api';
 
 /* ── Reusable Feature Item ── */
 function FeatureItem({ title, description }: { title: string; description: string }) {
@@ -100,22 +101,17 @@ export default function ResetPassword() {
         setStatus(null);
 
         try {
-            const res = await fetch('/api/auth/reset-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, newPassword, confirmPassword }),
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to reset password. The link may have expired.');
+            const res = await api.post<any>('/api/Auth/reset-password', { token, newPassword, confirmPassword });
+            if (!res.data.isSuccess) {
+                throw new Error(res.data.message || 'Failed to reset password. The link may have expired.');
             }
 
             setDone(true);
             setStatus(null);
             setTimeout(() => navigate('/'), 3000);
         } catch (err: any) {
-            setStatus({ type: 'error', message: err.message ?? 'Something went wrong. Please try again.' });
+            const msg = err?.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+            setStatus({ type: 'error', message: msg });
         } finally {
             setLoading(false);
         }

@@ -14,6 +14,8 @@ using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.TaskManagement;
 using Backend.Modules.Notifications;
+using Backend.Models;
+using Backend.Models.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,7 +44,7 @@ builder.Services.AddOpenApi(options =>
             }
         };
         
-        return Task.CompletedTask;
+        return System.Threading.Tasks.Task.CompletedTask;
     });
 });
 
@@ -98,14 +100,18 @@ builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
+builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<ITaskTemplateService, TaskTemplateService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<ITaskCommentService, TaskCommentService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IFomsExportService, FomsExportService>();
 builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<ISuitabilityService, SuitabilityService>();
+builder.Services.Configure<Neo4jSettings>(builder.Configuration.GetSection("Neo4jSettings"));
 
 
 // Hosted Services
@@ -121,6 +127,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
     db.Database.EnsureCreated();
 
     // Seed default departments and positions
@@ -139,6 +146,19 @@ using (var scope = app.Services.CreateScope())
     // Seed default notification settings
     var notificationSettingsService = scope.ServiceProvider.GetRequiredService<INotificationSettingsService>();
     await notificationSettingsService.SeedDefaultSettingsAsync();
+
+    // Reactivate any deactivated Manager accounts (safety net)
+    var deactivatedManagers = await db.Users
+        .Where(u => u.Role == UserRole.Manager && (u.IsDeactivated || !u.IsActive))
+        .ToListAsync();
+    foreach (var mgr in deactivatedManagers)
+    {
+        mgr.IsDeactivated = false;
+        mgr.IsActive = true;
+        mgr.UpdatedAt = DateTime.UtcNow;
+    }
+    if (deactivatedManagers.Count > 0)
+        await db.SaveChangesAsync();
 }
 
 if (app.Environment.IsDevelopment())

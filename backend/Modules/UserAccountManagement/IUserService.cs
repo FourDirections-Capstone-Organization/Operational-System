@@ -10,8 +10,8 @@ public interface IUserService
     Task<ApiResponseDTO<UserResponseDTO>> GetByIdAsync(Guid id);
     Task<ApiResponseDTO<UserResponseDTO>> GetByEmployeeNumberAsync(string employeeNumber);
     Task<ApiResponseDTO<UserResponseDTO>> UpdateAsync(Guid id, UpdateUserDTO dto, Guid? requestUserId = null);
-    Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id);
-    Task<ApiResponseDTO<bool>> ActivateAsync(Guid id);
+    Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id, Guid? requestUserId = null);
+    Task<ApiResponseDTO<bool>> ActivateAsync(Guid id, Guid? requestUserId = null);
     Task<ApiResponseDTO<string>> GenerateEmployeeNumberAsync();
     System.Threading.Tasks.Task SeedDefaultManagerAsync();
     System.Threading.Tasks.Task SeedTestAccountsAsync();

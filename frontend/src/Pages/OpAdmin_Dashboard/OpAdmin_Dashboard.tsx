@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import * as signalR from '@microsoft/signalr';
 import {
     ClipboardList,
     CheckCircle2,
@@ -24,6 +23,7 @@ import {
     LogOut,
     Save,
     Loader2,
+    User,
     Users,
     Search,
     Trash2,
@@ -41,6 +41,7 @@ import {
     Activity,
     Building,
     Clock,
+    Play,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
@@ -48,9 +49,7 @@ import { useNavigate } from 'react-router-dom';
 import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
-import ApprovalTracker, { TrackerData } from '../../components/ApprovalTracker/ApprovalTracker';
-import PendingApprovalsTab from './PendingApprovalsTab';
-import RoutingManagementTab from './RoutingManagementTab';
+
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
 import StatCard from '../../components/StatCard/StatCard';
@@ -62,6 +61,8 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import SubTabNav from '../../components/ui/SubTabNav';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
+import api from '../../api';
+import axios from 'axios';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -204,9 +205,9 @@ interface UpdateTaskDTO {
 
 // DTO from backend for duplicate warnings
 interface DuplicateWarningDTO {
-    existingTaskTitle: string;
-    existingTaskId: string;
-    existingTaskStatus: string;
+    taskId: string;
+    title: string;
+    status: string;
     similarityPercentage: number;
 }
 
@@ -314,6 +315,7 @@ const TASK_STATUSES_FILTER = [
     'Overdue',
 ];
 
+const PER_PAGE = 10;
 const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 
 // --- Task Template Types -------------------------------------------------------
@@ -321,6 +323,7 @@ const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 interface TaskTemplateDTO {
     templateId: string;
     templateName: string;
+    defaultTitle: string;
     templateDescription: string;
     priorityLevel: string;
     recurrenceType: string;
@@ -337,6 +340,7 @@ interface TaskTemplateDTO {
 
 interface CreateTemplateDTO {
     templateName: string;
+    defaultTitle: string;
     templateDescription: string;
     priorityLevel: string;
     recurrenceType: string;
@@ -375,13 +379,6 @@ const NAV_GROUPS = [
         label: 'REPORTS',
         items: [
             { tab: 'reports' as NavTab, icon: BarChart3, label: 'Reports' },
-        ],
-    },
-    {
-        label: 'REQUESTS',
-        items: [
-            { tab: 'approvals' as NavTab, icon: Shield, label: 'Approvals' },
-            { tab: 'reopen' as NavTab, icon: RotateCcw, label: 'Reopen Requests' },
         ],
     },
     {
@@ -557,6 +554,7 @@ interface WorkloadInfo {
     employeeName: string;
     accountId: string;
     availabilityStatus: string;
+    isAvailable: boolean;
     workload: number;
     role: string;
     isRecommended: boolean;
@@ -620,31 +618,30 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
 
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
         const fetchRecommendations = async () => {
             try {
-                const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=50', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const json = await res.json();
-                const list: any[] = json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []);
+                const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=50');
+                const json = res.data;
+                const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
                 if (list.length > 0) {
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
                         employeeName: emp.fullName ?? emp.FullName ?? '',
                         accountId: emp.userId ?? emp.UserId ?? emp.id,
-                        availabilityStatus: 'Active',
-                        workload: 0,
+                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
+                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
+                        workload: emp.workload ?? 0,
                         role: emp.role ?? '',
                         isRecommended: true,
                         recommendationReason: 'Available for assignment',
                     }));
                     setEligibleEmployees(mapped);
-                    if (mapped.length > 0) {
-                        const best = mapped.reduce((a, b) => a.workload <= b.workload ? a : b);
+                    const activeEmployees = mapped.filter(e => e.isAvailable);
+                    if (activeEmployees.length > 0) {
+                        const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
                         setRecommendation({
                             employeeName: best.employeeName,
                             accountId: best.accountId,
-                            availabilityStatus: 'Active',
+                            availabilityStatus: best.availabilityStatus,
                             workload: best.workload,
                             reason: 'Available for assignment',
                         });
@@ -655,18 +652,20 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         };
         const fetchDepartments = async () => {
             try {
-                const res = await fetch('/api/departments', {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const json = await res.json();
-                if (json.isSuccess && json.data) {
-                    setDepartments(json.data.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
+                const res = await api.get('/api/Department');
+                const json = res.data;
+                if (json.isSuccess && json.data?.items) {
+                    setDepartments(json.data.items.map((d: any) => ({ id: d.id ?? d.departmentId, name: d.name ?? d.departmentName })));
                 }
             } catch {
             }
         };
         fetchRecommendations();
         fetchDepartments();
+
+        // FR-065: Periodic refresh of availability status
+        const interval = setInterval(fetchRecommendations, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     // -- Per-field live validator ------------------------------------------
@@ -769,6 +768,25 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
 
     const handleSave = async () => {
         if (!validateAll()) return;
+
+        // FR-065: Pre-submit availability validation
+        if (form.assignmentScope === 'SingleEmployee' && form.assignedTo) {
+            const emp = eligibleEmployees.find(e => e.accountId === form.assignedTo);
+            if (emp && !emp.isAvailable) {
+                setFormError(`${emp.employeeName} is currently ${emp.availabilityStatus} and cannot be assigned.`);
+                return;
+            }
+        }
+        if (form.assignmentScope === 'Team' && selectedTeamIds.length > 0) {
+            const unavailable = selectedTeamIds
+                .map(id => eligibleEmployees.find(e => e.accountId === id))
+                .filter(e => e && !e.isAvailable);
+            if (unavailable.length > 0) {
+                setFormError(`Cannot assign: ${unavailable.map(e => e!.employeeName).join(', ')} ${unavailable.length === 1 ? 'is' : 'are'} currently unavailable.`);
+                return;
+            }
+        }
+
         setSubmitting(true);
         const scopeNum = SCOPE_MAP[form.assignmentScope] ?? 0;
         let assignedUserIds: string[] | undefined;
@@ -1123,17 +1141,23 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                             {eligibleEmployees.map(e => {
                                                 const isSelected = form.assignedTo === e.accountId;
                                                 const isRecommended = recommendation?.accountId === e.accountId;
+                                                const disabled = !e.isAvailable;
                                                 return (
                                                     <div
                                                         key={e.accountId}
-                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}`}
-                                                        onClick={() => { setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
+                                                        onClick={() => {
+                                                            if (disabled) return;
+                                                            setForm(prev => ({ ...prev, assignedTo: e.accountId }));
+                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                                        }}
+                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
                                                     >
                                                         <span className="sr-emp-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                             {isSelected && <CheckCircle2 size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
                                                             {e.employeeName}
                                                         </span>
-                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
                                                             {e.availabilityStatus}
                                                         </span>
                                                         <span className="sr-workload">{e.workload} tasks</span>
@@ -1171,11 +1195,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                         <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
                                             {eligibleEmployees.map(e => {
                                                 const selected = selectedTeamIds.includes(e.accountId);
+                                                const disabled = !e.isAvailable;
                                                 return (
                                                     <div
                                                         key={e.accountId}
-                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}`}
+                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
                                                         onClick={() => {
+                                                            if (disabled) return;
                                                             setSelectedTeamIds(prev =>
                                                                 prev.includes(e.accountId)
                                                                     ? prev.filter(id => id !== e.accountId)
@@ -1183,12 +1209,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                                             );
                                                             setErrors(prev => ({ ...prev, assignedTo: '' }));
                                                         }}
+                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
                                                     >
-                                                        <input type="checkbox" checked={selected}
+                                                        <input type="checkbox" checked={selected} disabled={disabled}
                                                             onChange={() => { }}
                                                             onClick={e => e.stopPropagation()} />
                                                         <span className="sr-emp-name">{e.employeeName}</span>
-                                                        <span className={`sr-status-tag ${e.availabilityStatus === 'Active' || e.availabilityStatus === 'Online' ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
+                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
                                                             {e.availabilityStatus}
                                                         </span>
                                                         <span className="sr-workload">{e.workload} tasks</span>
@@ -1336,7 +1363,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ task, onEdit, onReopen, onStatusC
                 <div className="view-modal-section">
                     <label className="view-modal-label">Assigned To:</label>
                     <div className="view-modal-assignee-box">
-                        {task.assignedEmployee || '�'}
+                        {task.assignedEmployee || 'Unassigned'}
                     </div>
                 </div>
 
@@ -1886,6 +1913,7 @@ const TasksTab: React.FC<{
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [subTab, setSubTab] = useState<'active' | 'bin'>('active');
     const [searchError, setSearchError] = useState('');
+    const [taskPage, setTaskPage] = useState(1);
 
     const deletedTasks = binTasks;
 
@@ -1925,6 +1953,11 @@ const TasksTab: React.FC<{
             }
         });
 
+    const taskTotalPages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+    const pagedTasks = subTab === 'active'
+        ? sorted.slice((taskPage - 1) * PER_PAGE, taskPage * PER_PAGE)
+        : [];
+
     return (
         <div className="dashboard-content">
             <DataTable
@@ -1933,35 +1966,35 @@ const TasksTab: React.FC<{
                     { key: 'bin', label: 'Bin', icon: <Trash2 size={14} />, badge: deletedTasks.length },
                 ]}
                 activeTab={subTab}
-                onTabChange={key => setSubTab(key as 'active' | 'bin')}
+                onTabChange={key => { setSubTab(key as 'active' | 'bin'); setTaskPage(1); }}
                 searchQuery={subTab === 'active' ? searchQuery : undefined}
-                setSearchQuery={subTab === 'active' ? handleSearchChange : undefined}
+                setSearchQuery={subTab === 'active' ? (val => { handleSearchChange(val); setTaskPage(1); }) : undefined}
                 searchPlaceholder="Search tasks..."
                 filterElements={subTab === 'active' ? (
                     <>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                        <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setTaskPage(1); }}>
                             <option value="">All Statuses</option>
                             {TASK_STATUS_FILTERS.map(s => (
                                 <option key={s} value={s}>{s}</option>
                             ))}
                         </select>
-                        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+                        <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value); setTaskPage(1); }}>
                             <option value="">All Priorities</option>
                             <option value="Critical">Critical</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
                         </select>
-                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)}>
+                        <select value={filterEmployee} onChange={e => { setFilterEmployee(e.target.value); setTaskPage(1); }}>
                             <option value="">All Employees</option>
                             {teamMembers.map(m => (
                                 <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
                             ))}
                         </select>
                         <input type="date" value={filterDeadline}
-                            onChange={e => setFilterDeadline(e.target.value)}
+                            onChange={e => { setFilterDeadline(e.target.value); setTaskPage(1); }}
                             style={{ height: 38, borderRadius: 8, border: '1.5px solid var(--border, #e8ecf4)', padding: '0 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'white', color: 'var(--text-primary)', outline: 'none' }} />
-                        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setTaskPage(1); }}
                             style={{ borderLeft: '2px solid var(--border, #e8ecf4)', paddingLeft: 12, borderRadius: 0 }}>
                             <option value="">Sort By</option>
                             <option value="taskTitle">Task Title</option>
@@ -1970,7 +2003,7 @@ const TasksTab: React.FC<{
                             <option value="status">Status</option>
                             <option value="assignedEmployee">Assigned Employee</option>
                         </select>
-                        <select value={sortOrder} onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}>
+                        <select value={sortOrder} onChange={e => { setSortOrder(e.target.value as 'asc' | 'desc'); setTaskPage(1); }}>
                             <option value="asc">Ascending</option>
                             <option value="desc">Descending</option>
                         </select>
@@ -1998,13 +2031,14 @@ const TasksTab: React.FC<{
                 loading={loading}
                 emptyIcon={subTab === 'bin' ? <Trash2 size={24} /> : <Package size={20} />}
                 emptyMessage={subTab === 'bin' ? 'Bin is empty' : 'No matching task records found.'}
+                currentPage={taskPage} totalPages={taskTotalPages} onPageChange={setTaskPage}
             >
                 {searchError && (
                     <tr><td colSpan={subTab === 'bin' ? 5 : 4} style={{ padding: '8px 20px 0', border: 'none' }}>
                         <span style={{ fontSize: 12, color: 'var(--status-failed)' }}>{searchError}</span>
                     </td></tr>
                 )}
-                {subTab === 'active' && sorted.length > 0 && sorted.map(t => {
+                {subTab === 'active' && pagedTasks.length > 0 && pagedTasks.map(t => {
                     const od = isEffectivelyOverdue(t);
                     const effectiveStatus = od ? 'Overdue' : t.taskStatus;
                     const refDisplay = t.taskReferenceNumber || t.taskId.slice(0, 8).toUpperCase();
@@ -2081,19 +2115,18 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<TaskTemplateDTO | null>(null);
+    const [templatePage, setTemplatePage] = useState(1);
 
     const fetchTemplates = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/TaskTemplate', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (!res.ok) throw new Error('Failed to fetch templates.');
-            const body = await res.json();
-            const list: any[] = body.isSuccess && Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []);
+            const res = await api.get('/api/TaskTemplate');
+            const body = res.data;
+            const list: any[] = body.isSuccess && Array.isArray(body.data?.items) ? body.data.items : (Array.isArray(body.data) ? body.data : (Array.isArray(body.data?.data) ? body.data.data : []));
             setTemplates(list.map((t: any) => ({
                 templateId: t.id ?? t.templateId,
                 templateName: t.templateName ?? '',
+                defaultTitle: t.defaultTitle ?? '',
                 templateDescription: t.defaultDescription ?? '',
                 priorityLevel: String(t.defaultPriorityLevel ?? t.priorityLevel ?? 'Medium'),
                 recurrenceType: String(t.recurrenceRule ?? t.recurrenceType ?? 'Daily'),
@@ -2119,11 +2152,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const handleDeleteTemplate = async (templateId: string) => {
         try {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete template.'); }
+            await api.delete(`/api/TaskTemplate/${templateId}`);
             success('Task template deactivated successfully.');
             setDeleteConfirm(null);
             await fetchTemplates();
@@ -2134,16 +2163,21 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const handleToggle = async (templateId: string, currentStatus: string) => {
         try {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify({ isActive: currentStatus !== 'Active' }),
-            });
-            if (!res.ok) throw new Error('Failed to toggle template status.');
+            await api.put(`/api/TaskTemplate/${templateId}`, { isActive: currentStatus !== 'Active' });
             success('Template status updated successfully.');
             await fetchTemplates();
         } catch (err: any) {
             error(err.message ?? 'Failed to toggle template status.');
+        }
+    };
+
+    const handleDeploy = async (templateId: string) => {
+        try {
+            await api.post(`/api/TaskTemplate/${templateId}/deploy`);
+            success('Task deployed successfully from template.');
+            await fetchTemplates();
+        } catch (err: any) {
+            error(err.message ?? 'Failed to deploy task from template.');
         }
     };
 
@@ -2152,7 +2186,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
     const handleSave = async (data: CreateTemplateDTO, templateId?: string) => {
         const backendPayload = {
             templateName: data.templateName,
-            defaultTitle: data.templateName,
+            defaultTitle: data.defaultTitle || data.templateName,
             defaultDescription: data.templateDescription,
             defaultPriorityLevel: PRIO_TO_BACKEND[data.priorityLevel] ?? 1,
             defaultClassification: 0,
@@ -2162,20 +2196,10 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
             isActive: data.templateStatus === 'Active',
         };
         if (templateId) {
-            const res = await fetch(`/api/TaskTemplate/${templateId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(backendPayload),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to update template.'); }
+            await api.put(`/api/TaskTemplate/${templateId}`, backendPayload);
             success('Task template updated successfully.');
         } else {
-            const res = await fetch('/api/TaskTemplate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify(backendPayload),
-            });
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to create template.'); }
+            await api.post('/api/TaskTemplate', backendPayload);
             success('Task template created successfully.');
         }
         await fetchTemplates();
@@ -2190,6 +2214,9 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     const fmtTemplateDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '�';
 
+    const tmplTotalPages = Math.max(1, Math.ceil(templates.length / PER_PAGE));
+    const pagedTemplates = templates.slice((templatePage - 1) * PER_PAGE, templatePage * PER_PAGE);
+
     return (
         <div className="dashboard-content">
             <DataTable
@@ -2200,12 +2227,14 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                 emptyMessage="No task templates found."
                 emptyIcon={<Copy size={20} />}
                 headers={['TEMPLATE NAME', 'PRIORITY', 'RECURRENCE', 'NEXT GENERATION', 'ASSIGNEE', 'STATUS', 'ACTIONS']}
+                currentPage={templatePage} totalPages={tmplTotalPages} onPageChange={setTemplatePage}
             >
-                {templates.map(t => (
+                {pagedTemplates.map(t => (
                     <tr key={t.templateId}>
                         <td>
                             <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.templateName}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.templateDescription}</div>
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>Task title: {t.defaultTitle || t.templateName}</div>
                         </td>
                         <td><PrioBadge p={t.priorityLevel as Priority} /></td>
                         <td>
@@ -2222,6 +2251,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                             <ActionsDropdown
                                 actions={[
                                     { label: 'Edit', icon: <Pencil size={12} />, onClick: () => openEdit(t) },
+                                    { label: 'Deploy Now', icon: <Play size={12} />, onClick: () => handleDeploy(t.templateId), variant: 'success' as const },
                                     {
                                         label: t.templateStatus === 'Active' ? 'Deactivate' : 'Activate',
                                         icon: <ToggleLeft size={12} />,
@@ -2277,6 +2307,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
     const isEdit = !!template;
     const [form, setForm] = useState({
         templateName: template?.templateName ?? '',
+        defaultTitle: template?.defaultTitle ?? '',
         templateDescription: template?.templateDescription ?? '',
         priorityLevel: template?.priorityLevel ?? 'Medium',
         recurrenceType: template?.recurrenceType ?? 'Daily',
@@ -2292,6 +2323,8 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
         const e: Record<string, string> = {};
         if (!form.templateName.trim()) e.templateName = 'Template name is required.';
         else if (form.templateName.length > 150) e.templateName = 'Must not exceed 150 characters.';
+        if (!form.defaultTitle.trim()) e.defaultTitle = 'Default title is required.';
+        else if (form.defaultTitle.length > 150) e.defaultTitle = 'Must not exceed 150 characters.';
         if (!form.templateDescription.trim()) e.templateDescription = 'Description is required.';
         else if (form.templateDescription.length > 2000) e.templateDescription = 'Must not exceed 2000 characters.';
         if (!form.recurrenceStartDate) e.recurrenceStartDate = 'Start date is required.';
@@ -2306,6 +2339,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
         try {
             await onSave({
                 templateName: form.templateName.trim(),
+                defaultTitle: form.defaultTitle.trim(),
                 templateDescription: form.templateDescription.trim(),
                 priorityLevel: form.priorityLevel,
                 recurrenceType: form.recurrenceType,
@@ -2348,6 +2382,13 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
                 <input type="text" className={errors.templateName ? 'report-input report-input-error' : 'report-input'}
                     value={form.templateName} onChange={set('templateName')} maxLength={150} placeholder="e.g. Weekly Warehouse Inventory" />
                 <FieldErr name="templateName" />
+            </div>
+
+            <div className="field">
+                <label>Default Task Title *</label>
+                <input type="text" className={errors.defaultTitle ? 'report-input report-input-error' : 'report-input'}
+                    value={form.defaultTitle} onChange={set('defaultTitle')} maxLength={150} placeholder="e.g. Conduct weekly warehouse inventory" />
+                <FieldErr name="defaultTitle" />
             </div>
 
             <div className="field">
@@ -2407,12 +2448,60 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
 
 // --- Team Tab -----------------------------------------------------------------
 
+interface EmpRecDTO {
+    recommendationId: string;
+    category: string;
+    notes: string;
+    recommendedByName: string;
+    taskTitle: string;
+    createdAt: string;
+}
+
+const CATEGORY_LABELS: Record<number, string> = {
+    0: 'Timeliness',
+    1: 'Work Quality',
+    2: 'Communication',
+    3: 'Other',
+};
+
 const TeamTab: React.FC<{
     tasks: Task[];
     teamMembers: TeamMember[];
     onView: (id: string) => void;
 }> = ({ tasks, teamMembers, onView }) => {
     const [selectedMemberId, setSelectedMemberId] = useState(teamMembers[0]?.accountId ?? '');
+    const [showRecModal, setShowRecModal] = useState(false);
+    const [recEmployee, setRecEmployee] = useState('');
+    const [recEmployeeName, setRecEmployeeName] = useState('');
+    const [empRecommendations, setEmpRecommendations] = useState<EmpRecDTO[]>([]);
+    const [recLoading, setRecLoading] = useState(false);
+    const [recError, setRecError] = useState('');
+
+    const fetchEmpRecommendations = async (empId: string, empName: string) => {
+        setRecLoading(true);
+        setRecError('');
+        setEmpRecommendations([]);
+        setRecEmployee(empId);
+        setRecEmployeeName(empName);
+        setShowRecModal(true);
+        try {
+            const res = await api.get<any>(`/api/users/${empId}/recommendations`);
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
+            setEmpRecommendations(list.map((r: any) => ({
+                recommendationId: r.id ?? r.recommendationId,
+                category: CATEGORY_LABELS[r.category as number] ?? String(r.category),
+                notes: r.notes ?? '',
+                recommendedByName: r.coordinatorName ?? '',
+                taskTitle: r.taskTitle ?? '',
+                createdAt: r.createdAt ?? '',
+            })));
+        } catch (err: any) {
+            setRecError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
+        } finally {
+            setRecLoading(false);
+        }
+    };
 
     return (
         <div className="dashboard-content">
@@ -2437,6 +2526,10 @@ const TeamTab: React.FC<{
                                 </div>
                                 <span className="badge badge-blue">{mt.length} tasks</span>
                                 <span className="badge badge-green">{mc} done</span>
+                                <button className="btn btn-sm" onClick={e => { e.stopPropagation(); fetchEmpRecommendations(m.accountId, m.employeeName); }}
+                                    style={{ marginLeft: 4, padding: '4px 8px', fontSize: 10 }}>
+                                    <Lightbulb size={10} /> Recs
+                                </button>
                             </div>
                         );
                     })}
@@ -2472,6 +2565,40 @@ const TeamTab: React.FC<{
                         .map(t => <TaskRow key={t.taskId} task={t} onView={onView} />)
                 }
             </div>
+
+            <FormModal isOpen={showRecModal} onClose={() => setShowRecModal(false)}
+                title="Recommendation History"
+                subtitle={`All recommendations for ${recEmployeeName}`}
+                size="md"
+                footer={<button className="btn" onClick={() => setShowRecModal(false)}>Close</button>}
+            >
+                {recLoading ? (
+                    <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading recommendations...</div>
+                ) : recError ? (
+                    <div className="tr-error" style={{ marginBottom: 12 }}><AlertCircle size={13} /> {recError}</div>
+                ) : empRecommendations.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        No recommendations for this employee yet.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                        {empRecommendations.map(r => (
+                            <div key={r.recommendationId} className="tr-item">
+                                <div className="tr-item-top">
+                                    <span className="tr-category">{r.category}</span>
+                                    <span className="tr-author"><User size={10} /> {r.recommendedByName}</span>
+                                </div>
+                                <div className="tr-notes">{r.notes}</div>
+                                <div style={{ fontSize: 10, color: '#94a3b8', display: 'flex', gap: 8 }}>
+                                    <span>Task: {r.taskTitle}</span>
+                                    <span>·</span>
+                                    <span>{new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </FormModal>
         </div>
     );
 };
@@ -2492,7 +2619,6 @@ const ApprovalsWrapper: React.FC = () => {
                     <RotateCcw size={14} /> Routing Config
                 </button>
             </div>
-            {subTab === 'pending' ? <PendingApprovalsTab /> : <RoutingManagementTab />}
         </div>
     );
 };
@@ -2501,7 +2627,7 @@ const ApprovalsWrapper: React.FC = () => {
 
 export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) => {
     const { success, error } = useToast();
-    const [reportSubTab, setReportSubTab] = useState<'task-completion' | 'operational-summary'>('task-completion');
+    const [reportSubTab, setReportSubTab] = useState<'task-completion' | 'operational-summary' | 'kpi-tracking' | 'performance-report' | 'foms-export'>('task-completion');
 
     const DATE_PRESETS = [
         { label: '1 Month', months: 1 },
@@ -2520,6 +2646,165 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
     const [tcError, setTcError] = useState('');
     const [tcNoRecords, setTcNoRecords] = useState(false);
     const [tcGeneratedAt, setTcGeneratedAt] = useState('');
+
+    // --- KPI Tracking State ---
+    const [kpiFilter, setKpiFilter] = useState<{ dateRangeStart: string; dateRangeEnd: string; employeeId: string }>({ dateRangeStart: '', dateRangeEnd: '', employeeId: '' });
+    const [kpiData, setKpiData] = useState<any>(null);
+    const [kpiLoading, setKpiLoading] = useState(false);
+    const [kpiError, setKpiError] = useState('');
+
+    const handleKpiGenerate = async () => {
+        if (!kpiFilter.dateRangeStart || !kpiFilter.dateRangeEnd) {
+            setKpiError('Please select a date range first.');
+            return;
+        }
+        setKpiLoading(true);
+        setKpiError('');
+        setKpiData(null);
+        try {
+            const params = new URLSearchParams();
+            params.set('dateRangeStart', kpiFilter.dateRangeStart);
+            params.set('dateRangeEnd', kpiFilter.dateRangeEnd);
+            if (kpiFilter.employeeId) params.set('employeeId', kpiFilter.employeeId);
+            const res = await api.get(`/api/reports/kpi?${params.toString()}`);
+            const json = res.data;
+            if (json?.isSuccess && json?.data) {
+                setKpiData(json.data);
+            } else {
+                setKpiError(json?.message || 'Failed to load KPI data.');
+            }
+        } catch (err: any) {
+            setKpiError(err?.response?.data?.message || err.message || 'Failed to load KPI data.');
+        } finally {
+            setKpiLoading(false);
+        }
+    };
+
+    // --- Performance Report State ---
+    const [prFilter, setPrFilter] = useState<{
+        period: 'Weekly' | 'Monthly';
+        dateRangeStart: string;
+        dateRangeEnd: string;
+        employeeId: string;
+        departmentId: string;
+    }>({ period: 'Weekly', dateRangeStart: '', dateRangeEnd: '', employeeId: '', departmentId: '' });
+    const [prData, setPrData] = useState<any>(null);
+    const [prLoading, setPrLoading] = useState(false);
+    const [prExporting, setPrExporting] = useState(false);
+    const [prError, setPrError] = useState('');
+
+    const handlePrGenerate = async () => {
+        if (!prFilter.dateRangeStart || !prFilter.dateRangeEnd) {
+            setPrError('Please select a date range.');
+            return;
+        }
+        const start = new Date(prFilter.dateRangeStart);
+        const end = new Date(prFilter.dateRangeEnd);
+        if (start > end) {
+            setPrError('Start date must be before end date.');
+            return;
+        }
+        setPrLoading(true);
+        setPrError('');
+        setPrData(null);
+        try {
+            const params = new URLSearchParams();
+            params.set('period', prFilter.period);
+            params.set('dateRangeStart', prFilter.dateRangeStart);
+            params.set('dateRangeEnd', prFilter.dateRangeEnd);
+            if (prFilter.employeeId) params.set('employeeId', prFilter.employeeId);
+            if (prFilter.departmentId) params.set('departmentId', prFilter.departmentId);
+            const res = await api.get(`/api/reports/performance?${params.toString()}`);
+            const json = res.data;
+            if (json?.isSuccess && json?.data) {
+                setPrData(json.data);
+            } else {
+                setPrError(json?.message || 'No records found for the selected criteria.');
+            }
+        } catch (err: any) {
+            setPrError(err?.response?.data?.message || err.message || 'Failed to generate report.');
+        } finally {
+            setPrLoading(false);
+        }
+    };
+
+    const handlePrExport = async (format: 'Excel' | 'Pdf') => {
+        if (!prData) return;
+        setPrExporting(true);
+        try {
+            const body = {
+                period: prFilter.period,
+                dateRangeStart: prFilter.dateRangeStart || undefined,
+                dateRangeEnd: prFilter.dateRangeEnd || undefined,
+                departmentId: prFilter.departmentId || undefined,
+                employeeId: prFilter.employeeId || undefined,
+                exportFormat: format === 'Excel' ? 0 : 1,
+            };
+            const res = await axios.post('/api/reports/export', body, { responseType: 'blob' });
+            const contentDisposition = res.headers['content-disposition'];
+            const match = contentDisposition?.match(/filename="?(.+?)"?$/);
+            const fileName = match?.[1] || `Performance_Report.${format === 'Excel' ? 'xlsx' : 'pdf'}`;
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            success(`${format} report downloaded successfully.`);
+        } catch (err: any) {
+            error(err?.response?.data?.message || err.message || 'Export failed.');
+        } finally {
+            setPrExporting(false);
+        }
+    };
+
+    // --- FOMS Export State ---
+    const [fomsFilter, setFomsFilter] = useState<{ dateRangeStart: string; dateRangeEnd: string; employeeId: string }>({ dateRangeStart: '', dateRangeEnd: '', employeeId: '' });
+    const [fomsExporting, setFomsExporting] = useState(false);
+    const [fomsError, setFomsError] = useState('');
+
+    const handleFomsExport = async () => {
+        if (!fomsFilter.dateRangeStart || !fomsFilter.dateRangeEnd) {
+            setFomsError('Please select a date range.');
+            return;
+        }
+        const start = new Date(fomsFilter.dateRangeStart);
+        const end = new Date(fomsFilter.dateRangeEnd);
+        if (start > end) {
+            setFomsError('Start date must be before end date.');
+            return;
+        }
+        setFomsExporting(true);
+        setFomsError('');
+        try {
+            const body: Record<string, any> = {
+                dateRangeStart: fomsFilter.dateRangeStart,
+                dateRangeEnd: fomsFilter.dateRangeEnd,
+            };
+            if (fomsFilter.employeeId) body.employeeId = fomsFilter.employeeId;
+            const res = await axios.post('/api/foms/export', body, { responseType: 'blob' });
+            const contentDisposition = res.headers['content-disposition'];
+            const match = contentDisposition?.match(/filename="?(.+?)"?$/);
+            const fileName = match?.[1] || `foms_export_${fomsFilter.dateRangeStart}_${fomsFilter.dateRangeEnd}.csv`;
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            success('FOMS export completed successfully.');
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err.message || 'FOMS export failed.';
+            setFomsError(msg);
+            error(msg);
+        } finally {
+            setFomsExporting(false);
+        }
+    };
 
     const applyTcPreset = (months: number) => {
         const end = new Date();
@@ -2547,14 +2832,14 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (tcFilter.taskStatus) params.set('TaskStatus', tcFilter.taskStatus);
             if (tcFilter.taskCategory) params.set('TaskCategory', tcFilter.taskCategory);
 
-            const res = await fetch(`/api/reporting/task-completion?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (res.status === 400) { setTcError('Invalid date range selected.'); setTcLoading(false); return; }
-            if (!res.ok) { setTcError('Failed to generate report. Please try again.'); setTcLoading(false); return; }
-
-            const data = await res.json();
+            let data;
+            try {
+                const res = await api.get(`/api/reports/task-completion?${params}`);
+                data = res.data;
+            } catch (err: any) {
+                if (err.response?.status === 400) { setTcError('Invalid date range selected.'); setTcLoading(false); return; }
+                setTcError('Failed to generate report. Please try again.'); setTcLoading(false); return;
+            }
             if (data.isSuccess && data.data) { setTcReport(data.data); setTcGeneratedAt(new Date().toLocaleString()); }
             else { setTcNoRecords(true); }
         } catch { setTcError('Failed to generate report. Please try again.'); }
@@ -2616,16 +2901,14 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
     useEffect(() => {
         const fetchOptions = async () => {
             try {
-                const res = await fetch('/api/reporting/filter-options', {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-                });
-                if (res.ok) {
-                    const data = await res.json();
+                try {
+                    const res = await api.get('/api/reports/filter-options');
+                    const data = res.data;
                     if (data.isSuccess && data.data) {
                         setDepartments(data.data.departments || []);
                         setEmployees(data.data.employees || []);
                     }
-                }
+                } catch { }
             } catch { }
         };
         fetchOptions();
@@ -2655,15 +2938,15 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (opFilter.departmentId) params.set('DepartmentId', opFilter.departmentId);
             if (opFilter.employeeId) params.set('EmployeeId', opFilter.employeeId);
 
-            const res = await fetch(`/api/reporting/operational-summary?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (res.status === 400) { setOpError('Invalid date range selected.'); setOpLoading(false); return; }
-            if (res.status === 404) { setOpNoRecords(true); setOpLoading(false); return; }
-            if (!res.ok) { setOpError('Failed to generate report. Please try again.'); setOpLoading(false); return; }
-
-            const data = await res.json();
+            let data;
+            try {
+                const res = await api.get(`/api/reports/operational-summary?${params}`);
+                data = res.data;
+            } catch (err: any) {
+                if (err.response?.status === 400) { setOpError('Invalid date range selected.'); setOpLoading(false); return; }
+                if (err.response?.status === 404) { setOpNoRecords(true); setOpLoading(false); return; }
+                setOpError('Failed to generate report. Please try again.'); setOpLoading(false); return;
+            }
             if (data.isSuccess && data.data) { setOpReport(data.data); setOpGeneratedAt(new Date().toLocaleString()); }
             else { setOpNoRecords(true); }
         } catch { setOpError('Failed to generate report. Please try again.'); }
@@ -2686,18 +2969,15 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
             if (opFilter.employeeId) params.set('EmployeeId', opFilter.employeeId);
             params.set('ReportFormat', opFilter.reportFormat);
 
-            const res = await fetch(`/api/reporting/operational-summary/download?${params}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => null);
-                error(errData?.message || 'Failed to download report.');
+            let blob;
+            try {
+                const res = await axios.get(`/api/reports/operational-summary/download?${params}`, { responseType: 'blob' });
+                blob = res.data;
+            } catch (err: any) {
+                error('Failed to download report.');
                 setOpLoading(false);
                 return;
             }
-
-            const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const ext = opFilter.reportFormat === 'EXCEL' ? 'xlsx' : 'pdf';
@@ -2713,12 +2993,386 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
         <div className="dashboard-content">
             <SubTabNav
                 tabs={[
+                    { key: 'kpi-tracking', label: 'KPI Tracking', icon: <BarChart3 size={14} /> },
+                    { key: 'performance-report', label: 'Performance Report', icon: <BarChart3 size={14} /> },
+                    { key: 'foms-export', label: 'FOMS Export', icon: <Download size={14} /> },
                     { key: 'task-completion', label: 'Task Completion Report', icon: <FileText size={14} /> },
                     { key: 'operational-summary', label: 'Operational Summary Report', icon: <BarChart3 size={14} /> },
                 ]}
                 activeTab={reportSubTab}
-                onTabChange={key => setReportSubTab(key as 'task-completion' | 'operational-summary')}
+                onTabChange={key => setReportSubTab(key as 'task-completion' | 'operational-summary' | 'kpi-tracking' | 'performance-report' | 'foms-export')}
             />
+
+            {reportSubTab === 'kpi-tracking' && (
+                <>
+                    <div className="card report-filter-card">
+                        <div className="card-header-layout">
+                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />KPI Tracking</h3>
+                        </div>
+                        <div className="report-filter-grid">
+                            <div className="field">
+                                <label>Date Range</label>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    {[
+                                        { label: '1 Month', months: 1 },
+                                        { label: '3 Months', months: 3 },
+                                        { label: '6 Months', months: 6 },
+                                        { label: '12 Months', months: 12 },
+                                    ].map(p => (
+                                        <button key={p.label}
+                                            className="btn btn-sm"
+                                            onClick={() => {
+                                                const end = new Date();
+                                                const start = new Date();
+                                                start.setMonth(start.getMonth() - p.months);
+                                                setKpiFilter((prev: any) => ({
+                                                    ...prev,
+                                                    dateRangeStart: start.toISOString().split('T')[0],
+                                                    dateRangeEnd: end.toISOString().split('T')[0],
+                                                }));
+                                            }}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="field">
+                                <label>Employee</label>
+                                <select value={kpiFilter.employeeId}
+                                    onChange={e => setKpiFilter((prev: any) => ({ ...prev, employeeId: e.target.value }))}
+                                >
+                                    <option value="">All Employees</option>
+                                    {teamMembers.map(m => (
+                                        <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="field" style={{ alignSelf: 'flex-end' }}>
+                                <button className="btn btn-primary" onClick={handleKpiGenerate} disabled={kpiLoading}>
+                                    {kpiLoading ? <><Loader2 size={14} className="spin" /> Generating...</> : <>Generate Report</>}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {kpiError && (
+                        <div className="card" style={{ marginTop: 16 }}>
+                            <div className="empty-state">
+                                <AlertCircle size={22} style={{ color: 'var(--danger)' }} />
+                                <p>{kpiError}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {kpiData && !kpiError && (
+                        <>
+                            <div className="stats-row" style={{ marginTop: 16 }}>
+                                {[
+                                    { label: 'Total Completed', value: kpiData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary', subtext: 'Completed tasks' },
+                                    { label: 'On-Time', value: kpiData.totalOnTimeTasks, icon: <CheckCircle2 size={18} />, variant: 'success', subtext: `${kpiData.overallOnTimeRate}% rate` },
+                                    { label: 'Late', value: kpiData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger', subtext: `${kpiData.overallLateRate}% rate` },
+                                ].map(s => (
+                                    <StatCard key={s.label} icon={s.icon} variant={s.variant as any} label={s.label} value={s.value} subtext={s.subtext} />
+                                ))}
+                            </div>
+
+                            <div className="card" style={{ marginTop: 16 }}>
+                                <div className="card-header-layout">
+                                    <h3>Per-Employee Breakdown</h3>
+                                    {kpiData.employeeKpis && <span className="badge badge-blue">{kpiData.employeeKpis.length} employees</span>}
+                                </div>
+                                {kpiData.employeeKpis && kpiData.employeeKpis.length > 0 ? (
+                                    <table className="table-card-data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Employee</th>
+                                                <th>Department</th>
+                                                <th style={{ textAlign: 'center' }}>Completed</th>
+                                                <th style={{ textAlign: 'center' }}>On-Time</th>
+                                                <th style={{ textAlign: 'center' }}>Late</th>
+                                                <th style={{ textAlign: 'center' }}>On-Time Rate</th>
+                                                <th style={{ textAlign: 'center' }}>Late Rate</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {kpiData.employeeKpis.map((kpi: any) => {
+                                                const onTimeRate = kpi.onTimeRate ?? 0;
+                                                const isGood = onTimeRate >= 80;
+                                                const isWarning = onTimeRate >= 50 && onTimeRate < 80;
+                                                return (
+                                                    <tr key={kpi.employeeId} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{kpi.employeeName}</td>
+                                                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 13 }}>{kpi.department}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{kpi.totalCompleted}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--status-active)' }}>{kpi.onTimeCount}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--status-failed)' }}>{kpi.lateCount}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                            <span style={{
+                                                                display: 'inline-block', padding: '2px 10px', borderRadius: 999,
+                                                                fontSize: 12, fontWeight: 700,
+                                                                background: isGood ? 'rgba(5,205,153,0.12)' : isWarning ? 'rgba(255,181,71,0.12)' : 'rgba(238,93,80,0.12)',
+                                                                color: isGood ? 'var(--status-active)' : isWarning ? 'var(--status-pending)' : 'var(--status-failed)',
+                                                            }}>
+                                                                {onTimeRate}%
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{kpi.lateRate}%</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="empty-state" style={{ padding: '32px 0' }}>
+                                        <CheckCircle2 size={22} />
+                                        <p>No completed tasks found for the selected criteria.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
+
+            {reportSubTab === 'performance-report' && (
+                <>
+                    <div className="card report-filter-card">
+                        <div className="card-header-layout">
+                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Performance Report</h3>
+                        </div>
+                        <div className="report-filter-grid">
+                            <div className="field">
+                                <label>Date Range *</label>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    {[
+                                        { label: 'Last 7 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 7); return { s, e }; } },
+                                        { label: 'Last 30 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 30); return { s, e }; } },
+                                        { label: 'Last 90 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 90); return { s, e }; } },
+                                    ].map(p => (
+                                        <button key={p.label} className="btn btn-sm" onClick={() => {
+                                            const { s, e } = p.fn();
+                                            setPrFilter(prev => ({ ...prev, dateRangeStart: s.toISOString().split('T')[0], dateRangeEnd: e.toISOString().split('T')[0] }));
+                                        }}>{p.label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="field">
+                                <label>Period *</label>
+                                <select value={prFilter.period} onChange={e => setPrFilter(prev => ({ ...prev, period: e.target.value as 'Weekly' | 'Monthly' }))}>
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <div className="field">
+                                <label>Employee</label>
+                                <select value={prFilter.employeeId} onChange={e => setPrFilter(prev => ({ ...prev, employeeId: e.target.value }))}>
+                                    <option value="">All Employees</option>
+                                    {teamMembers.map(m => (
+                                        <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="field">
+                                <label>Department</label>
+                                <select value={prFilter.departmentId} onChange={e => setPrFilter(prev => ({ ...prev, departmentId: e.target.value }))}>
+                                    <option value="">All Departments</option>
+                                </select>
+                            </div>
+                            <div className="field" style={{ alignSelf: 'flex-end' }}>
+                                <button className="btn btn-primary" onClick={handlePrGenerate} disabled={prLoading}>
+                                    {prLoading ? <><Loader2 size={14} className="spin" /> Generating...</> : <>Generate Report</>}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {prError && (
+                        <div className="card" style={{ marginTop: 16 }}>
+                            <div className="empty-state">
+                                <AlertCircle size={22} style={{ color: 'var(--danger)' }} />
+                                <p>{prError}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {prData && !prError && (
+                        <>
+                            <div className="stats-row" style={{ marginTop: 16 }}>
+                                {[
+                                    { label: 'Total Completed', value: prData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary' as const, subtext: 'Completed tasks' },
+                                    { label: 'On-Time', value: prData.totalCompletedTasks - prData.totalLateTasks, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: `${prData.overallOnTimeRate}% rate` },
+                                    { label: 'Late', value: prData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger' as const, subtext: `${prData.overallLateRate}% rate` },
+                                ].map(s => (
+                                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                                ))}
+                            </div>
+
+                            <div className="card" style={{ marginTop: 16 }}>
+                                <div className="card-header-layout">
+                                    <h3>Employee Breakdown ({prData.period})</h3>
+                                    <span className="badge badge-blue">{prData.employeeBreakdown?.length || 0} employees</span>
+                                </div>
+                                {prData.employeeBreakdown && prData.employeeBreakdown.length > 0 ? (
+                                    <table className="table-card-data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Employee</th>
+                                                <th>Department</th>
+                                                <th>Role</th>
+                                                <th style={{ textAlign: 'center' }}>Completed</th>
+                                                <th style={{ textAlign: 'center' }}>On-Time</th>
+                                                <th style={{ textAlign: 'center' }}>Late</th>
+                                                <th style={{ textAlign: 'center' }}>On-Time Rate</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {prData.employeeBreakdown.map((kpi: any) => {
+                                                const rate = kpi.onTimeRate ?? 0;
+                                                return (
+                                                    <tr key={kpi.employeeId} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{kpi.employeeName}</td>
+                                                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: 13 }}>{kpi.department}</td>
+                                                        <td style={{ padding: '10px 12px', fontSize: 13 }}>{kpi.role}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{kpi.totalCompleted}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--status-active)' }}>{kpi.onTimeCount}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--status-failed)' }}>{kpi.lateCount}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                            <span style={{
+                                                                display: 'inline-block', padding: '2px 10px', borderRadius: 999,
+                                                                fontSize: 12, fontWeight: 700,
+                                                                background: rate >= 80 ? 'rgba(5,205,153,0.12)' : rate >= 50 ? 'rgba(255,181,71,0.12)' : 'rgba(238,93,80,0.12)',
+                                                                color: rate >= 80 ? 'var(--status-active)' : rate >= 50 ? 'var(--status-pending)' : 'var(--status-failed)',
+                                                            }}>{rate}%</span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="empty-state" style={{ padding: '32px 0' }}>
+                                        <CheckCircle2 size={22} />
+                                        <p>No completed tasks found for the selected criteria.</p>
+                                    </div>
+                                )}
+                                <div className="report-export-row">
+                                    <span className="report-generated-badge">
+                                        <Calendar size={12} /> {prData.dateRangeStart?.split('T')[0]} to {prData.dateRangeEnd?.split('T')[0]}
+                                    </span>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn btn-primary" onClick={() => handlePrExport('Excel')} disabled={prExporting}>
+                                            {prExporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />} Export Excel
+                                        </button>
+                                        <button className="btn btn-primary" onClick={() => handlePrExport('Pdf')} disabled={prExporting}>
+                                            {prExporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />} Export PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
+
+            {reportSubTab === 'foms-export' && (
+                <>
+                    <div className="card report-filter-card">
+                        <div className="card-header-layout">
+                            <h3><Download size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />FOMS Export</h3>
+                            <span className="badge badge-blue">CSV</span>
+                        </div>
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, padding: '0 24px' }}>
+                            Export completed task records for the Field Operations Management System.
+                            Only reviewed and completed tasks are included.
+                        </p>
+                        <div className="report-filter-grid">
+                            <div className="field">
+                                <label>Date Range *</label>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    {[
+                                        { label: 'Last 7 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 7); return { s, e }; } },
+                                        { label: 'Last 30 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 30); return { s, e }; } },
+                                        { label: 'Last 90 Days', fn: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 90); return { s, e }; } },
+                                    ].map(p => (
+                                        <button key={p.label} className="btn btn-sm" onClick={() => {
+                                            const { s, e } = p.fn();
+                                            setFomsFilter(prev => ({ ...prev, dateRangeStart: s.toISOString().split('T')[0], dateRangeEnd: e.toISOString().split('T')[0] }));
+                                        }}>{p.label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="field">
+                                <label>Employee</label>
+                                <select value={fomsFilter.employeeId} onChange={e => setFomsFilter(prev => ({ ...prev, employeeId: e.target.value }))}>
+                                    <option value="">All Employees</option>
+                                    {teamMembers.map(m => (
+                                        <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="field" style={{ alignSelf: 'flex-end' }}>
+                                <button className="btn btn-primary" onClick={handleFomsExport} disabled={fomsExporting}>
+                                    {fomsExporting ? <><Loader2 size={14} className="spin" /> Exporting...</> : <><Download size={14} /> Export to CSV</>}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {fomsError && (
+                        <div className="card" style={{ marginTop: 16 }}>
+                            <div className="empty-state">
+                                <AlertCircle size={22} style={{ color: 'var(--danger)' }} />
+                                <p>{fomsError}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="card" style={{ marginTop: 16 }}>
+                        <div className="card-header-layout">
+                            <h3>Export Format</h3>
+                        </div>
+                        <div style={{ padding: '16px 24px' }}>
+                            <table style={{ width: '100%', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Column</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Description</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left' }}>Source</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[
+                                        ['TaskReferenceNumber', 'Task identifier', 'Task title (truncated)'],
+                                        ['Title', 'Full task title', 'Task title'],
+                                        ['Status', 'Task status', 'Always "Completed"'],
+                                        ['Priority', 'Priority level', 'Task priority level'],
+                                        ['Classification', 'Task classification', 'Task classification'],
+                                        ['AssignedEmployee', 'Assigned employee(s)', 'Task assignments'],
+                                        ['Department', 'Department name', 'Assigned department'],
+                                        ['Deadline', 'Original deadline', 'Task deadline'],
+                                        ['RevisedDeadline', 'Revised deadline (if any)', 'Revised deadline'],
+                                        ['CreatedAt', 'Task creation timestamp', 'Created timestamp'],
+                                        ['CompletedAt', 'Completion timestamp', 'Updated timestamp'],
+                                        ['DurationHours', 'Total duration in hours', 'CompletedAt - CreatedAt'],
+                                        ['IsOnTime', 'Whether completed on time', 'CompletedAt <= Deadline'],
+                                        ['OvertimeHours', 'Overtime hours if late', 'CompletedAt - Deadline (if late)'],
+                                        ['IsSLALocked', 'SLA enforcement flag', 'SLA lock status'],
+                                        ['ReviewRemarks', 'Reviewer remarks', 'Review remarks'],
+                                        ['PushBackComment', 'Push-back comment', 'Push back comment'],
+                                    ].map(([col, desc, src]) => (
+                                        <tr key={col} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '8px 12px', fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{col}</td>
+                                            <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{desc}</td>
+                                            <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>{src}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {reportSubTab === 'task-completion' && (
                 <>
@@ -3066,10 +3720,9 @@ function ProfileTab() {
     useEffect(() => {
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${t}` },
-        })
-            .then(res => res.ok ? res.json() : null)
+        api.get('/api/Auth/me')
+            .then(res => res.data)
+            .catch(() => null)
             .then(resJson => {
                 if (!resJson || !resJson.isSuccess || !resJson.data) return;
                 const data = resJson.data;
@@ -3098,11 +3751,6 @@ function ProfileTab() {
             })
             .catch(() => { });
     }, []);
-
-    const authHeader = () => ({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('authToken')}`,
-    });
 
     // -- "Save Changes" clicked: validate first, then open gate ---------------
     const requestSave = () => {
@@ -3139,15 +3787,11 @@ function ProfileTab() {
         setGateLoading(true);
         setGateError('');
         try {
-            const verifyRes = await fetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: authHeader(),
-                body: JSON.stringify({
-                    employeeID: employeeId,
-                    password: gatePassword,
-                }),
+            const verifyRes = await api.post('/api/Auth/verify-password', {
+                employeeID: employeeId,
+                password: gatePassword,
             });
-            const verifyData = await verifyRes.json().catch(() => ({}));
+            const verifyData = verifyRes.data;
             if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
             setPasswordGate(false);
             setGatePassword('');
@@ -3163,22 +3807,13 @@ function ProfileTab() {
     const performSave = async () => {
         setProfileSaving(true);
         try {
-            const token = localStorage.getItem('authToken') ?? '';
             const fd = new FormData();
             fd.append('firstName', profileForm.firstName.trim());
             fd.append('middleName', profileForm.middleName.trim());
             fd.append('lastName', profileForm.lastName.trim());
             fd.append('contactNumber', profileForm.contactNumber.trim());
             fd.append('email', profileForm.email.trim());
-            const res = await fetch('/api/profile/update-profile', {
-                method: 'PUT',
-                headers: { Authorization: `Bearer ${token}` },
-                body: fd,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Profile update failed.');
-            }
+            await api.uploadPut('/api/Profile/update-profile', fd);
             localStorage.setItem('firstName', profileForm.firstName.trim());
             localStorage.setItem('middleName', profileForm.middleName.trim());
             localStorage.setItem('lastName', profileForm.lastName.trim());
@@ -3226,19 +3861,11 @@ function ProfileTab() {
 
     const handlePwSave = async () => {
         if (!pwForm.current) { setPwError('Current password is required.'); return; }
-        if (pwForm.next.length < 6) { setPwError('New password must be at least 6 characters.'); return; }
+        if (pwForm.next.length < 15) { setPwError('New password must be at least 15 characters.'); return; }
         if (pwForm.next !== pwForm.confirm) { setPwError('Passwords do not match.'); return; }
         setPwSaving(true);
         try {
-            const res = await fetch('/api/auth/change-password', {
-                method: 'PATCH',
-                headers: authHeader(),
-                body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Password update failed.');
-            }
+            await api.post('/api/Auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next, confirmPassword: pwForm.confirm });
             success('Password changed successfully!');
             setEditingPassword(false);
             setPwForm({ current: '', next: '', confirm: '' });
@@ -3811,6 +4438,12 @@ const ReopenTab: React.FC<{
 }> = ({ requests, onReview }) => {
     const pending = requests.filter(r => r.status === 'Pending');
     const history = requests.filter(r => r.status !== 'Pending');
+    const [pendingPage, setPendingPage] = useState(1);
+    const [historyPage, setHistoryPage] = useState(1);
+    const pendingTotalPages = Math.max(1, Math.ceil(pending.length / PER_PAGE));
+    const historyTotalPages = Math.max(1, Math.ceil(history.length / PER_PAGE));
+    const pagedPending = pending.slice((pendingPage - 1) * PER_PAGE, pendingPage * PER_PAGE);
+    const pagedHistory = history.slice((historyPage - 1) * PER_PAGE, historyPage * PER_PAGE);
 
     return (
         <div className="dashboard-content">
@@ -3838,8 +4471,9 @@ const ReopenTab: React.FC<{
                     emptyMessage="No pending reopen requests."
                     emptyIcon={<RotateCcw size={24} />}
                     totalRecords={pending.length}
+                    currentPage={pendingPage} totalPages={pendingTotalPages} onPageChange={setPendingPage}
                 >
-                    {pending.map(r => (
+                    {pagedPending.map(r => (
                         <tr key={r.requestId}>
                             <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.referenceNumber || r.requestId.slice(0, 8).toUpperCase()}</td>
                             <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.taskTitle}</div></td>
@@ -3864,8 +4498,9 @@ const ReopenTab: React.FC<{
                         headers={['REQUEST ID', 'TASK', 'EMPLOYEE', 'DECISION', 'REMARKS', 'REVIEWED']}
                         loading={false}
                         totalRecords={history.length}
+                        currentPage={historyPage} totalPages={historyTotalPages} onPageChange={setHistoryPage}
                     >
-                        {history.map(r => (
+                        {pagedHistory.map(r => (
                             <tr key={r.requestId}>
                                 <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.referenceNumber || r.requestId.slice(0, 8).toUpperCase()}</td>
                                 <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.taskTitle}</div></td>
@@ -3915,12 +4550,12 @@ const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({ duplicate
                 <tbody>
                     {duplicates.map((d, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>{d.existingTaskTitle}</td>
+                            <td style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>{d.title}</td>
                             <td style={{ padding: '10px 8px', fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                                {d.existingTaskId.length > 8 ? d.existingTaskId.slice(0, 8) + '...' : d.existingTaskId}
+                                {d.taskId.length > 8 ? d.taskId.slice(0, 8) + '...' : d.taskId}
                             </td>
                             <td style={{ padding: '10px 8px' }}>
-                                <span className={statusBadgeClass(d.existingTaskStatus)} style={{ fontSize: 11 }}>{d.existingTaskStatus}</span>
+                                <span className={statusBadgeClass(d.status)} style={{ fontSize: 11 }}>{d.status}</span>
                             </td>
                             <td style={{ padding: '10px 8px', fontWeight: 700, color: d.similarityPercentage >= 90 ? 'var(--status-failed)' : d.similarityPercentage >= 80 ? '#c05c00' : d.similarityPercentage >= 70 ? '#9a6e00' : 'var(--text-primary)' }}>
                                 {d.similarityPercentage}%
@@ -3977,8 +4612,6 @@ export default function OpsAdminDashboard() {
     const [overrideTask, setOverrideTask] = useState<Task | null>(null);
     const [reviewTask, setReviewTask] = useState<Task | null>(null);
 
-    const token = () => localStorage.getItem('authToken');
-
     // -- Fetch Tasks --
     const [allTasks, setAllTasks] = useState<Task[]>([]);
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
@@ -4019,11 +4652,8 @@ export default function OpsAdminDashboard() {
                 const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
                 params.append('status', statusMap[dashboardFilters.taskStatus] || dashboardFilters.taskStatus);
             }
-            const res = await fetch(`/api/Dashboard/metrics?${params}`, {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error('Failed to load dashboard data');
-            const body = await res.json();
+            const res = await api.get(`/api/Dashboard/metrics?${params}`);
+            const body = res.data;
             if (!body.isSuccess) {
                 setDashboardError(body.message || 'No workload data available.');
                 setDashboardData(null);
@@ -4042,17 +4672,17 @@ export default function OpsAdminDashboard() {
     const fetchDashboardFilterOptions = useCallback(async () => {
         try {
             const [empRes, deptRes] = await Promise.all([
-                fetch('/api/Dashboard/employee-availability', { headers: { Authorization: `Bearer ${token()}` } }),
-                fetch('/api/departments', { headers: { Authorization: `Bearer ${token()}` } }),
+                api.get('/api/Dashboard/employee-availability').catch(() => ({ data: null })),
+                api.get('/api/Department').catch(() => ({ data: null })),
             ]);
-            if (empRes.ok) {
-                const json = await empRes.json();
-                const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+            if (empRes.data) {
+                const json = empRes.data;
+                const list: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardEmployees(list.map((e: any) => ({ employeeId: e.userId ?? e.UserId ?? e.employeeId, employeeName: e.fullName ?? e.FullName ?? e.employeeName })));
             }
-            if (deptRes.ok) {
-                const json = await deptRes.json();
-                const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+            if (deptRes.data) {
+                const json = deptRes.data;
+                const depts: any[] = Array.isArray(json) ? json : (Array.isArray(json.data?.items) ? json.data.items : (Array.isArray(json.data) ? json.data : []));
                 setDashboardDepartments(depts.map((d: any) => ({ departmentId: d.id ?? d.departmentId, departmentName: d.name ?? d.departmentName })));
             }
         } catch { /* non-fatal */ }
@@ -4070,21 +4700,21 @@ export default function OpsAdminDashboard() {
     const [activityLogTotalPages, setActivityLogTotalPages] = useState(1);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
 
-    const fetchActivityLogs = (page: number) => {
-        const t = token();
-        if (!t) return;
-        fetch(`/api/activity-logs/my-logs?page=${page}&pageSize=${ACTIVITY_LOG_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${t}` }, cache: 'no-store' })
-            .then(res => { if (!res.ok) return null; return res.json(); })
-            .then(data => {
-                if (data && Array.isArray(data.data)) {
-                    setActivityLogs(data.data);
-                    setActivityLogPage(data.pageNumber || page);
-                    setActivityLogTotalPages(data.totalPages || 1);
-                } else {
-                    setActivityLogs([]);
-                }
-            })
-            .catch(() => setActivityLogs([]));
+    const fetchActivityLogs = async (page: number) => {
+        try {
+            const res = await api.get('/api/audit-logs/my', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setActivityLogs(d.items);
+                setActivityLogPage(d.pageNumber || page);
+                setActivityLogTotalPages(d.totalPages || 1);
+            } else {
+                setActivityLogs([]);
+            }
+        } catch {
+            setActivityLogs([]);
+        }
     };
 
     // -- Update fetchTasks --
@@ -4092,12 +4722,9 @@ export default function OpsAdminDashboard() {
         setLoadingTasks(true);
         setDashboardLoading(true);
         try {
-            const res = await fetch('/api/task', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const jsonRes = await res.json();
-            const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.data) ? jsonRes.data.data : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
+            const res = await api.get('/api/Task?pageNumber=1&pageSize=200');
+            const jsonRes = res.data;
+            const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -4134,18 +4761,8 @@ export default function OpsAdminDashboard() {
 
     const fetchBinRecords = async () => {
         try {
-            const res = await fetch(
-                `/api/task/bin-records/${employeeId}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token()}`,
-                    },
-                }
-            );
-
-            if (!res.ok) throw new Error();
-
-            const data = await res.json();
+            const res = await api.get(`/api/Task/bin-records/${employeeId}`);
+            const data = res.data;
 
             setBinTasks(data);
         } catch {
@@ -4156,14 +4773,7 @@ export default function OpsAdminDashboard() {
     // -- Restore task --
     const handleRestoreTask = async (taskId: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/restore-task`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to restore task.');
-            }
+            await api.patch(`/api/Task/${taskId}/restore-task`);
             setAllTasks(prev => prev.map(t =>
                 t.taskId === taskId ? { ...t, deleted: false } : t
             ));
@@ -4190,20 +4800,7 @@ export default function OpsAdminDashboard() {
             onConfirm: async () => {
                 setConfirmModal(CONFIRM_CLOSED);
                 try {
-                    const res = await fetch(
-                        `/api/task/empty-bin/${employeeId}`,
-                        {
-                            method: 'DELETE',
-                            headers: {
-                                Authorization: `Bearer ${token()}`,
-                            },
-                        }
-                    );
-
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to empty bin.');
-                    }
+                    await api.delete(`/api/Task/empty-bin/${employeeId}`);
 
                     setBinTasks([]);
                     await fetchTasks();
@@ -4218,18 +4815,15 @@ export default function OpsAdminDashboard() {
     // -- Fetch Team Members (for assignee dropdown) --
     const fetchTeamMembers = async () => {
         try {
-            const res = await fetch('/api/task/assignable-users?pageNumber=1&pageSize=100', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const body = await res.json();
+            const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=100');
+            const body = res.data;
             const rawList: any[] = Array.isArray(body) ? body : (Array.isArray(body?.data?.data) ? body.data.data : (Array.isArray(body?.data) ? body.data : []));
 
             setTeamMembers(rawList.map(e => ({
                 accountId: e.userId ?? e.UserId ?? e.id,
                 employeeName: (e.fullName ?? e.FullName ?? e.employeeName ?? e.EmployeeName ?? '').trim(),
                 role: e.role ?? '',
-                presenceStatus: 'Active',
+                presenceStatus: e.availabilityStatus ?? e.AvailabilityStatus ?? 'Active',
             })));
         } catch {
             setTeamMembers([]);
@@ -4239,11 +4833,8 @@ export default function OpsAdminDashboard() {
     const fetchReopenRequests = async () => {
         setReopenLoading(true);
         try {
-            const res = await fetch('/api/task/reopen-requests', {
-                headers: { Authorization: `Bearer ${token()}` },
-            });
-            if (!res.ok) throw new Error();
-            const data: any[] = await res.json();
+            const res = await api.get('/api/Task/reopen-requests');
+            const data: any[] = res.data;
             setReopenRequests(data.map((r: any) => ({
                 requestId: r.requestId,
                 referenceNumber: r.referenceNumber,
@@ -4274,10 +4865,9 @@ export default function OpsAdminDashboard() {
         fetchDashboardFilterOptions();
         const t = localStorage.getItem('authToken');
         if (!t) return;
-        fetch('/api/auth/me', {
-            headers: { Authorization: `Bearer ${t}` },
-        })
-            .then(res => res.ok ? res.json() : null)
+        api.get('/api/Auth/me')
+            .then(res => res.data)
+            .catch(() => null)
             .then(resJson => {
                 if (!resJson || !resJson.isSuccess || !resJson.data) return;
                 const data = resJson.data;
@@ -4302,38 +4892,28 @@ export default function OpsAdminDashboard() {
     }, []);
 
     // -- Create Task --
-    const handleNewTask = async (data: CreateTaskDTO) => {
+    const handleNewTask = async (data: CreateTaskDTO, skipDuplicateCheck = false) => {
         try {
-            const res = await fetch('/api/task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify(data),
-            });
-            if (res.status === 409) {
-                const errBody = await res.json().catch(() => ({}));
-                if (errBody.data && Array.isArray(errBody.data) && errBody.data.length > 0) {
-                    setDuplicateWarnings(errBody.data);
+            // Check for duplicates before saving (requirement 1, 7)
+            if (!skipDuplicateCheck) {
+                const checkRes = await api.post('/api/Duplicate/check', { title: data.title, description: data.description });
+                const checkJson = checkRes.data;
+                if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
+                    setDuplicateWarnings(checkJson.data.matches);
                     setPendingTaskData(data);
-                    return;
+                    return; // Show warning instead of saving (requirement 5, 6)
                 }
-                throw new Error(errBody.message || errBody.Message || 'Potential duplicate task detected.');
             }
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to create task.');
-            }
-            const created = await res.json();
+
+            const res = await api.post('/api/Task', data);
+            const created = res.data;
             const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
 
             // Upload supporting document if provided
             if (taskId && pendingFile) {
                 const fileFormData = new FormData();
                 fileFormData.append('file', pendingFile);
-                await fetch(`/api/tasks/${taskId}/attachments`, {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token()}` },
-                    body: fileFormData,
-                }).catch(() => { });
+                await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData).catch(() => { });
                 setPendingFile(null);
             }
 
@@ -4343,22 +4923,14 @@ export default function OpsAdminDashboard() {
             success('Task created successfully.');
         } catch (err: any) {
             console.error('Create task error:', err);
-            error(err.message || err.Message || 'Failed to create task.');
+            error(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to create task.');
         }
     };
 
     // -- Update Task --
     const handleEditTask = async (taskId: string, data: UpdateTaskDTO) => {
         try {
-            const res = await fetch(`/api/task/${taskId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify(data),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || err.Message || 'Failed to update task.');
-            }
+            await api.put(`/api/Task/${taskId}`, data);
             await fetchTasks();
             await fetchDashboardData();
             setEditingTask(null);
@@ -4374,15 +4946,7 @@ export default function OpsAdminDashboard() {
         try {
             const formData = new FormData();
             formData.append('Reason', 'Admin reopen request');
-            const res = await fetch(`/api/task/${taskId}/reopen-request`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token()}` },
-                body: formData,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to reopen task.');
-            }
+            await api.upload(`/api/Task/${taskId}/reopen-request`, formData);
             await fetchTasks();
             await fetchDashboardData();
             await fetchReopenRequests();
@@ -4401,15 +4965,7 @@ export default function OpsAdminDashboard() {
         const task = tasks.find(t => t.taskId === taskId);
         if (!task) { error('Task not found.'); return; }
         try {
-            const res = await fetch(`/api/task/${taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                body: JSON.stringify({ newStatus: STATUS_TO_BACKEND[newStatus] || newStatus }),
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to update task status.');
-            }
+            await api.patch(`/api/Task/${taskId}/status`, { newStatus: STATUS_TO_BACKEND[newStatus] || newStatus });
             await fetchTasks();
             await fetchDashboardData();
             setViewingTask(null);
@@ -4422,21 +4978,10 @@ export default function OpsAdminDashboard() {
     // -- Task Review (Approve & Close / Return for Rework) --
     const handleReviewTask = async (taskId: string, adminDecision: 'Approve & Close' | 'Return for Rework', reviewerRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    isApproved: adminDecision === 'Approve & Close',
-                    remarks: reviewerRemarks || undefined,
-                }),
+            await api.patch(`/api/Task/${taskId}/review`, {
+                isApproved: adminDecision === 'Approve & Close',
+                remarks: reviewerRemarks || undefined,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to process review decision.');
-            }
             await fetchTasks();
             await fetchDashboardData();
             success(
@@ -4452,23 +4997,12 @@ export default function OpsAdminDashboard() {
     // -- Admin Override (completed task) --
     const handleAdminOverride = async (taskId: string, reason: string, remarks: string, requestedStatus: string) => {
         try {
-            const res = await fetch(`/api/task/${taskId}/override`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    OverrideReason: reason,
-                    AdminRemarks: remarks,
-                    ApprovalConfirmation: true,
-                    RequestedStatus: requestedStatus,
-                }),
+            await api.post(`/api/Task/${taskId}/override`, {
+                OverrideReason: reason,
+                AdminRemarks: remarks,
+                ApprovalConfirmation: true,
+                RequestedStatus: requestedStatus,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed to process admin override.');
-            }
             await fetchTasks();
             setOverrideTask(null);
             success('Administrator override applied � Task reopened � Audit Log entry generated.');
@@ -4480,21 +5014,10 @@ export default function OpsAdminDashboard() {
     // -- Approve Reopen Request --
     const handleApproveReopen = async (requestId: string, adminRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/reopen-requests/${requestId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    ApprovalDecision: 'Approve',
-                    AdminRemarks: adminRemarks,
-                }),
+            await api.patch(`/api/Task/reopen-requests/${requestId}/review`, {
+                ApprovalDecision: 'Approve',
+                AdminRemarks: adminRemarks,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to approve reopen request.');
-            }
             setReopenRequests(prev => prev.map(r =>
                 r.requestId === requestId
                     ? { ...r, status: 'Approved', adminRemarks, reviewedAt: new Date().toISOString() }
@@ -4512,21 +5035,10 @@ export default function OpsAdminDashboard() {
     // -- Reject Reopen Request --
     const handleRejectReopen = async (requestId: string, adminRemarks: string) => {
         try {
-            const res = await fetch(`/api/task/reopen-requests/${requestId}/review`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token()}`,
-                },
-                body: JSON.stringify({
-                    ApprovalDecision: 'Reject',
-                    AdminRemarks: adminRemarks,
-                }),
+            await api.patch(`/api/Task/reopen-requests/${requestId}/review`, {
+                ApprovalDecision: 'Reject',
+                AdminRemarks: adminRemarks,
             });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error((err as any).message || 'Failed to reject reopen request.');
-            }
             setReopenRequests(prev => prev.map(r =>
                 r.requestId === requestId
                     ? { ...r, status: 'Rejected', adminRemarks, reviewedAt: new Date().toISOString() }
@@ -4551,14 +5063,7 @@ export default function OpsAdminDashboard() {
             onConfirm: async () => {
                 setConfirmModal(CONFIRM_CLOSED);
                 try {
-                    const res = await fetch(`/api/task/${taskId}/delete-task`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token()}` },
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.message || 'Failed to delete task.');
-                    }
+                    await api.delete(`/api/Task/${taskId}/delete-task`);
 
                     // Track locally so refetches don't resurrect the task
                     setDeletedTaskIds(prev => new Set(prev).add(taskId));
@@ -4586,13 +5091,7 @@ export default function OpsAdminDashboard() {
         const token = localStorage.getItem('authToken');
 
         if (token) {
-            await fetch('/api/auth/logout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            }).catch(() => { }); // non-fatal � clear localStorage regardless
+            await api.post('/api/Auth/logout', {}).catch(() => { }); // non-fatal � clear localStorage regardless
         }
 
         ['employeeId', 'refreshToken', 'authToken', 'employeeName',
@@ -4624,27 +5123,6 @@ export default function OpsAdminDashboard() {
         const interval = setInterval(() => fetchTasks(), 30000);
         return () => clearInterval(interval);
     }, []);
-
-    // -- SignalR: Auto-refresh dashboard when task data changes --
-    useEffect(() => {
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl('/hubs/workflow')
-            .withAutomaticReconnect()
-            .build();
-
-        connection.on('DashboardDataChanged', () => {
-            fetchDashboardData();
-            fetchTasks();
-            window.dispatchEvent(new CustomEvent('opencode-notification-update'));
-        });
-
-        connection.start().then(() => {
-            const acctId = localStorage.getItem('employeeId');
-            if (acctId) connection.invoke('JoinDashboardGroup', acctId).catch(() => { });
-        }).catch(() => { });
-
-        return () => { connection.stop(); };
-    }, [fetchDashboardData]);
 
     return (
         <div className="dashboard-container">
@@ -4851,12 +5329,7 @@ export default function OpsAdminDashboard() {
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
                     onPushBack={async (id, comment) => {
                         try {
-                            const res = await fetch(`/api/task/${id}/push-back`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
-                                body: JSON.stringify({ comment }),
-                            });
-                            if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Push back failed.'); }
+                            await api.patch(`/api/Task/${id}/push-back`, { comment });
                             await fetchTasks();
                             await fetchDashboardData();
                             setDetailTask(null);
@@ -4896,7 +5369,7 @@ export default function OpsAdminDashboard() {
                         const task = pendingTaskData;
                         setDuplicateWarnings([]);
                         setPendingTaskData(null);
-                        handleNewTask(task);
+                        handleNewTask(task, true);
                     }}
                     onCancel={() => {
                         setDuplicateWarnings([]);

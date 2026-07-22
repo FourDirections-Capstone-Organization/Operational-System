@@ -425,3 +425,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Neo4j data directory (CDC / graph database persistence)
+# This folder is created by Docker bind mount when Neo4j runs.
+# It contains the graph database files and should NOT be committed to git.
+# Delete this folder manually if you want a fresh Neo4j database.
+neo4j-data/

@@ -127,6 +127,7 @@ public class AuditLogService : IAuditLogService
         var userName = user is not null
             ? $"{user.FirstName} {user.LastName}".Trim()
             : "Unknown";
+        var role = user?.Role.ToString() ?? "Unknown";
 
         await LogAsync(
             userId,
@@ -134,7 +135,7 @@ public class AuditLogService : IAuditLogService
             "AuditLog",
             null,
             ipAddress,
-            $"Manager {userName} accessed audit log",
+            $"{role} {userName} accessed audit log",
             "AuditLog");
     }
 

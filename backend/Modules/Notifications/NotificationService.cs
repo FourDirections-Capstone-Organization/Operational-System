@@ -4,6 +4,7 @@ using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.Email;
+using Backend.Modules.TaskManagement;
 using Task = System.Threading.Tasks.Task;
 
 namespace Backend.Modules.Notifications;
@@ -12,13 +13,22 @@ public class NotificationService : INotificationService
 {
     private readonly AppDbContext _db;
     private readonly IEmailService _emailService;
+    private readonly IAuditLogService _auditLogService;
     private readonly ILogger<NotificationService> _logger;
 
-    public NotificationService(AppDbContext db, IEmailService emailService, ILogger<NotificationService> logger)
+    public NotificationService(AppDbContext db, IEmailService emailService, IAuditLogService auditLogService, ILogger<NotificationService> logger)
     {
         _db = db;
         _emailService = emailService;
+        _auditLogService = auditLogService;
         _logger = logger;
+    }
+
+    private async Task AuditNotificationAsync(Guid? userId, Guid? taskId, string action, string description)
+    {
+        await _auditLogService.LogAsync(
+            userId, AuditActionType.Create, "Notification", taskId, null,
+            description, "Notifications");
     }
 
     public async Task<Notification> CreateNotificationAsync(
@@ -37,6 +47,9 @@ public class NotificationService : INotificationService
 
         _db.Notifications.Add(notification);
         await _db.SaveChangesAsync();
+
+        await AuditNotificationAsync(recipientId, taskId, "created",
+            $"Notification sent to user {recipientId}: {title}");
 
         return notification;
     }
@@ -127,6 +140,9 @@ public class NotificationService : INotificationService
         notification.IsRead = true;
         await _db.SaveChangesAsync();
 
+        await AuditNotificationAsync(recipientId, notification.RelatedTaskId, "read",
+            $"Notification {notificationId} marked as read by user {recipientId}");
+
         return ApiResponseDTO<bool>.Success(true);
     }
 
@@ -142,6 +158,9 @@ public class NotificationService : INotificationService
         }
 
         await _db.SaveChangesAsync();
+
+        await AuditNotificationAsync(recipientId, null, "read-all",
+            $"All notifications marked as read by user {recipientId} ({unreadNotifications.Count} notifications)");
 
         return ApiResponseDTO<bool>.Success(true, "All notifications marked as read");
     }
