@@ -73,7 +73,7 @@ services:
       NEO4J_dbms_memory_heap_max__size: 1g
       NEO4J_dbms_default__listen__address: 0.0.0.0
     volumes:
-      - ./neo4j-data:/data
+      - neo4j-data:/data
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u neo4j -p starslab! 'RETURN 1'"]
       interval: 15s
@@ -180,3 +180,4 @@ services:
 volumes:
   pgdata:
   kafka-data:
+  neo4j-data:
