@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
@@ -36,7 +36,7 @@ import {
 import './OpEmployee_Dashboard.css';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import { useToast } from '../../components/Toast/Toast';
-import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import GlobalHeader, { NotificationItem } from '../../components/GlobalHeader/GlobalHeader';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import StatusCard from '../../components/StatusCard/StatusCard';
 
@@ -1432,6 +1432,47 @@ export default function EmployeeDashboard() {
         accountStatus: 'Active',
     });
 
+    // -- Notifications --
+    const [headerNotifications, setHeaderNotifications] = useState<NotificationItem[]>([]);
+
+    const mapToHeaderNotification = useCallback((n: any): NotificationItem => {
+        const typeLabels: Record<string, NotificationItem['type']> = {
+            TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
+            TaskCancelled: 'system', TaskCompleted: 'success',
+        };
+        const type = typeof n.type === 'number' ? ['TaskAssigned','TaskUpdated','TaskOverdue','DeadlineWarning','PushBack','TaskCancelled','TaskResumed','TaskOnHold','TaskCompleted','TemplateTaskUnassigned'][n.type] || 'Unknown' : n.type || '';
+        const createdAt = n.createdAt ?? '';
+        const createdDate = new Date(createdAt);
+        const now = new Date();
+        const isToday = createdDate.toDateString() === now.toDateString();
+        const timeStr = createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return {
+            id: String(n.id ?? n.notificationId ?? ''),
+            title: n.message ?? n.title ?? '',
+            description: n.description ?? '',
+            timestamp: timeStr,
+            date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: n.isRead ?? false,
+            type: typeLabels[type] || 'info',
+            category: type.toLowerCase(),
+            isToday,
+            source: 'System',
+        };
+    }, []);
+
+    const fetchHeaderNotifications = useCallback(async () => {
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setHeaderNotifications(d.items.map(mapToHeaderNotification));
+            }
+        } catch { /* fallback to dummy */ }
+    }, [mapToHeaderNotification]);
+
+    useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
+
     // -- Activity Logs --
     const [activityLogs, setActivityLogs] = useState<any[]>([]);
     const [activityLogPage, setActivityLogPage] = useState(1);
@@ -1585,6 +1626,7 @@ export default function EmployeeDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: 'Employee' }, { label: pageTitles[activeTab] }]}
+                    notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
                     profile={{
                         name: user.fullName || 'Employee',
                         role: toDisplayRole(user.role) || 'Employee',

@@ -15,7 +15,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: nowrap;
 }
 
 /* Mobile hamburger — toggles the off-canvas Sidebar drawer.
@@ -52,6 +52,10 @@
   line-height: 1.3;
   color: var(--navy, #1B254B);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 /* Right Side Controls */
@@ -59,6 +63,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 /* Icon Buttons (Notification Bell) */
@@ -855,6 +860,9 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  margin-right: auto;
 }
 
 .header-breadcrumb {

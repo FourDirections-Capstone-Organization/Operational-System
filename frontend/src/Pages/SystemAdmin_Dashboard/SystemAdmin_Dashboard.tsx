@@ -38,6 +38,7 @@ import {
     GitBranch,
     Bell,
     Megaphone,
+    Lightbulb,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
@@ -2066,15 +2067,38 @@ export default function Dashboard() {
     const [showNewTask, setShowNewTask] = useState(false);
     const [tmDetailTask, setTmDetailTask] = useState<TaskViewTask | null>(null);
     const [tmEditingTask, setTmEditingTask] = useState<TaskViewTask | null>(null);
-    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+    interface WorkloadInfo {
+        employeeName: string;
+        accountId: string;
+        availabilityStatus: string;
+        isAvailable: boolean;
+        workload: number;
+        role: string;
+        isRecommended: boolean;
+        recommendationReason: string;
+    }
+
+    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [] as string[], supportingEvidenceUrl: '' });
     const [newTaskErrors, setNewTaskErrors] = useState<Record<string, string>>({});
     const [newTaskSubmitting, setNewTaskSubmitting] = useState(false);
     const [newTaskApiError, setNewTaskApiError] = useState('');
-    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [] as string[], supportingEvidenceUrl: '' });
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editApiError, setEditApiError] = useState('');
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+    const [newTaskEligibleEmployees, setNewTaskEligibleEmployees] = useState<WorkloadInfo[]>([]);
+    const [editEligibleEmployees, setEditEligibleEmployees] = useState<WorkloadInfo[]>([]);
+    const [newTaskRecommendation, setNewTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
+    const [editTaskRecommendation, setEditTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
+    const [newTaskSingleSearch, setNewTaskSingleSearch] = useState('');
+    const [newTaskTeamSearch, setNewTaskTeamSearch] = useState('');
+    const [newTaskSupportingEvidence, setNewTaskSupportingEvidence] = useState<File | null>(null);
+    const newTaskFileRef = useRef<HTMLInputElement>(null);
+    const [editTaskSingleSearch, setEditTaskSingleSearch] = useState('');
+    const [editTaskTeamSearch, setEditTaskTeamSearch] = useState('');
+    const [editTaskSupportingEvidence, setEditTaskSupportingEvidence] = useState<File | null>(null);
+    const editTaskFileRef = useRef<HTMLInputElement>(null);
     const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
     const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
     const STATUS_LABELS: Record<number, string> = { 0: 'Not Started', 1: 'In Progress', 2: 'Done/Pending Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -2153,6 +2177,41 @@ export default function Dashboard() {
             })
             .catch(() => {});
     }, []);
+
+    const fetchAssignableEmployees = async (setter: (list: WorkloadInfo[]) => void, setRec: (r: any) => void) => {
+        try {
+            const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=50');
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
+            if (list.length > 0) {
+                const mapped: WorkloadInfo[] = list.map((emp: any) => ({
+                    employeeName: emp.fullName ?? emp.FullName ?? '',
+                    accountId: emp.userId ?? emp.UserId ?? emp.id,
+                    availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
+                    isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
+                    workload: emp.workload ?? 0,
+                    role: emp.role ?? '',
+                    isRecommended: true,
+                    recommendationReason: 'Available for assignment',
+                }));
+                setter(mapped);
+                const activeEmployees = mapped.filter(e => e.isAvailable);
+                if (activeEmployees.length > 0) {
+                    const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
+                    setRec({
+                        employeeName: best.employeeName,
+                        accountId: best.accountId,
+                        availabilityStatus: best.availabilityStatus,
+                        workload: best.workload,
+                        reason: 'Available for assignment',
+                    });
+                }
+            }
+        } catch { /* ignore */ }
+    };
+
+    useEffect(() => { if (showNewTask) { fetchAssignableEmployees(setNewTaskEligibleEmployees, setNewTaskRecommendation); } }, [showNewTask]);
+    useEffect(() => { if (tmEditingTask) { fetchAssignableEmployees(setEditEligibleEmployees, setEditTaskRecommendation); } }, [tmEditingTask]);
 
     const handleManagerTaskArchive = async (ids: string[]) => {
         for (const id of ids) {
@@ -2248,6 +2307,9 @@ export default function Dashboard() {
                 isConfidential: tmEditingTask.isConfidential ?? false,
                 assignmentScope: (tmEditingTask.assignmentScope !== undefined ? ['SingleEmployee', 'Team', 'Department'][tmEditingTask.assignmentScope] : 'SingleEmployee') as string,
                 assignedDepartmentId: tmEditingTask.assignedDepartmentId ?? '',
+                assignedTo: '',
+                assignedUserIds: [],
+                supportingEvidenceUrl: '',
             });
             setEditErrors({});
             setEditApiError('');
@@ -2256,9 +2318,11 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (!showNewTask) {
-            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [], supportingEvidenceUrl: '' });
             setNewTaskErrors({});
             setNewTaskApiError('');
+            setNewTaskEligibleEmployees([]);
+            setNewTaskRecommendation(null);
         }
     }, [showNewTask]);
 
@@ -2276,6 +2340,8 @@ export default function Dashboard() {
         if (!newTaskForm.deadline) errs.deadline = 'Deadline is required.';
         if (!newTaskForm.classification) errs.classification = 'Classification is required.';
         if (!newTaskForm.assignmentScope) errs.assignmentScope = 'Assignment scope is required.';
+        if (newTaskForm.assignmentScope === 'SingleEmployee' && !newTaskForm.assignedTo) errs.assignedTo = 'Please select an employee to assign.';
+        if (newTaskForm.assignmentScope === 'Team' && newTaskForm.assignedUserIds.length === 0) errs.assignedUserIds = 'Please select at least one team member.';
         if (newTaskForm.assignmentScope === 'Department' && !newTaskForm.assignedDepartmentId) errs.assignedDepartmentId = 'Department is required for Department scope.';
         if (Object.keys(errs).length) { setNewTaskErrors(errs); return; }
         setNewTaskErrors({});
@@ -2286,6 +2352,11 @@ export default function Dashboard() {
         setNewTaskSubmitting(true);
         setNewTaskApiError('');
         try {
+            const userIds = scopeNum === 0
+                ? (newTaskForm.assignedTo ? [newTaskForm.assignedTo] : [])
+                : scopeNum === 1
+                    ? newTaskForm.assignedUserIds
+                    : [];
             const createPayload: Record<string, any> = {
                 title: t,
                 description: d,
@@ -2293,6 +2364,7 @@ export default function Dashboard() {
                 classification: newTaskForm.classification === 'special' ? 1 : 0,
                 assignmentScope: scopeNum,
                 isConfidential: newTaskForm.isConfidential,
+                assignedUserIds: userIds.length > 0 ? userIds : undefined,
                 assignedDepartmentId: scopeNum === 2 ? newTaskForm.assignedDepartmentId || undefined : undefined,
             };
             if (newTaskForm.priority !== 'Urgent') {
@@ -2332,6 +2404,11 @@ export default function Dashboard() {
         setEditSubmitting(true);
         setEditApiError('');
         try {
+            const editUserIds = scopeNum === 0
+                ? (editForm.assignedTo ? [editForm.assignedTo] : [])
+                : scopeNum === 1
+                    ? editForm.assignedUserIds
+                    : [];
             const updatePayload: Record<string, any> = {
                 title: t,
                 description: d,
@@ -2339,6 +2416,7 @@ export default function Dashboard() {
                 classification: editForm.classification === 'special' ? 1 : 0,
                 assignmentScope: scopeNum,
                 isConfidential: editForm.isConfidential,
+                assignedUserIds: editUserIds.length > 0 ? editUserIds : undefined,
                 assignedDepartmentId: scopeNum === 2 ? editForm.assignedDepartmentId || undefined : undefined,
             };
             if (!tmEditingTask.isSLALocked) {
@@ -2365,13 +2443,53 @@ export default function Dashboard() {
     const ACTIVITY_LOG_PAGE_SIZE = 15;
     const [activityLogSearch, setActivityLogSearch] = useState('');
 
-    // ── Notifications Tab ──
+    // ── Notifications ──
     const NOTIF_TYPE_MAP: Record<number, string> = { 0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning', 4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold', 8: 'TaskCompleted', 9: 'TemplateTaskUnassigned' };
     const [allNotifications, setAllNotifications] = useState<any[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifPage, setNotifPage] = useState(1);
     const [notifTotalPages, setNotifTotalPages] = useState(1);
     const NOTIF_PAGE_SIZE = 20;
+    const [headerNotifications, setHeaderNotifications] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
+
+    const mapToHeaderNotification = (n: any): import('../../components/GlobalHeader/GlobalHeader').NotificationItem => {
+        const typeLabels: Record<string, 'alert' | 'success' | 'info' | 'system'> = {
+            TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
+            PushBack: 'warning' as any, TaskCancelled: 'system', TaskResumed: 'info', TaskOnHold: 'warning' as any,
+            TaskCompleted: 'success', TemplateTaskUnassigned: 'system',
+        };
+        const type = typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '';
+        const createdAt = n.createdAt ?? '';
+        const now = new Date();
+        const createdDate = new Date(createdAt);
+        const isToday = createdDate.toDateString() === now.toDateString();
+        const timeStr = createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return {
+            id: String(n.id ?? n.notificationId ?? ''),
+            title: n.message ?? n.title ?? '',
+            description: n.description ?? '',
+            timestamp: timeStr,
+            date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: n.isRead ?? false,
+            type: typeLabels[type] || 'info',
+            category: type.toLowerCase(),
+            isToday,
+            source: 'System',
+        };
+    };
+
+    const fetchHeaderNotifications = async () => {
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setHeaderNotifications(d.items.map(mapToHeaderNotification));
+            }
+        } catch {
+            // silently fall back to dummy data
+        }
+    };
 
     const fetchAllNotifications = async (page: number) => {
         setNotifLoading(true);
@@ -2400,6 +2518,7 @@ export default function Dashboard() {
         }
     };
 
+    useEffect(() => { fetchHeaderNotifications(); }, []);
     useEffect(() => {
         if (activeTab === 'notifications') {
             fetchAllNotifications(1);
@@ -2591,6 +2710,7 @@ export default function Dashboard() {
                     <GlobalHeader
                         title={pageTitles[activeTab]}
                         breadcrumbs={[{ label: 'System Admin' }, { label: pageTitles[activeTab] }]}
+                        notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
                         profile={{
                             name: employeeName || 'Manager',
                             role: 'MANAGER',
@@ -3054,7 +3174,10 @@ export default function Dashboard() {
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 {['SingleEmployee', 'Team', 'Department'].map(scope => (
-                                    <label key={scope} onClick={() => setNewTaskForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                    <label key={scope} onClick={() => setNewTaskForm(p => ({
+                                        ...p, assignmentScope: scope, assignedDepartmentId: '',
+                                        assignedTo: '', assignedUserIds: [],
+                                    }))}
                                         style={{
                                             flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                                             fontSize: 12, fontWeight: 600, border: `2px solid ${newTaskForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
@@ -3094,7 +3217,151 @@ export default function Dashboard() {
                                 )}
                             </div>
                         )}
+
+                        {newTaskForm.assignmentScope === 'SingleEmployee' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Assign To <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {newTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{newTaskRecommendation.employeeName}</strong> — {newTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={newTaskSingleSearch}
+                                    onChange={e => setNewTaskSingleSearch(e.target.value)} />
+                                {newTaskEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(newTaskSingleSearch ? newTaskEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(newTaskSingleSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                            const isSelected = newTaskForm.assignedTo === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            const isRecommended = newTaskRecommendation?.accountId === e.accountId;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setNewTaskForm(p => ({ ...p, assignedTo: e.accountId })); }}
+                                                >
+                                                    <input type="radio" name="newTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {newTaskErrors.assignedTo && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.assignedTo}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {newTaskForm.assignmentScope === 'Team' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Select Team Members <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {newTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{newTaskRecommendation.employeeName}</strong> — {newTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={newTaskTeamSearch}
+                                    onChange={e => setNewTaskTeamSearch(e.target.value)} />
+                                {newTaskEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(newTaskTeamSearch ? newTaskEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(newTaskTeamSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                            const selected = newTaskForm.assignedUserIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setNewTaskForm(p => ({
+                                                            ...p,
+                                                            assignedUserIds: selected ? p.assignedUserIds.filter(id => id !== e.accountId) : [...p.assignedUserIds, e.accountId],
+                                                        }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {newTaskForm.assignedUserIds.length > 0 && (
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {newTaskForm.assignedUserIds.length} team member(s) selected</span>
+                                )}
+                                {newTaskErrors.assignedUserIds && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.assignedUserIds}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* ── Supporting Document ── */}
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Attachment</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            {newTaskForm.supportingEvidenceUrl && !newTaskSupportingEvidence && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {(newTaskForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
+                                    </span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                <input ref={newTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                            if (!allowed.includes(ext)) { setNewTaskApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
+                                            if (file.size > 20 * 1024 * 1024) { setNewTaskApiError('File size must not exceed 20MB.'); return; }
+                                            setNewTaskApiError('');
+                                            setNewTaskSupportingEvidence(file);
+                                        }
+                                    }}
+                                    style={{ flex: 1, fontSize: 13 }} />
+                                {newTaskSupportingEvidence && (
+                                    <button type="button" onClick={() => { setNewTaskSupportingEvidence(null); if (newTaskFileRef.current) newTaskFileRef.current.value = ''; }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            {newTaskSupportingEvidence && (
+                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
+                                    ✓ {newTaskSupportingEvidence.name} ({(newTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
                         <label className={`conf-card${newTaskForm.isConfidential ? ' active' : ''}`}>
@@ -3247,7 +3514,10 @@ export default function Dashboard() {
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 {['SingleEmployee', 'Team', 'Department'].map(scope => (
-                                    <label key={scope} onClick={() => setEditForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                    <label key={scope} onClick={() => setEditForm(p => ({
+                                        ...p, assignmentScope: scope, assignedDepartmentId: '',
+                                        assignedTo: '', assignedUserIds: [],
+                                    }))}
                                         style={{
                                             flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                                             fontSize: 12, fontWeight: 600, border: `2px solid ${editForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
@@ -3277,7 +3547,141 @@ export default function Dashboard() {
                                 </select>
                             </div>
                         )}
+
+                        {editForm.assignmentScope === 'SingleEmployee' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Assign To <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {editTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{editTaskRecommendation.employeeName}</strong> — {editTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={editTaskSingleSearch}
+                                    onChange={e => setEditTaskSingleSearch(e.target.value)} />
+                                {editEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(editTaskSingleSearch ? editEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(editTaskSingleSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                            const isSelected = editForm.assignedTo === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            const isRecommended = editTaskRecommendation?.accountId === e.accountId;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setEditForm(p => ({ ...p, assignedTo: e.accountId })); }}
+                                                >
+                                                    <input type="radio" name="editTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                            </div>
+                        )}
+
+                        {editForm.assignmentScope === 'Team' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Select Team Members <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {editTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{editTaskRecommendation.employeeName}</strong> — {editTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={editTaskTeamSearch}
+                                    onChange={e => setEditTaskTeamSearch(e.target.value)} />
+                                {editEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(editTaskTeamSearch ? editEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(editTaskTeamSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                            const selected = editForm.assignedUserIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setEditForm(p => ({
+                                                            ...p,
+                                                            assignedUserIds: selected ? p.assignedUserIds.filter(id => id !== e.accountId) : [...p.assignedUserIds, e.accountId],
+                                                        }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {editForm.assignedUserIds.length > 0 && (
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {editForm.assignedUserIds.length} team member(s) selected</span>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* ── Supporting Document (Edit) ── */}
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Attachment</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            {editForm.supportingEvidenceUrl && !editTaskSupportingEvidence && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {(editForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
+                                    </span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                <input ref={editTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                            if (!allowed.includes(ext)) { setEditApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
+                                            if (file.size > 20 * 1024 * 1024) { setEditApiError('File size must not exceed 20MB.'); return; }
+                                            setEditApiError('');
+                                            setEditTaskSupportingEvidence(file);
+                                        }
+                                    }}
+                                    style={{ flex: 1, fontSize: 13 }} />
+                                {editTaskSupportingEvidence && (
+                                    <button type="button" onClick={() => { setEditTaskSupportingEvidence(null); if (editTaskFileRef.current) editTaskFileRef.current.value = ''; }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            {editTaskSupportingEvidence && (
+                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
+                                    ✓ {editTaskSupportingEvidence.name} ({(editTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
                         <label className={`conf-card${editForm.isConfidential ? ' active' : ''}`}>

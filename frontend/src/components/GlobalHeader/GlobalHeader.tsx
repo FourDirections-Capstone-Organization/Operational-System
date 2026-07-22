@@ -17,7 +17,7 @@ import {
   Menu
 } from 'lucide-react';
 import ConfirmModal from '../ConfirmModal/ConfirmModal';
-import type { NotificationItem } from './notificationTypes';
+import type { NotificationItem } from '../notificationTypes';
 import './GlobalHeader.css';
 
 export type { NotificationItem };
@@ -56,6 +56,8 @@ export interface GlobalHeaderProps {
     avatarInitials: string;
     avatarUrl?: string;
   };
+  /** External notifications from API. When provided, overrides internal dummy data. */
+  notifications?: NotificationItem[];
   /** Called when a notification action button is clicked. Replaces alert(). */
   onNotificationAction?: (notification: NotificationItem) => void;
   /** Called when "View all notifications" footer link is clicked. */
@@ -66,6 +68,8 @@ export interface GlobalHeaderProps {
   onSettings?: () => void;
   /** Called when "Log Out" is clicked in the profile dropdown. */
   onLogout?: () => void;
+  /** Called when notifications are marked as read or cleared. */
+  onNotificationsUpdate?: (notifications: NotificationItem[]) => void;
 }
 
 const defaultProfile: {
@@ -83,15 +87,31 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   title = 'Dashboard',
   breadcrumbs,
   profile = defaultProfile,
+  notifications: externalNotifications,
   onNotificationAction,
   onViewAllNotifications,
   onProfile,
   onSettings,
   onLogout,
+  onNotificationsUpdate,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DUMMY_NOTIFICATIONS);
+  const [internalNotifications, setInternalNotifications] = useState<NotificationItem[]>(DUMMY_NOTIFICATIONS);
+
+  const notifications = externalNotifications ?? internalNotifications;
+  const setNotifications = (items: NotificationItem[] | ((prev: NotificationItem[]) => NotificationItem[])) => {
+    if (externalNotifications) {
+      if (typeof items === 'function') {
+        const result = items(externalNotifications);
+        onNotificationsUpdate?.(result);
+      } else {
+        onNotificationsUpdate?.(items);
+      }
+    } else {
+      setInternalNotifications(items as any);
+    }
+  };
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [bellAnimating, setBellAnimating] = useState(false);

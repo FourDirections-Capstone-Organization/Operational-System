@@ -119,6 +119,7 @@ const FormModal: React.FC<FormModalProps> = ({
                 {children}
             </div>
 
+            <div className="fm-ft-divider" />
             <div className="fm-footer">
                 {footer ? (
                     footer
@@ -178,8 +179,10 @@ const FormModal: React.FC<FormModalProps> = ({
                         <h3 className="fm-title">{title}</h3>
                         {subtitle && <p className="fm-subtitle">{subtitle}</p>}
                     </div>
-                    <button className="icon-btn" onClick={handleCancelClick}><X size={16} /></button>
+                    <button className="fm-close-btn" onClick={handleCancelClick}><X size={16} /></button>
                 </div>
+
+                <div className="fm-hd-divider" />
 
                 {apiError && (
                     <div className="fm-api-error">

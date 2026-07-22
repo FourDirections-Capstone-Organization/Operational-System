@@ -51,7 +51,7 @@ import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
 
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
-import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import GlobalHeader, { NotificationItem } from '../../components/GlobalHeader/GlobalHeader';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
@@ -620,6 +620,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
     const [eligibleEmployees, setEligibleEmployees] = useState<WorkloadInfo[]>([]);
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
+    const [singleSearch, setSingleSearch] = useState('');
+    const [teamSearch, setTeamSearch] = useState('');
 
     useEffect(() => {
         const fetchRecommendations = async () => {
@@ -1127,116 +1129,117 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
 
                         {/* -- SingleEmployee: pick one user -- */}
                         {form.assignmentScope === 'SingleEmployee' && (
-                            <>
+                            <div className="emp-picker-section">
                                 {recommendation && (
-                                    <div className="rec-banner">
-                                        <Lightbulb size={14} />
+                                    <div className="emp-picker-rec-banner">
+                                        <Lightbulb size={13} />
                                         <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
                                     </div>
                                 )}
-
-                                {eligibleEmployees.length > 0 && (
-                                    <div className="sr-eligible-list">
-                                        <div className="sr-eligible-title">Available Employees</div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 200, overflowY: 'auto' }}>
-                                            {eligibleEmployees.map(e => {
-                                                const isSelected = form.assignedTo === e.accountId;
-                                                const isRecommended = recommendation?.accountId === e.accountId;
-                                                const disabled = !e.isAvailable;
-                                                return (
-                                                    <div
-                                                        key={e.accountId}
-                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
-                                                        onClick={() => {
-                                                            if (disabled) return;
-                                                            setForm(prev => ({ ...prev, assignedTo: e.accountId }));
-                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                                        }}
-                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
-                                                    >
-                                                        <span className="sr-emp-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            {isSelected && <CheckCircle2 size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
-                                                            {e.employeeName}
-                                                        </span>
-                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                            {e.availabilityStatus}
-                                                        </span>
-                                                        <span className="sr-workload">{e.workload} tasks</span>
-                                                        {isRecommended && <span className="sr-rec-tag">Best pick</span>}
+                                <input
+                                    type="text"
+                                    className="emp-picker-search"
+                                    placeholder="Search employees…"
+                                    value={singleSearch}
+                                    onChange={e => setSingleSearch(e.target.value)}
+                                />
+                                {eligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(singleSearch
+                                            ? eligibleEmployees.filter(e =>
+                                                e.employeeName.toLowerCase().includes(singleSearch.toLowerCase()))
+                                            : eligibleEmployees
+                                        ).map(e => {
+                                            const isSelected = form.assignedTo === e.accountId;
+                                            const isRecommended = recommendation?.accountId === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                                >
+                                                    <input type="radio" name="singleEmp" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found for assignment.</div>
                                 )}
-
-                                {eligibleEmployees.length === 0 && (
-                                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
-                                        No eligible employees found for assignment.
-                                    </div>
-                                )}
-
                                 <FieldErr name="assignedTo" />
                                 {!errors.assignedTo && form.assignedTo && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <CheckCircle2 size={11} /> {eligibleEmployees.find(e => e.accountId === form.assignedTo)?.employeeName ?? 'Employee'} assigned
-                                    </span>
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {eligibleEmployees.find(e => e.accountId === form.assignedTo)?.employeeName ?? 'Employee'} assigned</span>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* -- Team: pick multiple users -- */}
                         {form.assignmentScope === 'Team' && (
-                            <>
-                                <div className="sr-eligible-list">
-                                    <div className="sr-eligible-title">
-                                        Select Team Members {selectedTeamIds.length > 0 && <strong style={{ color: 'var(--primary)', marginLeft: 4 }}>({selectedTeamIds.length})</strong>}
+                            <div className="emp-picker-section">
+                                {recommendation && (
+                                    <div className="emp-picker-rec-banner">
+                                        <Lightbulb size={13} />
+                                        <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
                                     </div>
-                                    {eligibleEmployees.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
-                                            {eligibleEmployees.map(e => {
-                                                const selected = selectedTeamIds.includes(e.accountId);
-                                                const disabled = !e.isAvailable;
-                                                return (
-                                                    <div
-                                                        key={e.accountId}
-                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
-                                                        onClick={() => {
-                                                            if (disabled) return;
-                                                            setSelectedTeamIds(prev =>
-                                                                prev.includes(e.accountId)
-                                                                    ? prev.filter(id => id !== e.accountId)
-                                                                    : [...prev, e.accountId]
-                                                            );
-                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                                        }}
-                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
-                                                    >
-                                                        <input type="checkbox" checked={selected} disabled={disabled}
-                                                            onChange={() => { }}
-                                                            onClick={e => e.stopPropagation()} />
-                                                        <span className="sr-emp-name">{e.employeeName}</span>
-                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                            {e.availabilityStatus}
-                                                        </span>
-                                                        <span className="sr-workload">{e.workload} tasks</span>
+                                )}
+                                <input
+                                    type="text"
+                                    className="emp-picker-search"
+                                    placeholder="Search employees…"
+                                    value={teamSearch}
+                                    onChange={e => setTeamSearch(e.target.value)}
+                                />
+                                {eligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(teamSearch
+                                            ? eligibleEmployees.filter(e =>
+                                                e.employeeName.toLowerCase().includes(teamSearch.toLowerCase()))
+                                            : eligibleEmployees
+                                        ).map(e => {
+                                            const selected = selectedTeamIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setSelectedTeamIds(prev =>
+                                                            prev.includes(e.accountId) ? prev.filter(id => id !== e.accountId) : [...prev, e.accountId]
+                                                        );
+                                                        setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
-                                            No eligible employees found.
-                                        </div>
-                                    )}
-                                </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
                                 <FieldErr name="assignedTo" />
                                 {!errors.assignedTo && selectedTeamIds.length > 0 && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <CheckCircle2 size={11} /> {selectedTeamIds.length} team member(s) selected
-                                    </span>
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {selectedTeamIds.length} team member(s) selected</span>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* -- Department: pick a department -- */}
@@ -4632,6 +4635,45 @@ export default function OpsAdminDashboard() {
     const [loadingTasks, setLoadingTasks] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [userPresenceStatus, setUserPresenceStatus] = useState('Offline');
+    const [headerNotifications, setHeaderNotifications] = useState<NotificationItem[]>([]);
+
+    const mapToHeaderNotification = useCallback((n: any): NotificationItem => {
+        const typeLabels: Record<string, NotificationItem['type']> = {
+            TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
+            TaskCancelled: 'system', TaskCompleted: 'success',
+        };
+        const type = typeof n.type === 'number' ? ['TaskAssigned','TaskUpdated','TaskOverdue','DeadlineWarning','PushBack','TaskCancelled','TaskResumed','TaskOnHold','TaskCompleted','TemplateTaskUnassigned'][n.type] || 'Unknown' : n.type || '';
+        const createdAt = n.createdAt ?? '';
+        const createdDate = new Date(createdAt);
+        const now = new Date();
+        const isToday = createdDate.toDateString() === now.toDateString();
+        const timeStr = createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return {
+            id: String(n.id ?? n.notificationId ?? ''),
+            title: n.message ?? n.title ?? '',
+            description: n.description ?? '',
+            timestamp: timeStr,
+            date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: n.isRead ?? false,
+            type: typeLabels[type] || 'info',
+            category: type.toLowerCase(),
+            isToday,
+            source: 'System',
+        };
+    }, []);
+
+    const fetchHeaderNotifications = useCallback(async () => {
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setHeaderNotifications(d.items.map(mapToHeaderNotification));
+            }
+        } catch { /* fallback to dummy */ }
+    }, [mapToHeaderNotification]);
+
+    useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
 
     const [showNew, setShowNew] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -5175,6 +5217,7 @@ export default function OpsAdminDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: 'Ops Admin' }, { label: pageTitles[activeTab] }]}
+                    notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
                     profile={{
                         name: employeeName || 'Op Admin',
                         role: 'Operations Admin',
