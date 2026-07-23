@@ -118,6 +118,7 @@ builder.Services.Configure<ExpertSystemConfig>(builder.Configuration.GetSection(
 // Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
 builder.Services.AddHostedService<RecurringTaskGenerator>();
+builder.Services.AddHostedService<SlaRiskTrainingService>();
 
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
