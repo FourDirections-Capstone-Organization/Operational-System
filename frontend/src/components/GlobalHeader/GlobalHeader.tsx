@@ -301,7 +301,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
           )}
           <h1 className="header-title">{title}</h1>
         </div>
-        
+
         {/* Right Side: Interactive Controls */}
         <div className="header-controls">
 

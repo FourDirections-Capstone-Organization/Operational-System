@@ -1288,12 +1288,12 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                 </ActionButton>
             </div>
             <div className="stats-row">
-                {[
+                {([
                     { icon: <Users size={20} strokeWidth={2.3} />, variant: 'teal', label: 'TOTAL EMPLOYEES', value: employees.length, subtext: 'All registered staff' },
                     { icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', label: 'ACTIVE', value: activeCount, subtext: 'Currently active accounts' },
                     { icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger', label: 'DEACTIVATED', value: deactivatedCount, subtext: 'Accounts needing review' },
                     { icon: <Shield size={20} strokeWidth={2.3} />, variant: 'warning', label: 'ROLES', value: rolesCount ?? SYSTEM_ROLES.length, subtext: 'Available role types' },
-                ].map(({ icon, variant, label, value, subtext }) => (
+                ] as const).map(({ icon, variant, label, value, subtext }) => (
                     <StatusCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
                 ))}
             </div>
@@ -1333,16 +1333,16 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                         <EmptyState message="No data" />
                     ) : (
                         <ResponsiveContainer width="100%" height={260}>
-                            <PieChart>
+                            <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
                                 <Pie
                                     data={statusDistribution}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={55}
-                                    outerRadius={90}
+                                    outerRadius={85}
                                     paddingAngle={3}
                                     dataKey="value"
-                                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                                    label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
                                     labelLine={false}
                                 >
                                     {statusDistribution.map((entry) => (
@@ -2088,6 +2088,7 @@ export default function Dashboard() {
     const [editApiError, setEditApiError] = useState('');
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [newTaskEligibleEmployees, setNewTaskEligibleEmployees] = useState<WorkloadInfo[]>([]);
+    const [rawApiKeys, setRawApiKeys] = useState<string>('');
     const [editEligibleEmployees, setEditEligibleEmployees] = useState<WorkloadInfo[]>([]);
     const [newTaskRecommendation, setNewTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
     const [editTaskRecommendation, setEditTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
@@ -2184,13 +2185,18 @@ export default function Dashboard() {
             const json = res.data;
             const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
             if (list.length > 0) {
+                const sample = list[0];
+                console.debug('[TaskForm] ALL KEYS of first item:', Object.keys(sample));
+                console.debug('[TaskForm] Raw first item:', JSON.stringify(sample, null, 2));
+                console.debug('[TaskForm] Full JSON response (truncated):', JSON.stringify(json).slice(0, 2000));
+                setRawApiKeys(Object.keys(sample).join(', ') + '\n\n' + JSON.stringify(sample, null, 2).slice(0, 800));
                 const mapped: WorkloadInfo[] = list.map((emp: any) => ({
-                    employeeName: emp.fullName ?? emp.FullName ?? '',
-                    accountId: emp.userId ?? emp.UserId ?? emp.id,
-                    availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
-                    isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
-                    workload: emp.workload ?? 0,
-                    role: emp.role ?? '',
+                    employeeName: emp.fullName ?? emp.FullName ?? emp.employeeName ?? '',
+                    accountId: emp.userId ?? emp.UserId ?? emp.id ?? '',
+                    availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? emp.status ?? 'Active',
+                    isAvailable: emp.isAvailable ?? emp.IsAvailable ?? emp.available ?? true,
+                    workload: typeof emp.workload === 'number' ? emp.workload : 0,
+                    role: emp.role ?? emp.Role ?? '',
                     isRecommended: true,
                     recommendationReason: 'Available for assignment',
                 }));
@@ -2199,7 +2205,7 @@ export default function Dashboard() {
                 if (activeEmployees.length > 0) {
                     const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
                     setRec({
-                        employeeName: best.employeeName,
+                        employeeName: best.employeeName || 'Recommended Employee',
                         accountId: best.accountId,
                         availabilityStatus: best.availabilityStatus,
                         workload: best.workload,
@@ -2207,7 +2213,9 @@ export default function Dashboard() {
                     });
                 }
             }
-        } catch { /* ignore */ }
+        } catch (err) {
+            console.warn('[TaskForm] fetchAssignableEmployees error:', err);
+        }
     };
 
     useEffect(() => { if (showNewTask) { fetchAssignableEmployees(setNewTaskEligibleEmployees, setNewTaskRecommendation); } }, [showNewTask]);
@@ -3227,14 +3235,22 @@ export default function Dashboard() {
                                         <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{newTaskRecommendation.employeeName}</strong> — {newTaskRecommendation.reason}</span>
                                     </div>
                                 )}
+                                {rawApiKeys && (
+                                    <details style={{ fontSize: 10, color: '#666', marginBottom: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, maxHeight: 120, overflow: 'auto' }}>
+                                        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>API Debug: keys of first item</summary>
+                                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{rawApiKeys}</pre>
+                                    </details>
+                                )}
                                 <input type="text" className="emp-picker-search" placeholder="Search employees…" value={newTaskSingleSearch}
                                     onChange={e => setNewTaskSingleSearch(e.target.value)} />
                                 {newTaskEligibleEmployees.length > 0 ? (
                                     <div className="emp-picker-list">
-                                        {(newTaskSingleSearch ? newTaskEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(newTaskSingleSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                        {(newTaskSingleSearch ? newTaskEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(newTaskSingleSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
                                             const isSelected = newTaskForm.assignedTo === e.accountId;
                                             const disabled = !e.isAvailable;
                                             const isRecommended = newTaskRecommendation?.accountId === e.accountId;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
                                             return (
                                                 <div key={e.accountId}
                                                     className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
@@ -3242,11 +3258,11 @@ export default function Dashboard() {
                                                 >
                                                     <input type="radio" name="newTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
                                                     <div className="emp-picker-info">
-                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
                                                         <div className="emp-picker-meta">
-                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
-                                                            <span>{e.availabilityStatus}</span>
-                                                            <span>{e.workload} tasks</span>
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
                                                         </div>
                                                     </div>
                                                     {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
@@ -3279,9 +3295,11 @@ export default function Dashboard() {
                                     onChange={e => setNewTaskTeamSearch(e.target.value)} />
                                 {newTaskEligibleEmployees.length > 0 ? (
                                     <div className="emp-picker-list">
-                                        {(newTaskTeamSearch ? newTaskEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(newTaskTeamSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                        {(newTaskTeamSearch ? newTaskEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(newTaskTeamSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
                                             const selected = newTaskForm.assignedUserIds.includes(e.accountId);
                                             const disabled = !e.isAvailable;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
                                             return (
                                                 <div key={e.accountId}
                                                     className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
@@ -3295,11 +3313,11 @@ export default function Dashboard() {
                                                 >
                                                     <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
                                                     <div className="emp-picker-info">
-                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
                                                         <div className="emp-picker-meta">
-                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
-                                                            <span>{e.availabilityStatus}</span>
-                                                            <span>{e.workload} tasks</span>
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3561,10 +3579,12 @@ export default function Dashboard() {
                                     onChange={e => setEditTaskSingleSearch(e.target.value)} />
                                 {editEligibleEmployees.length > 0 ? (
                                     <div className="emp-picker-list">
-                                        {(editTaskSingleSearch ? editEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(editTaskSingleSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                        {(editTaskSingleSearch ? editEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(editTaskSingleSearch.toLowerCase())) : editEligibleEmployees).map(e => {
                                             const isSelected = editForm.assignedTo === e.accountId;
                                             const disabled = !e.isAvailable;
                                             const isRecommended = editTaskRecommendation?.accountId === e.accountId;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
                                             return (
                                                 <div key={e.accountId}
                                                     className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
@@ -3572,11 +3592,11 @@ export default function Dashboard() {
                                                 >
                                                     <input type="radio" name="editTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
                                                     <div className="emp-picker-info">
-                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
                                                         <div className="emp-picker-meta">
-                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
-                                                            <span>{e.availabilityStatus}</span>
-                                                            <span>{e.workload} tasks</span>
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
                                                         </div>
                                                     </div>
                                                     {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
@@ -3591,7 +3611,7 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        {editForm.assignmentScope === 'Team' && (
+                        {newTaskForm.assignmentScope === 'Team' && (
                             <div className="fm-field" style={{ marginTop: 10 }}>
                                 <label className="fm-label">Select Team Members <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                                 {editTaskRecommendation && (
@@ -3604,9 +3624,11 @@ export default function Dashboard() {
                                     onChange={e => setEditTaskTeamSearch(e.target.value)} />
                                 {editEligibleEmployees.length > 0 ? (
                                     <div className="emp-picker-list">
-                                        {(editTaskTeamSearch ? editEligibleEmployees.filter(e => e.employeeName.toLowerCase().includes(editTaskTeamSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                        {(editTaskTeamSearch ? editEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(editTaskTeamSearch.toLowerCase())) : editEligibleEmployees).map(e => {
                                             const selected = editForm.assignedUserIds.includes(e.accountId);
                                             const disabled = !e.isAvailable;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
                                             return (
                                                 <div key={e.accountId}
                                                     className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
@@ -3620,11 +3642,11 @@ export default function Dashboard() {
                                                 >
                                                     <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
                                                     <div className="emp-picker-info">
-                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
                                                         <div className="emp-picker-meta">
-                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
-                                                            <span>{e.availabilityStatus}</span>
-                                                            <span>{e.workload} tasks</span>
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
                                                         </div>
                                                     </div>
                                                 </div>

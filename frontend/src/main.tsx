@@ -34,6 +34,11 @@ axios.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // Don't retry or handle errors from heartbeat refresh requests
+        if (originalRequest.headers?.['X-Heartbeat']) {
+            return Promise.reject(error);
+        }
+
         // Handle SESSION_TIMEOUT from backend
         if (error.response?.data?.code === 'SESSION_TIMEOUT') {
             localStorage.clear();

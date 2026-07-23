@@ -630,13 +630,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                 const json = res.data;
                 const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
                 if (list.length > 0) {
+                    const sample = list[0];
+                    console.debug('[TaskForm] ALL KEYS of first item:', Object.keys(sample));
+                    console.debug('[TaskForm] Raw first item:', JSON.stringify(sample, null, 2));
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
-                        employeeName: emp.fullName ?? emp.FullName ?? '',
-                        accountId: emp.userId ?? emp.UserId ?? emp.id,
-                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
-                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
-                        workload: emp.workload ?? 0,
-                        role: emp.role ?? '',
+                        employeeName: emp.fullName ?? emp.FullName ?? emp.employeeName ?? '',
+                        accountId: emp.userId ?? emp.UserId ?? emp.id ?? '',
+                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? emp.status ?? 'Active',
+                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? emp.available ?? true,
+                        workload: typeof emp.workload === 'number' ? emp.workload : 0,
+                        role: emp.role ?? emp.Role ?? '',
                         isRecommended: true,
                         recommendationReason: 'Available for assignment',
                     }));
@@ -645,7 +648,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                     if (activeEmployees.length > 0) {
                         const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
                         setRecommendation({
-                            employeeName: best.employeeName,
+                            employeeName: best.employeeName || 'Recommended Employee',
                             accountId: best.accountId,
                             availabilityStatus: best.availabilityStatus,
                             workload: best.workload,
@@ -653,7 +656,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         });
                     }
                 }
-            } catch {
+            } catch (err) {
+                console.warn('[TaskForm] fetchRecommendations error:', err);
             }
         };
         const fetchDepartments = async () => {

@@ -1,4 +1,5 @@
 import React from 'react';
+import './StatusCard.css';
 
 export type StatusCardVariant = 'teal' | 'success' | 'warning' | 'danger' | 'info' | 'new' | 'delivery';
 

@@ -1,34 +1,78 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+const HEARTBEAT_INTERVAL = 5 * 60 * 1000;
+const RESET_THROTTLE = 1000;
+
+const ACTIVITY_EVENTS = [
+    'mousedown', 'mousemove', 'click', 'keydown',
+    'touchstart', 'touchmove', 'pointerdown', 'pointermove',
+    'wheel', 'scroll', 'input', 'focus',
+];
 
 export function useSessionTimeout() {
     const navigate = useNavigate();
-    const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const inactivityTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const heartbeatTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+    const lastReset = useRef(0);
+    const logoutRef = useRef<(() => void) | undefined>(undefined);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         localStorage.clear();
         navigate('/', { replace: true });
-    };
+    }, [navigate]);
 
-    const resetTimer = () => {
-        if (timerRef.current) clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(logout, INACTIVITY_TIMEOUT);
-    };
+    logoutRef.current = logout;
+
+    const resetTimer = useCallback(() => {
+        const now = Date.now();
+        if (now - lastReset.current < RESET_THROTTLE) return;
+        lastReset.current = now;
+
+        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+        inactivityTimer.current = setTimeout(() => {
+            logoutRef.current?.();
+        }, INACTIVITY_TIMEOUT);
+    }, []);
+
+    const refreshToken = useCallback(async () => {
+        const token = localStorage.getItem('refreshToken');
+        if (!token) return;
+
+        try {
+            const { data: raw } = await axios.post(
+                '/api/Auth/refresh-token',
+                { refreshToken: token },
+                { headers: { 'X-Heartbeat': 'true' } as any }
+            );
+            const d = raw?.data ?? raw;
+            if (d?.accessToken) localStorage.setItem('authToken', d.accessToken);
+            if (d?.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
+        } catch {
+            // Silently ignore heartbeat failures.
+            // The next real API 401 will trigger the interceptor's refresh flow.
+        }
+    }, []);
 
     useEffect(() => {
-        const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-
         const handleActivity = () => resetTimer();
+
+        ACTIVITY_EVENTS.forEach(event =>
+            window.addEventListener(event, handleActivity, { capture: true })
+        );
 
         resetTimer();
 
-        events.forEach(event => window.addEventListener(event, handleActivity));
+        heartbeatTimer.current = setInterval(refreshToken, HEARTBEAT_INTERVAL);
 
         return () => {
-            if (timerRef.current) clearTimeout(timerRef.current);
-            events.forEach(event => window.removeEventListener(event, handleActivity));
+            if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+            if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+            ACTIVITY_EVENTS.forEach(event =>
+                window.removeEventListener(event, handleActivity, { capture: true })
+            );
         };
-    }, [navigate]);
+    }, [resetTimer, refreshToken]);
 }

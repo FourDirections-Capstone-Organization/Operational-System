@@ -8,7 +8,7 @@
   z-index: 50; /* Above regular content, but below overlays */
   display: flex;
   align-items: center;
-  padding: 0 28px; /* Page Padding Margin: 28px (per visualizer) */
+  padding: 0 28px 0 20px;
 }
 
 .nav-bar {
@@ -64,6 +64,7 @@
   align-items: center;
   gap: 16px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* Icon Buttons (Notification Bell) */
@@ -862,7 +863,6 @@
   gap: 2px;
   min-width: 0;
   overflow: hidden;
-  margin-right: auto;
 }
 
 .header-breadcrumb {
