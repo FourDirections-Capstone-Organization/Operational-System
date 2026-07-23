@@ -58,7 +58,7 @@ public class DashboardService : IDashboardService
 
         var activeTasks = allTasks.Where(t => activeStatuses.Contains(t.Status)).ToList();
         var now = DateTime.UtcNow;
-        var overdueTasks = activeTasks.Where(t => t.Deadline < now).ToList();
+        var overdueTasks = activeTasks.Where(t => (t.RevisedDeadline ?? t.Deadline) < now).ToList();
 
         var employeeWorkload = activeTasks
             .SelectMany(t => t.Assignments.Select(a => new { a.AssignedUserId, Task = t }))
@@ -79,7 +79,7 @@ public class DashboardService : IDashboardService
                     Role = user?.Role.ToString() ?? "",
                     Department = user?.Department?.Name ?? "",
                     ActiveTaskCount = g.Count(),
-                    OverdueTaskCount = g.Count(x => x.Task.Deadline < now),
+                    OverdueTaskCount = g.Count(x => (x.Task.RevisedDeadline ?? x.Task.Deadline) < now),
                     AvailabilityStatus = new AvailabilityStatusDTO
                     {
                         Status = user?.AvailabilityStatus.ToString() ?? "Unknown",
@@ -98,7 +98,7 @@ public class DashboardService : IDashboardService
                 DepartmentId = g.Key,
                 DepartmentName = g.First().AssignedDepartment?.Name ?? "Unknown",
                 TotalActiveTasks = g.Count(),
-                TotalOverdueTasks = g.Count(t => t.Deadline < now),
+                TotalOverdueTasks = g.Count(t => (t.RevisedDeadline ?? t.Deadline) < now),
                 EmployeeCount = g.SelectMany(t => t.Assignments)
                     .Select(a => a.AssignedUserId)
                     .Distinct()
@@ -178,7 +178,7 @@ public class DashboardService : IDashboardService
                 DepartmentId = g.Key,
                 DepartmentName = g.First().AssignedDepartment?.Name ?? "Unknown",
                 TotalActiveTasks = g.Count(),
-                TotalOverdueTasks = g.Count(t => t.Deadline < now),
+                TotalOverdueTasks = g.Count(t => (t.RevisedDeadline ?? t.Deadline) < now),
                 EmployeeCount = g.SelectMany(t => t.Assignments)
                     .Select(a => a.AssignedUserId)
                     .Distinct()

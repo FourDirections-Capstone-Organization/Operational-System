@@ -55,7 +55,7 @@ public class OverdueCheckService : BackgroundService
         var overdueTasks = await db.Tasks
             .Include(t => t.Assignments)
             .Include(t => t.CreatedBy)
-            .Where(t => t.Deadline < now
+            .Where(t => (t.RevisedDeadline ?? t.Deadline) < now
                 && t.Status != TaskStatus.Completed
                 && t.Status != TaskStatus.Cancelled)
             .ToListAsync(stoppingToken);
