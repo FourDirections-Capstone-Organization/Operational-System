@@ -13,6 +13,7 @@ public class TaskResponseDTO
     public AssignmentScope AssignmentScope { get; set; }
     public DateTime Deadline { get; set; }
     public bool IsSLALocked { get; set; }
+    public SlaRiskLevel SlaRiskLevel { get; set; }
     public bool IsConfidential { get; set; }
     public Guid CreatedById { get; set; }
     public string? CreatedByName { get; set; }

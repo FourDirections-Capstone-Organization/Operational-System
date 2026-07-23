@@ -431,3 +431,6 @@ FodyWeavers.xsd
 # It contains the graph database files and should NOT be committed to git.
 # Delete this folder manually if you want a fresh Neo4j database.
 neo4j-data/
+
+# Windows system file
+desktop.ini

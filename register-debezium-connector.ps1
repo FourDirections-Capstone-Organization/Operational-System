@@ -1,21 +1,21 @@
-$connectorConfig = @{
-    name   = "stars-postgres-connector"
-    config = @{
-        connector_class   = "io.debezium.connector.postgresql.PostgresConnector"
-        database_hostname = "db"
-        database_port     = "5432"
-        database_user     = "postgres"
-        database_password = "postgres"
-        database_dbname   = "backend_db"
-        topic_prefix      = "stars"
-        table_include_list = "public.*"
-        plugin_name       = "pgoutput"
-        slot_name         = "stars_cdc_slot"
-        publication_name  = "stars_cdc"
+$json = @'
+{
+    "name": "stars-postgres-connector",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "database.hostname": "db",
+        "database.port": "5432",
+        "database.user": "postgres",
+        "database.password": "postgres",
+        "database.dbname": "backend_db",
+        "topic.prefix": "stars",
+        "table.include.list": "public.*",
+        "plugin.name": "pgoutput",
+        "slot.name": "stars_cdc_slot",
+        "publication.name": "stars_cdc"
     }
 }
-
-$json = $connectorConfig | ConvertTo-Json -Depth 3
+'@
 
 Write-Host "Registering Debezium PostgreSQL connector..." -ForegroundColor Cyan
 

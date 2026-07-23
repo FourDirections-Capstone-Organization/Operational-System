@@ -14,13 +14,15 @@ public class TaskService : ITaskService
     private readonly INotificationService _notificationService;
     private readonly IDashboardService _dashboardService;
     private readonly IAuditLogService _auditLogService;
+    private readonly ISlaRiskPredictionService _slaRiskService;
 
-    public TaskService(AppDbContext db, INotificationService notificationService, IDashboardService dashboardService, IAuditLogService auditLogService)
+    public TaskService(AppDbContext db, INotificationService notificationService, IDashboardService dashboardService, IAuditLogService auditLogService, ISlaRiskPredictionService slaRiskService)
     {
         _db = db;
         _notificationService = notificationService;
         _dashboardService = dashboardService;
         _auditLogService = auditLogService;
+        _slaRiskService = slaRiskService;
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId, string? ipAddress = null)
@@ -113,6 +115,8 @@ public class TaskService : ITaskService
         }
 
         await _db.SaveChangesAsync();
+
+        await _slaRiskService.PredictRiskAsync(task.Id);
 
         await _auditLogService.LogAsync(
             creatorId,
@@ -560,6 +564,7 @@ public class TaskService : ITaskService
             AssignmentScope = task.AssignmentScope,
             Deadline = task.Deadline,
             IsSLALocked = task.IsSLALocked,
+            SlaRiskLevel = task.SlaRiskLevel,
             IsConfidential = task.IsConfidential,
             CreatedById = task.CreatedById,
             CreatedByName = task.CreatedBy is not null

@@ -111,12 +111,18 @@ builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<ISuitabilityService, SuitabilityService>();
+builder.Services.AddScoped<ISlaRiskPredictionService, SlaRiskPredictionService>();
+builder.Services.AddSingleton<IExpertSystemConfigStore, JsonExpertSystemConfigStore>();
 builder.Services.Configure<Neo4jSettings>(builder.Configuration.GetSection("Neo4jSettings"));
-
+builder.Services.Configure<ExpertSystemConfig>(builder.Configuration.GetSection("ExpertSystemConfig"));
 
 // Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
 builder.Services.AddHostedService<RecurringTaskGenerator>();
+builder.Services.AddHostedService<SlaRiskTrainingService>();
+builder.Services.AddSingleton<IRetrainTrigger>(sp =>
+    (SlaRiskTrainingService)sp.GetServices<IHostedService>()
+        .First(s => s.GetType() == typeof(SlaRiskTrainingService)));
 
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
