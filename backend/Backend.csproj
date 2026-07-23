@@ -28,6 +28,7 @@
     <PackageReference Include="Neo4j.Driver" Version="5.27.0" />
     <PackageReference Include="Microsoft.ML" Version="4.0.2" />
     <PackageReference Include="Microsoft.ML.FastTree" Version="4.0.2" />
+    <PackageReference Include="ksqlDB.RestApi.Client" Version="7.0.0" />
   </ItemGroup>
 
 </Project>
