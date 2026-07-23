@@ -177,6 +177,37 @@ services:
       db:
         condition: service_healthy
 
+  # =========================================================================
+  # Stream Analytics Infrastructure
+  # =========================================================================
+
+  ksqldb:
+    image: confluentinc/ksqldb-server:0.29.0
+    container_name: ksqldb
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_BOOTSTRAP_SERVERS: kafka:9092
+      KSQL_LISTENERS: http://0.0.0.0:8088
+      KSQL_KSQL_SERVICE_ID: stars-ksql
+      KSQL_KSQL_QUERIES_FILE: /etc/ksql/queries.sql
+      KSQL_KSQL_STREAMS_AUTO_OFFSET_RESET: earliest
+    volumes:
+      - ./ksql-queries.sql:/etc/ksql/queries.sql
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  ksqldb-cli:
+    image: confluentinc/ksqldb-cli:0.29.0
+    container_name: ksqldb-cli
+    restart: "no"
+    depends_on:
+      - ksqldb
+    entrypoint: /bin/sh
+    tty: true
+
 volumes:
   pgdata:
   kafka-data:
