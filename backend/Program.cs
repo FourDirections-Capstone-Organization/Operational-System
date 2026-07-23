@@ -14,6 +14,7 @@ using Backend.Middleware;
 using Backend.Modules.RoleBasedAccessControl;
 using Backend.Modules.TaskManagement;
 using Backend.Modules.Notifications;
+using Backend.Modules.Analytics;
 using Backend.Models;
 using Backend.Models.Enums;
 
@@ -115,10 +116,16 @@ builder.Services.AddScoped<ISlaRiskPredictionService, SlaRiskPredictionService>(
 builder.Services.AddSingleton<IExpertSystemConfigStore, JsonExpertSystemConfigStore>();
 builder.Services.Configure<Neo4jSettings>(builder.Configuration.GetSection("Neo4jSettings"));
 builder.Services.Configure<ExpertSystemConfig>(builder.Configuration.GetSection("ExpertSystemConfig"));
+builder.Services.Configure<BiomarkerThresholds>(builder.Configuration.GetSection("BiomarkerThresholds"));
+
+// Analytics Services
+builder.Services.AddScoped<IStreamAnalyticsService, StreamAnalyticsService>();
+builder.Services.AddScoped<ChartDataService>();
 
 // Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
 builder.Services.AddHostedService<RecurringTaskGenerator>();
+builder.Services.AddHostedService<BiomarkerScanService>();
 builder.Services.AddHostedService<SlaRiskTrainingService>();
 builder.Services.AddSingleton<IRetrainTrigger>(sp =>
     (SlaRiskTrainingService)sp.GetServices<IHostedService>()
