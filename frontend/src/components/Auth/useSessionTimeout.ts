@@ -50,9 +50,8 @@ export function useSessionTimeout() {
             const d = raw?.data ?? raw;
             if (d?.accessToken) localStorage.setItem('authToken', d.accessToken);
             if (d?.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
-        } catch {
-            // Silently ignore heartbeat failures.
-            // The next real API 401 will trigger the interceptor's refresh flow.
+        } catch (err) {
+            console.warn('[SessionTimeout] Heartbeat token refresh failed:', (err as any)?.message ?? err);
         }
     }, []);
 
