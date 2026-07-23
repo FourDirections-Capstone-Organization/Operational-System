@@ -564,6 +564,7 @@ public class TaskService : ITaskService
             AssignmentScope = task.AssignmentScope,
             Deadline = task.Deadline,
             IsSLALocked = task.IsSLALocked,
+            SlaRiskLevel = task.SlaRiskLevel,
             IsConfidential = task.IsConfidential,
             CreatedById = task.CreatedById,
             CreatedByName = task.CreatedBy is not null

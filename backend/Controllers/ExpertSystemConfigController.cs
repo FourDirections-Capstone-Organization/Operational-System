@@ -12,12 +12,10 @@ namespace Backend.Controllers;
 public class ExpertSystemConfigController : ControllerBase
 {
     private readonly IExpertSystemConfigStore _configStore;
-    private readonly SlaRiskTrainingService _trainingService;
 
-    public ExpertSystemConfigController(IExpertSystemConfigStore configStore, SlaRiskTrainingService trainingService)
+    public ExpertSystemConfigController(IExpertSystemConfigStore configStore)
     {
         _configStore = configStore;
-        _trainingService = trainingService;
     }
 
     [HttpGet("config")]
@@ -46,12 +44,5 @@ public class ExpertSystemConfigController : ControllerBase
 
         _configStore.UpdateConfig(newConfig);
         return Ok(ApiResponseDTO<ExpertSystemConfig>.Success(newConfig, "Expert system config updated"));
-    }
-
-    [HttpPost("ml/retrain")]
-    public async Task<IActionResult> RetrainModel()
-    {
-        await System.Threading.Tasks.Task.Run(() => _trainingService.RequestRetrain());
-        return Ok(ApiResponseDTO<string>.Success("Model retraining started"));
     }
 }
