@@ -17,11 +17,13 @@ public class ReportController : ControllerBase
 {
     private readonly IReportService _reportService;
     private readonly AppDbContext _db;
+    private readonly Modules.Analytics.ChartDataService _chartService;
 
-    public ReportController(IReportService reportService, AppDbContext db)
+    public ReportController(IReportService reportService, AppDbContext db, Modules.Analytics.ChartDataService chartService)
     {
         _reportService = reportService;
         _db = db;
+        _chartService = chartService;
     }
 
     [HttpGet("kpi")]
@@ -179,6 +181,34 @@ public class ReportController : ControllerBase
         if (!result.IsSuccess)
             return NotFound(result);
 
+        return Ok(result);
+    }
+
+    [HttpGet("kpi/department/{deptId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetDepartmentKpi(Guid deptId, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        var result = await _reportService.GetDepartmentKpiAsync(deptId, from, to);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    [HttpGet("trends/completion-rate")]
+    [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
+    public async Task<IActionResult> GetCompletionRateTrend([FromQuery] int weeks = 4)
+    {
+        var result = await _chartService.GetCompletionRateTrendAsync(weeks);
         return Ok(result);
     }
 }
