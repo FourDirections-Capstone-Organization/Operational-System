@@ -6,7 +6,12 @@ using Backend.Models.Enums;
 
 namespace Backend.Modules.TaskManagement;
 
-public class SlaRiskTrainingService : BackgroundService
+public interface IRetrainTrigger
+{
+    void RequestRetrain();
+}
+
+public class SlaRiskTrainingService : BackgroundService, IRetrainTrigger
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IWebHostEnvironment _env;
@@ -137,7 +142,7 @@ public class SlaRiskTrainingService : BackgroundService
                 Classification = (float)task.Classification,
                 DepartmentWorkload = deptWorkload,
                 AssignedEmployeeCount = assignedEmployeeCount,
-                HasMultipleAssignments = hasMultipleAssignments,
+                HasMultipleAssignments = hasMultipleAssignments ? 1f : 0f,
                 Label = isOverdue
             });
         }

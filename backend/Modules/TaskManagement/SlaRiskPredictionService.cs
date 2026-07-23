@@ -14,7 +14,7 @@ internal class SlaRiskInput
     public float Classification { get; set; }
     public float DepartmentWorkload { get; set; }
     public float AssignedEmployeeCount { get; set; }
-    public bool HasMultipleAssignments { get; set; }
+    public float HasMultipleAssignments { get; set; }
 }
 
 internal class SlaRiskOutput
@@ -29,7 +29,7 @@ internal class SlaRiskTrainingData
     public float Classification { get; set; }
     public float DepartmentWorkload { get; set; }
     public float AssignedEmployeeCount { get; set; }
-    public bool HasMultipleAssignments { get; set; }
+    public float HasMultipleAssignments { get; set; }
     public bool Label { get; set; }
 }
 
@@ -185,7 +185,7 @@ public class SlaRiskPredictionService : ISlaRiskPredictionService
                 Classification = (float)task.Classification,
                 DepartmentWorkload = deptWorkload,
                 AssignedEmployeeCount = assignedEmployeeCount,
-                HasMultipleAssignments = hasMultipleAssignments
+                HasMultipleAssignments = hasMultipleAssignments ? 1f : 0f
             },
             isUrgent,
             employeeWorkload,
@@ -280,7 +280,7 @@ public class SlaRiskPredictionService : ISlaRiskPredictionService
             new() { FeatureName = "Classification", Value = input.Classification, Contribution = input.Classification, Description = $"Classification: {task.Classification}" },
             new() { FeatureName = "DepartmentWorkload", Value = input.DepartmentWorkload, Contribution = Math.Min(input.DepartmentWorkload / 20.0, 1.0), Description = $"{input.DepartmentWorkload} active tasks in department" },
             new() { FeatureName = "AssignedEmployeeCount", Value = input.AssignedEmployeeCount, Contribution = Math.Min(input.AssignedEmployeeCount / 5.0, 1.0), Description = $"{input.AssignedEmployeeCount} assigned employees" },
-            new() { FeatureName = "HasMultipleAssignments", Value = input.HasMultipleAssignments ? 1 : 0, Contribution = input.HasMultipleAssignments ? 0.3 : 0.0, Description = input.HasMultipleAssignments ? "Multiple employees assigned" : "Single employee assigned" }
+            new() { FeatureName = "HasMultipleAssignments", Value = input.HasMultipleAssignments, Contribution = input.HasMultipleAssignments > 0 ? 0.3 : 0.0, Description = input.HasMultipleAssignments > 0 ? "Multiple employees assigned" : "Single employee assigned" }
         };
 
         var riskLevel = DetermineRiskLevel(prediction.Score);
@@ -305,7 +305,7 @@ public class SlaRiskPredictionService : ISlaRiskPredictionService
             new() { FeatureName = "Classification", Value = input.Classification, Contribution = input.Classification * 0.1, Description = $"Classification: {task.Classification}" },
             new() { FeatureName = "DepartmentWorkload", Value = input.DepartmentWorkload, Contribution = Math.Min(input.DepartmentWorkload / 20.0, 1.0), Description = $"{input.DepartmentWorkload} active tasks in department" },
             new() { FeatureName = "AssignedEmployeeCount", Value = input.AssignedEmployeeCount, Contribution = Math.Min(input.AssignedEmployeeCount / 5.0, 1.0), Description = $"{input.AssignedEmployeeCount} assigned employees" },
-            new() { FeatureName = "HasMultipleAssignments", Value = input.HasMultipleAssignments ? 1 : 0, Contribution = input.HasMultipleAssignments ? 0.3 : 0.0, Description = input.HasMultipleAssignments ? "Multiple employees assigned" : "Single employee assigned" },
+            new() { FeatureName = "HasMultipleAssignments", Value = input.HasMultipleAssignments, Contribution = input.HasMultipleAssignments > 0 ? 0.3 : 0.0, Description = input.HasMultipleAssignments > 0 ? "Multiple employees assigned" : "Single employee assigned" },
             new() { FeatureName = "IsUrgent", Value = isUrgent ? 1 : 0, Contribution = isUrgent ? 0.8 : 0.0, Description = isUrgent ? "Urgent priority task" : "Non-urgent priority" },
             new() { FeatureName = "HourUntilDeadline", Value = (float)Math.Round(hoursUntilDeadline, 1), Contribution = Math.Min(1.0 - hoursUntilDeadline / 168.0, 1.0), Description = $"{Math.Round(hoursUntilDeadline, 1)} hours until deadline" }
         };

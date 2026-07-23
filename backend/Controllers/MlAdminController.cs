@@ -11,17 +11,17 @@ namespace Backend.Controllers;
 [Authorize(Policy = AuthorizationPolicies.ManagerOnly)]
 public class MlAdminController : ControllerBase
 {
-    private readonly SlaRiskTrainingService _trainingService;
+    private readonly IRetrainTrigger _retrainTrigger;
 
-    public MlAdminController(SlaRiskTrainingService trainingService)
+    public MlAdminController(IRetrainTrigger retrainTrigger)
     {
-        _trainingService = trainingService;
+        _retrainTrigger = retrainTrigger;
     }
 
     [HttpPost("retrain")]
     public async Task<IActionResult> RetrainModel()
     {
-        await System.Threading.Tasks.Task.Run(() => _trainingService.RequestRetrain());
+        await System.Threading.Tasks.Task.Run(() => _retrainTrigger.RequestRetrain());
         return Ok(ApiResponseDTO<string>.Success("Model retraining started"));
     }
 }
