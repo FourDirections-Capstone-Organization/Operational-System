@@ -43,4 +43,28 @@ public class SuitabilityController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("tasks/{taskId:guid}/suitability/{employeeId:guid}/explain")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetSuitabilityExplanation(Guid taskId, Guid employeeId)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var roleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        var departmentClaim = User.FindFirst("DepartmentId")?.Value;
+
+        if (string.IsNullOrEmpty(userIdClaim) || string.IsNullOrEmpty(roleClaim))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(roleClaim, out var role))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        var departmentId = !string.IsNullOrEmpty(departmentClaim) && Guid.TryParse(departmentClaim, out var deptId)
+            ? deptId : Guid.Empty;
+
+        var result = await _suitabilityService.GetSuitabilityExplanationAsync(taskId, employeeId, role, departmentId);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }
