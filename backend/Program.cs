@@ -111,6 +111,7 @@ builder.Services.AddScoped<IDuplicateDetectionService, DuplicateDetectionService
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<ISuitabilityService, SuitabilityService>();
+builder.Services.AddScoped<ISlaRiskPredictionService, SlaRiskPredictionService>();
 builder.Services.Configure<Neo4jSettings>(builder.Configuration.GetSection("Neo4jSettings"));
 builder.Services.Configure<ExpertSystemConfig>(builder.Configuration.GetSection("ExpertSystemConfig"));
 
