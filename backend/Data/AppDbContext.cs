@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<BiomarkerAlert> BiomarkerAlerts => Set<BiomarkerAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
