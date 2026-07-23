@@ -68,6 +68,21 @@ import TaskManager from '../../components/TaskManager/TaskManager';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
+import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
+
+const BIOMARKER_SCAN_LOGS: ActivityLog[] = [
+    { activityLogId: 'bio-scan-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Scan', description: 'Automated daily scan SCAN-20260723-001 finished. 10 violations detected.', createdAt: '2026-07-23T00:02:00' },
+    { activityLogId: 'bio-flag-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'RED FLAG generated for Jose Rizal (C-0388): Compound SLA + workload violation.', createdAt: '2026-07-23T00:01:00' },
+    { activityLogId: 'bio-flag-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Juan dela Cruz (C-0421): Recurring SLA breach pattern.', createdAt: '2026-07-23T00:01:05' },
+    { activityLogId: 'bio-flag-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Ana Gonzales (C-0612): Workload trending upward.', createdAt: '2026-07-23T00:01:10' },
+    { activityLogId: 'bio-flag-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'GREEN FLAG generated for Carlos Mendoza (C-0724): Workload normalized.', createdAt: '2026-07-23T00:01:15' },
+    { activityLogId: 'bio-viol-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88231 (Juan dela Cruz / Last Mile) breached SLA by 4h 32m. Flagged as Critical.', createdAt: '2026-07-23T00:00:12' },
+    { activityLogId: 'bio-viol-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88190 (Maria Santos / Dispatch) breached SLA by 1h 15m. Flagged as High.', createdAt: '2026-07-23T00:00:14' },
+    { activityLogId: 'bio-viol-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88012 (Pedro Reyes / Logistics) breached SLA by 45m. Flagged as Medium.', createdAt: '2026-07-23T00:00:16' },
+    { activityLogId: 'bio-viol-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0388 (Jose Rizal / Last Mile) has 12 active tasks (threshold: 8). Flagged as Critical.', createdAt: '2026-07-23T00:00:30' },
+    { activityLogId: 'bio-viol-005', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0612 (Ana Gonzales / Dispatch) has 10 active tasks (threshold: 8). Flagged as High.', createdAt: '2026-07-23T00:00:31' },
+    { activityLogId: 'bio-viol-006', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0724 (Carlos Mendoza / Logistics) has 9 active tasks (threshold: 8). Flagged as Low.', createdAt: '2026-07-23T00:00:32' },
+];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +99,8 @@ type NavTab =
     | 'activity_logs'
     | 'tasks'
     | 'profile'
-    | 'org-structure';
+    | 'org-structure'
+    | 'biomarker';
 
 // ─── Updated Types ────────────────────────────────────────────────────────────
 
@@ -2014,6 +2030,7 @@ export default function Dashboard() {
         { label: 'Role Management', onClick: () => setActiveTab('roles') },
         { label: 'Org Structure', onClick: () => setActiveTab('org-structure') },
         { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        { label: 'Biomarker Scan', onClick: () => setActiveTab('biomarker') },
         ],
         },
         {
@@ -2577,6 +2594,14 @@ export default function Dashboard() {
         }
     };
 
+    const allActivityLogs = useMemo(() =>
+        [...BIOMARKER_SCAN_LOGS, ...activityLogs],
+    [activityLogs]);
+
+    const combinedTotalPages = useMemo(() =>
+        Math.max(1, Math.ceil(allActivityLogs.length / 10)),
+    [allActivityLogs.length]);
+
     // Re-fetch activity logs when the tab becomes active or any filter changes
     useEffect(() => {
         if (activeTab === 'activity_logs' || activeTab === 'dashboard') {
@@ -2697,7 +2722,8 @@ export default function Dashboard() {
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
         roles: 'Role Management', reports: 'Reports', announcements: 'Announcements', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
         tasks: 'Task Manager',
-        'org-structure': 'Organizational Structure'
+        'org-structure': 'Organizational Structure',
+        biomarker: 'Biomarker Alert Dashboard'
     };
 
     return (
@@ -2780,6 +2806,7 @@ export default function Dashboard() {
                 {activeTab === 'roles' && <RoleManagementTab />}
 
                 {activeTab === 'org-structure' && <OrgStructureTab />}
+                {activeTab === 'biomarker' && <BiomarkerDashboard />}
 
                 {activeTab === 'announcements' && <AnnouncementsTab canCreate={true} />}
 
@@ -2903,6 +2930,10 @@ export default function Dashboard() {
                                         <option value="Approval Request Submitted">Approval Request Submitted</option>
                                         <option value="Approval Tier Approved">Approval Tier Approved</option>
                                         <option value="Approval Tier Rejected">Approval Tier Rejected</option>
+                                        <option value="Biomarker Scan">Biomarker Scan</option>
+                                        <option value="Biomarker Flag">Biomarker Flag</option>
+                                        <option value="SLA Breach">SLA Breach</option>
+                                        <option value="Workload Overload">Workload Overload</option>
                                     </select>
                                     <input type="date" value={activityLogDateFrom} onChange={e => setActivityLogDateFrom(e.target.value)}
                                         style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 130, boxSizing: 'border-box', outline: 'none' }} />
@@ -2919,13 +2950,14 @@ export default function Dashboard() {
                             loading={activityLogLoading}
                             emptyMessage="No activity logs found in the system."
                             emptyIcon={<Activity size={24} />}
-                            totalRecords={activityLogs.length}
+                            totalRecords={allActivityLogs.length}
                             currentPage={activityLogPage}
-                            totalPages={activityLogTotalPages}
+                            totalPages={combinedTotalPages}
                             onPageChange={p => fetchActivityLogs(p)}
                         >
-                            {activityLogs.map(log => {
+                            {allActivityLogs.map(log => {
                                 const empName = [log.firstName, log.middleName, log.lastName, log.suffix].filter(Boolean).join(' ');
+                                const isBiomarker = log.activityLogId.startsWith('bio-');
                                 return (
                                     <tr key={log.activityLogId}>
                                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
@@ -2936,15 +2968,15 @@ export default function Dashboard() {
                                                 display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
                                                 background: log.activityType === 'Login' ? 'var(--status-active-bg)' :
                                                     log.activityType === 'Logout' ? 'var(--status-pending-bg)' :
-                                                        'var(--status-new-bg)',
+                                                        isBiomarker ? '#ede9fe' : 'var(--status-new-bg)',
                                                 color: log.activityType === 'Login' ? 'var(--status-active)' :
                                                     log.activityType === 'Logout' ? 'var(--status-pending)' :
-                                                        'var(--status-new)',
+                                                        isBiomarker ? '#6d28d9' : 'var(--status-new)',
                                             }}>
                                                 {log.activityType}
                                             </span>
                                         </td>
-                                        <td style={{ fontSize: 13 }}>{empName || 'System'}</td>
+                                        <td style={{ fontSize: 13 }}>{isBiomarker ? 'Biomarker Scan' : (empName || 'System')}</td>
                                         <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
                                     </tr>
                                 );
