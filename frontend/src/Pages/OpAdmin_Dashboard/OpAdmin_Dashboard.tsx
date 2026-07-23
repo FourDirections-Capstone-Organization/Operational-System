@@ -64,6 +64,7 @@ import SubTabNav from '../../components/ui/SubTabNav';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
 import api from '../../api';
 import axios from 'axios';
+import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -105,6 +106,14 @@ interface DepartmentWorkloadItem {
     employeeCount: number;
 }
 
+interface TeamWorkloadItem {
+    teamId: string;
+    teamName: string;
+    memberCount: number;
+    totalActiveTasks: number;
+    totalOverdueTasks: number;
+}
+
 interface DashboardResponse {
     totalActiveTasks: number;
     overdueTaskCount: number;
@@ -115,6 +124,7 @@ interface DashboardResponse {
     completedTodayCount: number;
     employeeWorkload: DashboardEmployeeWorkload[];
     departmentWorkload: DepartmentWorkloadItem[];
+    teamWorkload: TeamWorkloadItem[];
 }
 
 interface EmployeeFilterOption {
@@ -1626,13 +1636,13 @@ const DashboardTab: React.FC<{
     dashboardDepartments: DepartmentFilterOption[];
     dashboardLoading: boolean;
     dashboardError: string | null;
-    filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string };
-    onFilterChange: (filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string }) => void;
+    filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string; assignmentScope: string };
+    onFilterChange: (filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string; assignmentScope: string }) => void;
     onClearFilters: () => void;
     onNewTask: () => void;
 }> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask }) => {
     const [searchQuery, setSearchQuery] = useState('');
-    const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus;
+    const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus || filters.assignmentScope;
     const td = dashboardData;
 
     const totalActive = td?.totalActiveTasks ?? 0;
@@ -1644,10 +1654,13 @@ const DashboardTab: React.FC<{
     const overdue = td?.overdueTaskCount ?? 0;
     const total = notStarted + inProgress + pendingReview + onHold + completedToday;
     const workloads = td?.employeeWorkload ?? [];
+    const teamWorkloads = td?.teamWorkload ?? [];
+    const deptWorkloads = td?.departmentWorkload ?? [];
     const filteredWorkloads = searchQuery
         ? workloads.filter(w => w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()))
         : workloads;
     const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
+    const lastUpdated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
     const statusChartData = [
         { name: 'Not Started', value: notStarted, color: 'var(--text-secondary)' },
@@ -1672,30 +1685,43 @@ const DashboardTab: React.FC<{
                 <EmptyState icon={<Loader2 size={24} className="spin" />} title="Loading workload data..." />
             ) : (
                 <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                        <div style={{ position: 'relative', width: 300, margin: 0 }}>
-                            <Search size={14} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input type="text" placeholder="Search employee…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '100%', height: 46, borderRadius: 999, border: '1px solid #dbe3f0', background: '#f8fafc', padding: '0 20px 0 42px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                                onFocus={e => { e.target.style.background = '#ffffff'; e.target.style.borderColor = '#14b8a6'; e.target.style.boxShadow = '0 0 0 4px rgba(20,184,166,0.08)'; }}
-                                onBlur={e => { e.target.style.background = '#f8fafc'; e.target.style.borderColor = '#dbe3f0'; e.target.style.boxShadow = 'none'; }} />
+                    {/* ── Header Row: Neo4j badge + auto-refresh + New Task ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span className="ai-neo4j-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 10, fontWeight: 700, borderRadius: 999, background: 'rgba(0,169,157,0.08)', color: 'var(--primary)', border: '1px solid rgba(0,169,157,0.15)', whiteSpace: 'nowrap' }}>
+                                <Activity size={12} /> Neo4j Graph
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-active)', display: 'inline-block' }} />
+                                Auto-refresh 30s
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                Updated {lastUpdated}
+                            </span>
                         </div>
                         <button className="btn btn-primary" onClick={onNewTask} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 9, fontSize: 13, whiteSpace: 'nowrap' }}>
                             <Plus size={14} /> New Task
                         </button>
                     </div>
-                    <div className="stats-row">
-                        {[
-                            { label: 'TOTAL', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: `${total} task${total !== 1 ? 's' : ''}` },
-                            { label: 'ACTIVE', value: totalActive, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning' as const, subtext: 'In Progress / Assigned' },
-                            { label: 'PENDING REVIEW', value: pendingReview, icon: <Eye size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: 'Awaiting admin' },
-                            { label: 'COMPLETED TODAY', value: completedToday, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success' as const, subtext: 'Today' },
-                            { label: 'ON HOLD', value: onHold, icon: <Clock size={20} strokeWidth={2.3} />, variant: 'teal' as const, subtext: 'Paused' },
-                            { label: 'OVERDUE', value: overdue, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger' as const, subtext: 'Past deadline' },
-                        ].map(s => (
-                            <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
-                        ))}
-                    </div>
+                    {td ? (
+                        <div className="stats-row">
+                            <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="teal" label="Total Tasks" value={total} subtext={`${total} task${total !== 1 ? 's' : ''}`} />
+                            <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="Active / In Progress" value={totalActive} subtext={inProgress > 0 ? `${inProgress} in progress` : 'None in progress'} />
+                            <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant="info" label="Pending Review" value={pendingReview} subtext={pendingReview > 0 ? 'Awaiting admin review' : 'All reviewed'} />
+                            <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="Completed Today" value={completedToday} subtext={completedToday > 0 ? `Out of ${total} total` : 'No completions yet'} />
+                            <StatusCard icon={<Clock size={20} strokeWidth={2.3} />} variant="new" label="On Hold" value={onHold} subtext={onHold > 0 ? `${onHold} paused` : 'None on hold'} />
+                            <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="Overdue" value={overdue} subtext={overdue > 0 ? `${overdue} past deadline` : 'No overdue tasks'} />
+                        </div>
+                    ) : (
+                        <div className="stats-row">
+                            <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="teal" label="Total Tasks" value={0} subtext="No data" />
+                            <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="Active / In Progress" value={0} subtext="No data" />
+                            <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant="info" label="Pending Review" value={0} subtext="No data" />
+                            <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="Completed Today" value={0} subtext="No data" />
+                            <StatusCard icon={<Clock size={20} strokeWidth={2.3} />} variant="new" label="On Hold" value={0} subtext="No data" />
+                            <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="Overdue" value={0} subtext="No data" />
+                        </div>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1747,7 +1773,16 @@ const DashboardTab: React.FC<{
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, marginBottom: 16 }}>
+                    {/* ── Employee Search ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, gap: 12 }}>
+                        <div style={{ position: 'relative', width: 280 }}>
+                            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input type="text" placeholder="Search employee…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                style={{ width: '100%', height: 38, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--bg-primary)', padding: '0 16px 0 36px', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)', fontFamily: 'inherit' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div className="card">
                             <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
                                 <h3>Employee Workload Distribution</h3>
@@ -1763,7 +1798,6 @@ const DashboardTab: React.FC<{
                                         <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
                                         <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', fontSize: 12 }} />
                                         <Bar dataKey="Total" fill="var(--primary)" radius={[3, 3, 0, 0]} name="Total" />
-                                        <Bar dataKey="Completed" fill="var(--status-active)" radius={[3, 3, 0, 0]} name="Completed" />
                                         <Bar dataKey="Overdue" fill="var(--status-failed)" radius={[3, 3, 0, 0]} name="Overdue" />
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1811,38 +1845,97 @@ const DashboardTab: React.FC<{
                         </div>
                     </div>
 
+                    {/* ── Team + Department Workload Row ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                        <div className="card">
+                            <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
+                                <h3>Team Workload Distribution</h3>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{teamWorkloads.length} teams</span>
+                            </div>
+                            {teamWorkloads.length === 0 ? (
+                                <EmptyState title="No team workload data." />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {teamWorkloads.map(t => {
+                                        const total = t.totalActiveTasks + t.totalOverdueTasks;
+                                        const pct = total > 0 ? Math.round((1 - t.totalOverdueTasks / total) * 100) : 100;
+                                        const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
+                                        return (
+                                            <div key={t.teamId} style={{ padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.teamName}</span>
+                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.memberCount} members</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 6 }}>
+                                                    <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>{t.totalActiveTasks} active</span>
+                                                    <span style={{ color: t.totalOverdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 600 }}>{t.totalOverdueTasks} overdue</span>
+                                                </div>
+                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
+                                <h3>Department Workload</h3>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{deptWorkloads.length} departments</span>
+                            </div>
+                            {deptWorkloads.length === 0 ? (
+                                <EmptyState title="No department workload data." />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {deptWorkloads.map(d => {
+                                        const total = d.totalActiveTasks + d.totalOverdueTasks;
+                                        const pct = total > 0 ? Math.round((1 - d.totalOverdueTasks / total) * 100) : 100;
+                                        const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
+                                        return (
+                                            <div key={d.departmentId} style={{ padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{d.departmentName}</span>
+                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.employeeCount} employees</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 6 }}>
+                                                    <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>{d.totalActiveTasks} active</span>
+                                                    <span style={{ color: d.totalOverdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 600 }}>{d.totalOverdueTasks} overdue</span>
+                                                </div>
+                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <DataTable
                         title="Workload Summary per Employee"
                         filterElements={
-                            <>
-                                {[{ label: '1 Month', months: 1 }, { label: '3 Months', months: 3 }, { label: '6 Months', months: 6 }, { label: '12 Months', months: 12 }].map(p => {
-                                    const isActive = filters.dateStart && filters.dateEnd && (() => {
-                                        const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                        return filters.dateStart === start.toISOString().split('T')[0];
-                                    })();
-                                    return (
-                                        <span key={p.label} className={`filter-pill${isActive ? ' active' : ''}`}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                                onFilterChange({ ...filters, dateStart: start.toISOString().split('T')[0], dateEnd: end.toISOString().split('T')[0] });
-                                            }}
-                                            style={{ fontSize: 12, padding: '6px 12px', height: 38, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-                                            {p.label}
-                                        </span>
-                                    );
-                                })}
-                                <select value={filters.employeeId}
+                            <div className="dt-filter-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <select value={filters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => onFilterChange({ ...filters, assignmentScope: e.target.value })}>
+                                    <option value="">All Scopes</option>
+                                    <option value="0">Single Employee</option>
+                                    <option value="1">Team</option>
+                                    <option value="2">Department</option>
+                                </select>
+                                <select value={filters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, employeeId: e.target.value })}>
                                     <option value="">All Employees</option>
                                     {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
                                 </select>
-                                <select value={filters.departmentId}
+                                <select value={filters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, departmentId: e.target.value })}>
                                     <option value="">All Departments</option>
                                     {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
                                 </select>
-                                <select value={filters.taskStatus}
+                                <select value={filters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, taskStatus: e.target.value })}>
                                     <option value="">All Statuses</option>
                                     <option value="Assigned">Assigned</option>
@@ -1851,10 +1944,28 @@ const DashboardTab: React.FC<{
                                     <option value="Completed">Completed</option>
                                     <option value="Overdue">Overdue</option>
                                 </select>
+                                {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
+                                    const isActive = filters.dateStart && filters.dateEnd && (() => {
+                                        const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                        return filters.dateStart === start.toISOString().split('T')[0];
+                                    })();
+                                    return (
+                                        <button key={p.label}
+                                            className={`filter-pill${isActive ? ' active' : ''}`}
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                                onFilterChange({ ...filters, dateStart: start.toISOString().split('T')[0], dateEnd: end.toISOString().split('T')[0] });
+                                            }}
+                                            style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {p.label}
+                                        </button>
+                                    );
+                                })}
                                 {hasAnyFilter && (
-                                    <button className="btn btn-sm" onClick={onClearFilters} style={{ height: 38, whiteSpace: 'nowrap' }}><X size={12} /> Clear</button>
+                                    <button className="btn btn-sm" onClick={onClearFilters} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
                                 )}
-                            </>
+                            </div>
                         }
                         headers={['EMPLOYEE', 'TOTAL', 'ACTIVE', 'COMPLETED', 'OVERDUE', 'COMPLETION']}
                         loading={false}
@@ -3694,6 +3805,8 @@ function ProfileTab() {
     const middleName = localStorage.getItem('middleName') ?? '';
     const lastName = localStorage.getItem('lastName') ?? '';
     const employeeNameStored = [firstName, middleName, lastName].filter(Boolean).join(' ');
+    const profileRole = localStorage.getItem('role') ?? '';
+    const displayProfileRole = profileRole === 'Manager' ? 'Manager' : 'Coordinator';
     const employeeContact = localStorage.getItem('contactNumber') ?? '';
     const storedEmail = localStorage.getItem('email') ?? '';
 
@@ -4150,7 +4263,7 @@ function ProfileTab() {
                                     <span className="system-detail">Operations access granted</span>
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'rgba(67,24,255,0.1)', padding: '4px 10px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-                                    Op Admin
+                                    {displayProfileRole}
                                 </span>
                             </div>
                             <div style={{ height: 1, background: 'var(--border)' }} />
@@ -4586,7 +4699,9 @@ export default function OpsAdminDashboard() {
     const firstName = localStorage.getItem('firstName') ?? '';
     const lastName = localStorage.getItem('lastName') ?? '';
     const middleName = localStorage.getItem('middleName') ?? '';
-    const employeeName = [firstName, middleName, lastName].filter(Boolean).join(' ') || 'Op Admin';
+    const rawRole = localStorage.getItem('role') ?? '';
+    const displayRole = rawRole === 'Manager' ? 'Manager' : 'Coordinator';
+    const employeeName = [firstName, middleName, lastName].filter(Boolean).join(' ') || displayRole;
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
@@ -4680,6 +4795,7 @@ export default function OpsAdminDashboard() {
     useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
 
     const [showNew, setShowNew] = useState(false);
+    const [taskSubTab, setTaskSubTab] = useState<'list' | 'create'>('list');
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [viewingTask, setViewingTask] = useState<Task | null>(null);
     const [detailTask, setDetailTask] = useState<TaskViewTask | null>(null);
@@ -4703,45 +4819,74 @@ export default function OpsAdminDashboard() {
 
     // -- Dashboard Data --
     const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const [dashboardLoading, setDashboardLoading] = useState(false);
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [dashboardEmployees, setDashboardEmployees] = useState<EmployeeFilterOption[]>([]);
     const [dashboardDepartments, setDashboardDepartments] = useState<DepartmentFilterOption[]>([]);
-    const [dashboardFilters, setDashboardFilters] = useState({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+    const [dashboardFilters, setDashboardFilters] = useState({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '', assignmentScope: '' });
 
-    const parseDateParam = (dateStr: string): string | undefined => dateStr || undefined;
+    const mountedRef = useRef(true);
+    const filtersRef = useRef(dashboardFilters);
+    filtersRef.current = dashboardFilters;
 
-    const fetchDashboardData = useCallback(async () => {
+    useEffect(() => {
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    const doFetchDashboard = useCallback(async () => {
+        if (!mountedRef.current) return;
         setDashboardLoading(true);
         setDashboardError(null);
+        const currentFilters = filtersRef.current;
+
         try {
             const params = new URLSearchParams();
-            const ds = parseDateParam(dashboardFilters.dateStart);
+            const ds = currentFilters.dateStart || undefined;
             if (ds) params.append('dateRangeStart', ds);
-            const de = parseDateParam(dashboardFilters.dateEnd);
+            const de = currentFilters.dateEnd || undefined;
             if (de) params.append('dateRangeEnd', de);
-            if (dashboardFilters.employeeId) params.append('employeeId', dashboardFilters.employeeId);
-            if (dashboardFilters.departmentId) params.append('departmentId', dashboardFilters.departmentId);
-            if (dashboardFilters.taskStatus) {
+            if (currentFilters.employeeId) params.append('employeeId', currentFilters.employeeId);
+            if (currentFilters.departmentId) params.append('departmentId', currentFilters.departmentId);
+            if (currentFilters.taskStatus) {
                 const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
-                params.append('status', statusMap[dashboardFilters.taskStatus] || dashboardFilters.taskStatus);
+                params.append('status', statusMap[currentFilters.taskStatus] || currentFilters.taskStatus);
             }
-            const res = await api.get(`/api/Dashboard/metrics?${params}`);
+            if (currentFilters.assignmentScope) params.append('assignmentScope', currentFilters.assignmentScope);
+
+            const res = await axios.get(`/api/ai-dashboard/metrics?${params}`, { timeout: 6000 });
+            if (!mountedRef.current) return;
             const body = res.data;
             if (!body.isSuccess) {
-                setDashboardError(body.message || 'No workload data available.');
-                setDashboardData(null);
+                setFallbackDashboardData();
             } else {
                 setDashboardData(body.data);
                 setDashboardError(null);
             }
         } catch (err: any) {
-            setDashboardError(err.message || 'No workload data available.');
-            setDashboardData(null);
+            if (!mountedRef.current) return;
+            console.warn('[Dashboard] metrics unavailable, using fallback:', err?.message || err);
+            setFallbackDashboardData();
         } finally {
-            setDashboardLoading(false);
+            if (mountedRef.current) setDashboardLoading(false);
         }
-    }, [dashboardFilters]);
+    }, []);
+
+    const setFallbackDashboardData = useCallback(() => {
+        const fallback: DashboardResponse = {
+            totalActiveTasks: 0,
+            overdueTaskCount: 0,
+            notStartedCount: 0,
+            inProgressCount: 0,
+            donePendingReviewCount: 0,
+            onHoldCount: 0,
+            completedTodayCount: 0,
+            employeeWorkload: [],
+            departmentWorkload: [],
+            teamWorkload: [],
+        };
+        setDashboardData(fallback);
+        setDashboardError(null);
+    }, []);
 
     const fetchDashboardFilterOptions = useCallback(async () => {
         try {
@@ -4763,7 +4908,7 @@ export default function OpsAdminDashboard() {
     }, []);
 
     const handleDashboardClearFilters = useCallback(() => {
-        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '', assignmentScope: '' });
     }, []);
 
     // -- Activity Logs --
@@ -4857,7 +5002,7 @@ export default function OpsAdminDashboard() {
             });
             success('Task restored successfully.');
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             await fetchBinRecords();
         } catch (err: any) {
             error(err.message ?? 'Failed to restore task.');
@@ -4997,7 +5142,7 @@ export default function OpsAdminDashboard() {
 
             setShowNew(false);
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             success('Task created successfully.');
         } catch (err: any) {
             console.error('Create task error:', err);
@@ -5011,7 +5156,7 @@ export default function OpsAdminDashboard() {
         try {
             await api.put(`/api/Task/${taskId}`, data);
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setEditingTask(null);
             success('Task updated successfully.');
         } catch (err: any) {
@@ -5027,7 +5172,7 @@ export default function OpsAdminDashboard() {
             formData.append('Reason', 'Admin reopen request');
             await api.upload(`/api/Task/${taskId}/reopen-request`, formData);
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             await fetchReopenRequests();
             success('Reopen request submitted for review.');
         } catch (err: any) {
@@ -5046,7 +5191,7 @@ export default function OpsAdminDashboard() {
         try {
             await api.patch(`/api/Task/${taskId}/status`, { newStatus: STATUS_TO_BACKEND[newStatus] || newStatus });
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setViewingTask(null);
             success('Task status updated successfully.');
         } catch (err: any) {
@@ -5062,7 +5207,7 @@ export default function OpsAdminDashboard() {
                 remarks: reviewerRemarks || undefined,
             });
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             success(
                 adminDecision === 'Approve & Close'
                     ? 'Task officially closed and recorded.'
@@ -5103,7 +5248,7 @@ export default function OpsAdminDashboard() {
                     : r
             ));
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setReviewingRequest(null);
             success('Reopening request approved � Task reopened � Task history preserved � Audit Log entry generated.');
         } catch (err: any) {
@@ -5123,7 +5268,7 @@ export default function OpsAdminDashboard() {
                     ? { ...r, status: 'Rejected', adminRemarks, reviewedAt: new Date().toISOString() }
                     : r
             ));
-            await fetchDashboardData();
+            await doFetchDashboard();
             setReviewingRequest(null);
             success('Reopening request rejected � Original task preserved � Audit Log entry generated.');
         } catch (err: any) {
@@ -5156,7 +5301,7 @@ export default function OpsAdminDashboard() {
                     success('Task deleted successfully.');
 
                     await fetchTasks();
-                    await fetchDashboardData();
+                    await doFetchDashboard();
                     await fetchBinRecords();
 
                 } catch (err: any) {
@@ -5191,41 +5336,52 @@ export default function OpsAdminDashboard() {
         activity_logs: 'Activity Logs',
     };
 
-    // -- Fetch dashboard data when filters change --
+    // -- Fetch dashboard data on mount and when filters change --
     useEffect(() => {
-        fetchDashboardData();
-        fetchActivityLogs(1);
-    }, [fetchDashboardData]);
+        doFetchDashboard();
+    }, [dashboardFilters]);
 
-    // -- Polling fallback: refresh tasks periodically regardless of SignalR --
+    useEffect(() => {
+        fetchActivityLogs(1);
+    }, []);
+
+    // -- Polling fallback: refresh tasks and dashboard periodically --
     useEffect(() => {
         const interval = setInterval(() => fetchTasks(), 30000);
         return () => clearInterval(interval);
     }, []);
 
+    // -- Auto-refresh dashboard data every 30 seconds --
+    useEffect(() => {
+        const interval = setInterval(() => doFetchDashboard(), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     return (
         <div className="dashboard-container">
-            <Sidebar
-                logoUrl={SpeedexLogo}
-                logoText="SPEEDEX"
-                navGroups={SIDEBAR_NAV_GROUPS}
-                profile={{
-                    name: employeeName || 'Op Admin',
-                    role: 'Operations Admin',
-                    avatarInitials: getInitials(employeeName || 'Op Admin'),
-                }}
-            />
+                <Sidebar
+                    logoUrl={SpeedexLogo}
+                    logoText="SPEEDEX"
+                    navGroups={SIDEBAR_NAV_GROUPS}
+                    profile={{
+                        name: employeeName || displayRole,
+                        role: displayRole,
+                        avatarInitials: getInitials(employeeName || displayRole),
+                    }}
+                    onProfileClick={() => setActiveTab('profile')}
+                    onLogout={handleLogout}
+                />
 
             {/* -- Main -- */}
             <main className="main-viewport">
                 <GlobalHeader
                     title={pageTitles[activeTab]}
-                    breadcrumbs={[{ label: 'Ops Admin' }, { label: pageTitles[activeTab] }]}
+                    breadcrumbs={[{ label: displayRole }, { label: pageTitles[activeTab] }]}
                     notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
                     profile={{
-                        name: employeeName || 'Op Admin',
-                        role: 'Operations Admin',
-                        avatarInitials: getInitials(employeeName || 'Op Admin'),
+                        name: employeeName || displayRole,
+                        role: displayRole,
+                        avatarInitials: getInitials(employeeName || displayRole),
                     }}
                     onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
@@ -5241,23 +5397,43 @@ export default function OpsAdminDashboard() {
                         filters={dashboardFilters}
                         onFilterChange={setDashboardFilters}
                         onClearFilters={handleDashboardClearFilters}
-                        onNewTask={() => setShowNew(true)}
+                        onNewTask={() => { setActiveTab('tasks'); setTaskSubTab('create'); }}
                     />
                 )}
                 {activeTab === 'tasks' && (
-                    <div className="dashboard-content">
-                        <TaskManager
-                            tasks={tmTasks}
-                            teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
-                            onNewTask={() => setShowNew(true)}
-                            onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
-                            onView={id => setDetailTask(tasks.find(t => t.taskId === id) ?? null)}
-                            onArchive={ids => { ids.forEach(id => handleDeleteTask(id)); }}
-                            onRestore={ids => { ids.forEach(id => handleRestoreTask(id)); }}
-                            onDelete={ids => { ids.forEach(id => handleDeleteTask(id)); }}
-                            onMarkDone={ids => { ids.forEach(id => handleStatusTransition(id, 'Completed')); }}
-                        />
-                    </div>
+                    <>
+                        <div className="dashboard-content" style={{ paddingBottom: 0 }}>
+                            <SubTabNav
+                                className="tasks-subtab-nav"
+                                tabs={[
+                                    { key: 'list', label: 'Task List' },
+                                    { key: 'create', label: 'Create Task' },
+                                ]}
+                                activeKey={taskSubTab}
+                                onTabChange={key => setTaskSubTab(key as 'list' | 'create')}
+                            />
+                        </div>
+                        {taskSubTab === 'list' && (
+                            <div className="dashboard-content">
+                                <TaskManager
+                                    tasks={tmTasks}
+                                    teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
+                                    onNewTask={() => { setTaskSubTab('create'); setShowNew(false); }}
+                                    onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
+                                    onView={id => setDetailTask(tasks.find(t => t.taskId === id) ?? null)}
+                                    onArchive={ids => { ids.forEach(id => handleDeleteTask(id)); }}
+                                    onRestore={ids => { ids.forEach(id => handleRestoreTask(id)); }}
+                                    onDelete={ids => { ids.forEach(id => handleDeleteTask(id)); }}
+                                    onMarkDone={ids => { ids.forEach(id => handleStatusTransition(id, 'Completed')); }}
+                                />
+                            </div>
+                        )}
+                        {taskSubTab === 'create' && (
+                            <div className="dashboard-content">
+                                <AIAssignmentView />
+                            </div>
+                        )}
+                    </>
                 )}
                 {activeTab === 'team' && (
                     <TeamTab
@@ -5362,7 +5538,7 @@ export default function OpsAdminDashboard() {
                         try {
                             await api.patch(`/api/Task/${id}/push-back`, { comment });
                             await fetchTasks();
-                            await fetchDashboardData();
+                            await doFetchDashboard();
                             setDetailTask(null);
                             success('Task pushed back to In Progress.');
                         } catch (err: any) {

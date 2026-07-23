@@ -34,6 +34,8 @@ export interface SidebarProps {
     role: string;
     avatarInitials: string;
   };
+  onProfileClick?: () => void;
+  onLogout?: () => void;
 }
 
 const defaultNavGroups: NavGroup[] = [
@@ -74,8 +76,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   logoText = "SPEEDEX",
   navGroups = defaultNavGroups,
   profile = defaultProfile,
+  onProfileClick,
+  onLogout,
 }) => {
-  const { toast } = useToast();
+  const { info, success } = useToast();
   // Persist collapse preference
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -355,16 +359,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="dropdown-role">{profile.role}</span>
               </div>
               <div className="dropdown-divider" />
-              <button className="dropdown-option" onClick={() => toast.info("My Profile → Redirecting to profile details...")}>
+              <button className="dropdown-option" onClick={() => { setShowProfileMenu(false); onProfileClick?.(); }}>
                 <i className="ti ti-user" />
                 <span>My Profile</span>
               </button>
-              <button className="dropdown-option" onClick={() => toast.info("System Settings → Settings Panel opened.")}>
-                <i className="ti ti-settings" />
-                <span>System Settings</span>
-              </button>
               <div className="dropdown-divider" />
-              <button className="dropdown-option logout" onClick={() => toast.success("Logging out of Speedex SSO System...")}>
+              <button className="dropdown-option logout" onClick={() => { setShowProfileMenu(false); onLogout?.(); }}>
                 <i className="ti ti-logout" />
                 <span>Log Out</span>
               </button>
