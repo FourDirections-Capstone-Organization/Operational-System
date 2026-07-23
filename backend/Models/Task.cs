@@ -28,6 +28,8 @@ public class Task
 
     public bool IsSLALocked { get; set; } = false;
 
+    public SlaRiskLevel SlaRiskLevel { get; set; } = SlaRiskLevel.Low;
+
     public bool IsConfidential { get; set; } = false;
 
     public Guid CreatedById { get; set; }
