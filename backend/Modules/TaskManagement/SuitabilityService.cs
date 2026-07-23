@@ -13,13 +13,13 @@ public class SuitabilityService : ISuitabilityService
     private readonly AppDbContext _db;
     private readonly IDriver _neo4j;
     private readonly ILogger<SuitabilityService> _logger;
-    private readonly IOptions<ExpertSystemConfig> _config;
+    private readonly IExpertSystemConfigStore _configStore;
 
-    public SuitabilityService(AppDbContext db, IOptions<Neo4jSettings> options, IOptions<ExpertSystemConfig> config, ILogger<SuitabilityService> logger)
+    public SuitabilityService(AppDbContext db, IOptions<Neo4jSettings> options, IExpertSystemConfigStore configStore, ILogger<SuitabilityService> logger)
     {
         _db = db;
         _neo4j = GraphDatabase.Driver(options.Value.Uri, AuthTokens.Basic(options.Value.User, options.Value.Password));
-        _config = config;
+        _configStore = configStore;
         _logger = logger;
     }
 
@@ -57,7 +57,7 @@ public class SuitabilityService : ISuitabilityService
             {
                 var result = await session.ExecuteReadAsync(async tx =>
                 {
-                    var cfg = _config.Value;
+                    var cfg = _configStore.GetConfig();
                     var cursor = await tx.RunAsync(@"
                         MATCH (d:Department {id: $departmentId})
                         MATCH (e:Employee)-[:BELONGS_TO]->(d)
@@ -155,7 +155,7 @@ public class SuitabilityService : ISuitabilityService
             {
                 var result = await session.ExecuteReadAsync(async tx =>
                 {
-                    var cfg = _config.Value;
+                    var cfg = _configStore.GetConfig();
                     var employeeIdStr = employeeId.ToString();
                     var cursor = await tx.RunAsync(@"
                         MATCH (d:Department {id: $departmentId})
