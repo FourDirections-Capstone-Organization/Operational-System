@@ -28,4 +28,9 @@ public interface IReportService
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId);
+
+    Task<ApiResponseDTO<DepartmentKpiDTO>> GetDepartmentKpiAsync(
+        Guid departmentId,
+        DateTime? from = null,
+        DateTime? to = null);
 }

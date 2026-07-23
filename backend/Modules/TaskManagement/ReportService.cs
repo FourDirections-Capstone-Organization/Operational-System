@@ -496,4 +496,104 @@ public class ReportService : IReportService
         document.GeneratePdf(stream);
         return stream.ToArray();
     }
+
+    public async Task<ApiResponseDTO<DepartmentKpiDTO>> GetDepartmentKpiAsync(
+        Guid departmentId, DateTime? from = null, DateTime? to = null)
+    {
+        var dept = await _db.Departments.FindAsync(departmentId);
+        if (dept == null)
+            return ApiResponseDTO<DepartmentKpiDTO>.Failure("Department not found");
+
+        var dateStart = from ?? DateTime.UtcNow.AddMonths(-1);
+        var dateEnd = to ?? DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+
+        var employees = await _db.Users
+            .Where(u => u.DepartmentId == departmentId && u.IsActive && !u.IsDeactivated)
+            .ToListAsync();
+
+        var allDeptTasks = await _db.Tasks
+            .Include(t => t.Assignments)
+            .Where(t => t.AssignedDepartmentId == departmentId)
+            .ToListAsync();
+
+        var completedTasks = allDeptTasks
+            .Where(t => t.Status == Models.Enums.TaskStatus.Completed)
+            .ToList();
+
+        var completedInRange = completedTasks
+            .Where(t => t.UpdatedAt >= dateStart && t.UpdatedAt <= dateEnd)
+            .ToList();
+
+        var onTimeTasks = completedInRange.Count(t => t.IsApproved == true);
+        var lateTasks = completedInRange.Count(t => t.IsApproved == false);
+        var overdueTasks = allDeptTasks.Count(t =>
+            (t.RevisedDeadline ?? t.Deadline) < now
+            && t.Status != Models.Enums.TaskStatus.Completed
+            && t.Status != Models.Enums.TaskStatus.Cancelled);
+        var activeTasks = allDeptTasks.Count(t =>
+            t.Status != Models.Enums.TaskStatus.Completed
+            && t.Status != Models.Enums.TaskStatus.Cancelled);
+
+        var totalTasks = allDeptTasks.Count;
+        var completedEver = completedTasks.Count;
+        var totalInRange = completedInRange.Count;
+
+        var avgCompletionTime = completedTasks.Count > 0
+            ? Math.Round(completedTasks
+                .Where(t => t.UpdatedAt.HasValue && t.CreatedAt != default)
+                .Average(t => (t.UpdatedAt!.Value - t.CreatedAt).TotalHours), 2)
+            : 0;
+
+        var employeeSummaries = new List<EmployeeKpiSummaryDTO>();
+        foreach (var emp in employees)
+        {
+            var empCompletedTasks = completedTasks
+                .Where(t => t.Assignments.Any(a => a.AssignedUserId == emp.Id))
+                .ToList();
+
+            var empCompletedInRange = empCompletedTasks
+                .Where(t => t.UpdatedAt >= dateStart && t.UpdatedAt <= dateEnd)
+                .ToList();
+
+            var empOnTime = empCompletedInRange.Count(t => t.IsApproved == true);
+            var empLate = empCompletedInRange.Count(t => t.IsApproved == false);
+            var empActive = activeTasks > 0 ? allDeptTasks
+                .Where(t => t.Assignments.Any(a => a.AssignedUserId == emp.Id))
+                .Count(t => t.Status != Models.Enums.TaskStatus.Completed && t.Status != Models.Enums.TaskStatus.Cancelled) : 0;
+
+            employeeSummaries.Add(new EmployeeKpiSummaryDTO
+            {
+                EmployeeId = emp.Id,
+                EmployeeNumber = emp.EmployeeNumber,
+                FullName = $"{emp.FirstName} {emp.LastName}".Trim(),
+                CompletedTasks = empCompletedInRange.Count,
+                OnTimeTasks = empOnTime,
+                LateTasks = empLate,
+                ActiveTasks = empActive,
+                OnTimeRate = empCompletedInRange.Count > 0
+                    ? Math.Round((double)empOnTime / empCompletedInRange.Count * 100, 2)
+                    : 0
+            });
+        }
+
+        var result = new DepartmentKpiDTO
+        {
+            DepartmentId = dept.Id,
+            DepartmentName = dept.Name,
+            TotalEmployees = employees.Count,
+            TotalTasks = totalTasks,
+            CompletedTasks = totalInRange,
+            OnTimeTasks = onTimeTasks,
+            LateTasks = lateTasks,
+            OverdueTasks = overdueTasks,
+            ActiveTasks = activeTasks,
+            OnTimeRate = totalInRange > 0 ? Math.Round((double)onTimeTasks / totalInRange * 100, 2) : 0,
+            CompletionRate = totalTasks > 0 ? Math.Round((double)completedEver / totalTasks * 100, 2) : 0,
+            AvgCompletionTimeHours = avgCompletionTime,
+            EmployeeSummaries = employeeSummaries
+        };
+
+        return ApiResponseDTO<DepartmentKpiDTO>.Success(result);
+    }
 }
