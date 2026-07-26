@@ -230,13 +230,13 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
             const userId = lookupData?.data?.id ?? lookupData?.id;
             if (!userId) throw new Error('Employee not found.');
 
-            // 1. Update status FIRST (backend blocks PUT on deactivated users)
-            if (form.accountStatus !== profile.accountStatus) {
-                const isActive = form.accountStatus === 'Active';
-                await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
+            // When deactivating: update personal details FIRST (while still active), then deactivate
+            const statusChanged = form.accountStatus !== profile.accountStatus;
+            if (statusChanged && form.accountStatus === 'Active') {
+                await api.patch(`/api/User/${userId}/activate`);
             }
 
-            // 2. Update personal details
+            // Update personal details
             await api.put(`/api/User/${userId}`, {
                 firstName,
                 middleName,
@@ -246,7 +246,12 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 email: form.email.trim(),
             });
 
-            // 3. Update role if changed
+            // Deactivate AFTER updating personal details (backend blocks PUT on deactivated users)
+            if (statusChanged && form.accountStatus !== 'Active') {
+                await api.patch(`/api/User/${userId}/deactivate`);
+            }
+
+            // Update role if changed
             const newRoleVal = toBackendRole(form.role);
             const oldRoleVal = typeof profile.role === 'number' ? profile.role : parseInt(profile.role, 10);
             if (newRoleVal !== oldRoleVal) {

@@ -1,0 +1,558 @@
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+    AlertTriangle, Clock, Users, Activity, Shield,
+    RefreshCw, Loader2, Calendar, CheckCircle2, XCircle,
+    AlertCircle, UserCheck, Filter, RotateCcw,
+    Radio
+} from 'lucide-react';
+import './BiomarkerDashboard.css';
+import StatusCard from '../../components/StatusCard/StatusCard';
+import DataTable, { DataTableColumn, DataTableTab } from '../../components/ui/DataTable';
+import Select from '../../components/ui/Select';
+
+// ─── Types ───────────────────────────────────────────────────────────────
+
+type ViolationType = 'sla_breach' | 'workload_overload' | 'biomarker_flag';
+type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
+type ViolationStatus = 'New' | 'Acknowledged' | 'Resolved';
+type ScanStatus = 'Idle' | 'Running' | 'Completed' | 'Failed';
+type FilterTab = 'all' | 'sla_breach' | 'workload_overload' | 'biomarker_flag';
+
+interface BiomarkerViolation {
+    id: string;
+    type: ViolationType;
+    severity: Severity;
+    description: string;
+    employeeName: string;
+    employeeNumber: string;
+    department: string;
+    departmentId: string;
+    taskTitle: string;
+    taskReference: string;
+    detectedAt: string;
+    status: ViolationStatus;
+}
+
+interface ScanMeta {
+    batchId: string;
+    scannedAt: string;
+    duration: string;
+    totalViolations: number;
+}
+
+// ─── Mock Data ───────────────────────────────────────────────────────────
+
+const MOCK_SCAN: ScanMeta = {
+    batchId: 'SCAN-20260723-001',
+    scannedAt: '2026-07-23T00:00:00',
+    duration: '2m 14s',
+    totalViolations: 10,
+};
+
+const MOCK_NEXT_SCAN = '2026-07-24T00:00:00';
+
+const MOCK_VIOLATIONS: BiomarkerViolation[] = [
+    {
+        id: 'V-001', type: 'sla_breach', severity: 'Critical',
+        description: 'Task exceeded SLA deadline by 4h 32m',
+        employeeName: 'Juan dela Cruz', employeeNumber: 'C-0421',
+        department: 'Last Mile', departmentId: 'D-004',
+        taskTitle: 'Priority Delivery — Warehouse A to Cluster B',
+        taskReference: 'T-88231', detectedAt: '2026-07-23T00:00:12', status: 'New',
+    },
+    {
+        id: 'V-002', type: 'sla_breach', severity: 'High',
+        description: 'Task exceeded SLA deadline by 1h 15m',
+        employeeName: 'Maria Santos', employeeNumber: 'C-0317',
+        department: 'Dispatch', departmentId: 'D-002',
+        taskTitle: 'Same-Day Dispatch — Client Package #4402',
+        taskReference: 'T-88190', detectedAt: '2026-07-23T00:00:14', status: 'New',
+    },
+    {
+        id: 'V-003', type: 'sla_breach', severity: 'Medium',
+        description: 'Task exceeded SLA deadline by 45m',
+        employeeName: 'Pedro Reyes', employeeNumber: 'C-0552',
+        department: 'Logistics', departmentId: 'D-001',
+        taskTitle: 'Route #12 — Document Drop-off',
+        taskReference: 'T-88012', detectedAt: '2026-07-23T00:00:16', status: 'Acknowledged',
+    },
+    {
+        id: 'V-004', type: 'workload_overload', severity: 'Critical',
+        description: 'Courier has 12 active tasks — exceeds threshold of 8',
+        employeeName: 'Jose Rizal', employeeNumber: 'C-0388',
+        department: 'Last Mile', departmentId: 'D-004',
+        taskTitle: 'Multiple active assignments',
+        taskReference: '—', detectedAt: '2026-07-23T00:00:30', status: 'New',
+    },
+    {
+        id: 'V-005', type: 'workload_overload', severity: 'High',
+        description: 'Courier has 10 active tasks — exceeds threshold of 8',
+        employeeName: 'Ana Gonzales', employeeNumber: 'C-0612',
+        department: 'Dispatch', departmentId: 'D-002',
+        taskTitle: 'Multiple active assignments',
+        taskReference: '—', detectedAt: '2026-07-23T00:00:31', status: 'New',
+    },
+    {
+        id: 'V-006', type: 'workload_overload', severity: 'Low',
+        description: 'Courier has 9 active tasks — exceeds threshold of 8',
+        employeeName: 'Carlos Mendoza', employeeNumber: 'C-0724',
+        department: 'Logistics', departmentId: 'D-001',
+        taskTitle: 'Multiple active assignments',
+        taskReference: '—', detectedAt: '2026-07-23T00:00:32', status: 'Resolved',
+    },
+    {
+        id: 'V-007', type: 'biomarker_flag', severity: 'Critical',
+        description: 'RED FLAG: SLA + workload overload — immediate review required.',
+        employeeName: 'Jose Rizal', employeeNumber: 'C-0388',
+        department: 'Last Mile', departmentId: 'D-004',
+        taskTitle: 'Compound violation',
+        taskReference: 'FLAG-C-0388', detectedAt: '2026-07-23T00:01:00', status: 'New',
+    },
+    {
+        id: 'V-008', type: 'biomarker_flag', severity: 'High',
+        description: 'AMBER FLAG: Recurring SLA breach pattern — 3rd breach this week',
+        employeeName: 'Juan dela Cruz', employeeNumber: 'C-0421',
+        department: 'Last Mile', departmentId: 'D-004',
+        taskTitle: 'Pattern violation',
+        taskReference: 'FLAG-C-0421', detectedAt: '2026-07-23T00:01:05', status: 'New',
+    },
+    {
+        id: 'V-009', type: 'biomarker_flag', severity: 'Medium',
+        description: 'AMBER FLAG: Courier workload trending upward — 20% increase over 7 days',
+        employeeName: 'Ana Gonzales', employeeNumber: 'C-0612',
+        department: 'Dispatch', departmentId: 'D-002',
+        taskTitle: 'Trend violation',
+        taskReference: 'FLAG-C-0612', detectedAt: '2026-07-23T00:01:10', status: 'Acknowledged',
+    },
+    {
+        id: 'V-010', type: 'biomarker_flag', severity: 'Low',
+        description: 'GREEN FLAG: Workload returned to normal after previous overload warning',
+        employeeName: 'Carlos Mendoza', employeeNumber: 'C-0724',
+        department: 'Logistics', departmentId: 'D-001',
+        taskTitle: 'Resolution flag',
+        taskReference: 'FLAG-C-0724', detectedAt: '2026-07-23T00:01:15', status: 'Resolved',
+    },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+const severityClass = (s: Severity) =>
+    ({ Critical: 'sev-critical', High: 'sev-high', Medium: 'sev-medium', Low: 'sev-low' }[s]);
+
+const typeLabel = (t: ViolationType): string =>
+    ({ sla_breach: 'SLA Breach', workload_overload: 'Workload Overload', biomarker_flag: 'Biomarker Flag' }[t]);
+
+const typeIcon = (t: ViolationType) => {
+    if (t === 'sla_breach') return <Clock size={14} />;
+    if (t === 'workload_overload') return <Users size={14} />;
+    return <Activity size={14} />;
+};
+
+const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const getTimeAgo = (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+};
+
+function ViolationBadge({ type }: { type: ViolationType }) {
+    const cls = type === 'sla_breach' ? 'badge badge-red' :
+        type === 'workload_overload' ? 'badge badge-amber' : 'badge badge-purple';
+    return (
+        <span className={cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem' }}>
+            {typeIcon(type)}{typeLabel(type)}
+        </span>
+    );
+}
+
+// ─── Constants ──────────────────────────────────────────────────────────
+
+const ALERT_TYPE_OPTIONS = [
+    { value: '', label: 'All Alert Types' },
+    { value: 'sla_breach', label: 'SLA Breach' },
+    { value: 'workload_overload', label: 'Workload Overload' },
+    { value: 'biomarker_flag', label: 'Biomarker Flag' },
+];
+
+const PAGE_SIZE = 5;
+
+// ─── Main Component ─────────────────────────────────────────────────────
+
+export default function BiomarkerDashboard() {
+    const [scanStatus, setScanStatus] = useState<ScanStatus>('Completed');
+    const [scanning, setScanning] = useState(false);
+    const [scanMeta] = useState<ScanMeta>(MOCK_SCAN);
+    const [violations] = useState<BiomarkerViolation[]>(MOCK_VIOLATIONS);
+    const [lastRefresh, setLastRefresh] = useState(Date.now());
+    const [page, setPage] = useState(1);
+
+    // ── Filter state ──
+    const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterEmployee, setFilterEmployee] = useState('');
+    const [filterDepartment, setFilterDepartment] = useState('');
+    const [filterAlertType, setFilterAlertType] = useState('');
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
+
+    // ── Derived filter options ──
+    const employeeOptions = useMemo(() => {
+        const seen = new Set<string>();
+        return violations
+            .filter(v => { if (seen.has(v.employeeNumber)) return false; seen.add(v.employeeNumber); return true; })
+            .map(v => ({ value: v.employeeNumber, label: `${v.employeeName} (${v.employeeNumber})` }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [violations]);
+
+    const departmentOptions = useMemo(() => {
+        const seen = new Set<string>();
+        return violations
+            .filter(v => { if (seen.has(v.departmentId)) return false; seen.add(v.departmentId); return true; })
+            .map(v => ({ value: v.departmentId, label: v.department }))
+            .sort((a, b) => a.label.localeCompare(b.label));
+    }, [violations]);
+
+    // ── Auto-refresh polling ──
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setLastRefresh(Date.now());
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // ── Reset page when filters change ──
+    useEffect(() => {
+        setPage(1);
+    }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
+
+    // ── Counts ──
+    const slaCount = useMemo(() => violations.filter(v => v.type === 'sla_breach').length, [violations]);
+    const workloadCount = useMemo(() => violations.filter(v => v.type === 'workload_overload').length, [violations]);
+    const flagCount = useMemo(() => violations.filter(v => v.type === 'biomarker_flag').length, [violations]);
+    const newCount = useMemo(() => violations.filter(v => v.status === 'New').length, [violations]);
+
+    // ── Filtered violations ──
+    const filteredViolations = useMemo(() => {
+        let filtered = violations;
+
+        if (activeFilter !== 'all') {
+            filtered = filtered.filter(v => v.type === activeFilter);
+        }
+        if (filterAlertType) {
+            filtered = filtered.filter(v => v.type === filterAlertType);
+        }
+        if (filterEmployee) {
+            filtered = filtered.filter(v => v.employeeNumber === filterEmployee);
+        }
+        if (filterDepartment) {
+            filtered = filtered.filter(v => v.departmentId === filterDepartment);
+        }
+        if (filterDateFrom) {
+            const from = new Date(filterDateFrom).getTime();
+            filtered = filtered.filter(v => new Date(v.detectedAt).getTime() >= from);
+        }
+        if (filterDateTo) {
+            const to = new Date(filterDateTo).getTime() + 86400000;
+            filtered = filtered.filter(v => new Date(v.detectedAt).getTime() <= to);
+        }
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            filtered = filtered.filter(v =>
+                v.description.toLowerCase().includes(q) ||
+                v.employeeName.toLowerCase().includes(q) ||
+                v.employeeNumber.toLowerCase().includes(q) ||
+                v.taskReference.toLowerCase().includes(q) ||
+                v.department.toLowerCase().includes(q)
+            );
+        }
+        return filtered;
+    }, [violations, activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
+
+    // ── Pagination ──
+    const totalPages = Math.max(1, Math.ceil(filteredViolations.length / PAGE_SIZE));
+    const paginatedViolations = filteredViolations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    // ── Handlers ──
+    const handleManualScan = useCallback(async () => {
+        setScanning(true);
+        setScanStatus('Running');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setScanStatus('Completed');
+        setScanning(false);
+        setLastRefresh(Date.now());
+    }, []);
+
+    const handleResetFilters = useCallback(() => {
+        setSearchQuery('');
+        setFilterEmployee('');
+        setFilterDepartment('');
+        setFilterAlertType('');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+        setActiveFilter('all');
+    }, []);
+
+    const hasActiveFilters = !!(searchQuery || filterEmployee || filterDepartment || filterAlertType || filterDateFrom || filterDateTo || activeFilter !== 'all');
+
+    // ── Columns ──
+    const columns: DataTableColumn<BiomarkerViolation>[] = useMemo(() => [
+        {
+            header: '',
+            accessor: v => <span className={`sev-dot ${severityClass(v.severity)}`} title={v.severity} />,
+            width: '24px',
+        },
+        {
+            header: 'Type',
+            accessor: v => <ViolationBadge type={v.type} />,
+            width: '105px',
+        },
+        {
+            header: 'Description',
+            accessor: v => <span className="bd-desc-text">{v.description}</span>,
+        },
+        {
+            header: 'Employee',
+            accessor: v => (
+                <span className="bd-employee-cell">
+                    <span className="bd-employee-name">{v.employeeName}</span>
+                    <span className="bd-employee-num">{v.employeeNumber}</span>
+                </span>
+            ),
+            width: '130px',
+        },
+        {
+            header: 'Department',
+            accessor: v => <span className="bd-dept-badge">{v.department}</span>,
+            width: '80px',
+        },
+        {
+            header: 'Task Ref',
+            accessor: v => <code className="bd-ref">{v.taskReference}</code>,
+            width: '70px',
+        },
+        {
+            header: 'Detected',
+            accessor: v => <span className="bd-time-cell">{getTimeAgo(v.detectedAt)}</span>,
+            width: '72px',
+        },
+        {
+            header: 'Status',
+            accessor: v => (
+                <span className={`bd-status ${v.status.toLowerCase()}`}>
+                    {v.status === 'New' && <AlertCircle size={12} />}
+                    {v.status === 'Acknowledged' && <UserCheck size={12} />}
+                    {v.status === 'Resolved' && <CheckCircle2 size={12} />}
+                    {v.status}
+                </span>
+            ),
+            width: '80px',
+        },
+    ], []);
+
+    // ── Tabs ──
+    const tabs: DataTableTab[] = useMemo(() => [
+        { key: 'all', label: 'All Violations', badge: violations.length },
+        { key: 'sla_breach', label: 'SLA Breaches', badge: slaCount },
+        { key: 'workload_overload', label: 'Workload Overloads', badge: workloadCount },
+        { key: 'biomarker_flag', label: 'Biomarker Flags', badge: flagCount },
+    ], [violations.length, slaCount, workloadCount, flagCount]);
+
+    // ── Filter elements ──
+    const filterElements = useMemo(() => (
+        <div className="bd-dt-filters">
+            <Select
+                value={filterEmployee}
+                onChange={v => { setFilterEmployee(v); setPage(1); }}
+                options={employeeOptions}
+                placeholder="All Employees"
+            />
+            <Select
+                value={filterDepartment}
+                onChange={v => { setFilterDepartment(v); setPage(1); }}
+                options={departmentOptions}
+                placeholder="All Departments"
+            />
+            <Select
+                value={filterAlertType}
+                onChange={v => { setFilterAlertType(v); setPage(1); }}
+                options={ALERT_TYPE_OPTIONS}
+                placeholder="All Alert Types"
+            />
+            <div className="bd-date-range">
+                <input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={e => { setFilterDateFrom(e.target.value); setPage(1); }}
+                    className="bd-date-input"
+                    title="From date"
+                />
+                <span className="bd-date-sep">–</span>
+                <input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={e => { setFilterDateTo(e.target.value); setPage(1); }}
+                    className="bd-date-input"
+                    title="To date"
+                />
+            </div>
+            {hasActiveFilters && (
+                <button className="bd-dt-reset-btn" onClick={handleResetFilters}>
+                    <RotateCcw size={13} /> Reset
+                </button>
+            )}
+        </div>
+    ), [filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo, employeeOptions, departmentOptions, hasActiveFilters, handleResetFilters]);
+
+    return (
+        <div className="biomarker-dashboard">
+            {/* ── Scan Status Header ── */}
+            <div className="bd-scan-header">
+                <div className="bd-scan-header-left">
+                    <div className="bd-scan-icon-wrap">
+                        <Activity size={28} />
+                    </div>
+                    <div className="bd-scan-info">
+                        <h3>Biomarker Scan Engine <span className="bd-live-badge"><Radio size={10} /> LIVE</span></h3>
+                        <div className="bd-scan-meta">
+                            <span className={`bd-scan-status-badge ${scanStatus.toLowerCase()}`}>
+                                <span className="bd-status-dot" />
+                                {scanStatus === 'Running' ? 'Scanning...' : scanStatus}
+                            </span>
+                            <span className="bd-scan-divider">|</span>
+                            <span className="bd-scan-label">
+                                <Calendar size={12} /> {scanMeta.batchId}
+                            </span>
+                            <span className="bd-scan-divider">|</span>
+                            <span className="bd-scan-label">
+                                <Clock size={12} /> Scanned: {formatTime(scanMeta.scannedAt)}
+                            </span>
+                            <span className="bd-scan-divider">|</span>
+                            <span className="bd-scan-label">
+                                <Clock size={12} /> Duration: {scanMeta.duration}
+                            </span>
+                            <span className="bd-scan-divider">|</span>
+                            <span className="bd-scan-label">
+                                Next: {formatTime(MOCK_NEXT_SCAN)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <button
+                    className="bd-scan-btn"
+                    onClick={handleManualScan}
+                    disabled={scanning}
+                >
+                    {scanning ? (
+                        <><Loader2 size={16} className="spin" /> Scanning...</>
+                    ) : (
+                        <><RefreshCw size={16} /> Run Scan Now</>
+                    )}
+                </button>
+            </div>
+
+            {/* ── Summary Cards ── */}
+            <div className="bd-cards-row">
+                <StatusCard
+                    label="Total Violations"
+                    value={violations.length}
+                    icon={<AlertTriangle size={22} />}
+                    variant="danger"
+                    subtext={`${newCount} new • Latest scan`}
+                />
+                <StatusCard
+                    label="SLA Breaches"
+                    value={slaCount}
+                    icon={<Clock size={22} />}
+                    variant="warning"
+                    subtext="Tasks past SLA deadline"
+                />
+                <StatusCard
+                    label="Workload Overloads"
+                    value={workloadCount}
+                    icon={<Users size={22} />}
+                    variant="warning"
+                    subtext="Couriers exceeding threshold"
+                />
+                <StatusCard
+                    label="Biomarker Flags"
+                    value={flagCount}
+                    icon={<Activity size={22} />}
+                    variant="info"
+                    subtext="Flags generated from violations"
+                />
+            </div>
+
+            {/* ── Violations DataTable ── */}
+            <DataTable<BiomarkerViolation>
+                title={`Detected Violations (${scanMeta.batchId})`}
+                columns={columns}
+                data={paginatedViolations}
+                tabs={tabs}
+                activeTab={activeFilter}
+                onTabChange={key => setActiveFilter(key as FilterTab)}
+                searchQuery={searchQuery}
+                onSearchChange={val => { setSearchQuery(val); setPage(1); }}
+                searchPlaceholder="Search violations…"
+                filterElements={filterElements}
+                emptyMessage="No violations match your filter."
+                emptyIcon={<CheckCircle2 size={24} />}
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                totalRecords={filteredViolations.length}
+                pageSize={PAGE_SIZE}
+            />
+
+            {/* ── Biomarker Flags Summary ── */}
+            <div className="bd-section">
+                <div className="bd-section-header">
+                    <h4>Biomarker Flag Summary — {scanMeta.batchId}</h4>
+                </div>
+                <div className="bd-flags-summary">
+                    <div className="bd-flag-card flag-red">
+                        <div className="bd-flag-icon"><XCircle size={24} /></div>
+                        <div className="bd-flag-body">
+                            <span className="bd-flag-label">Red Flags</span>
+                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Critical').length}</span>
+                            <span className="bd-flag-desc">Immediate action required — compound violations</span>
+                        </div>
+                    </div>
+                    <div className="bd-flag-card flag-amber">
+                        <div className="bd-flag-icon"><AlertTriangle size={24} /></div>
+                        <div className="bd-flag-body">
+                            <span className="bd-flag-label">Amber Flags</span>
+                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && (v.severity === 'High' || v.severity === 'Medium')).length}</span>
+                            <span className="bd-flag-desc">Requires monitoring — recurring or trending patterns</span>
+                        </div>
+                    </div>
+                    <div className="bd-flag-card flag-green">
+                        <div className="bd-flag-icon"><CheckCircle2 size={24} /></div>
+                        <div className="bd-flag-body">
+                            <span className="bd-flag-label">Green Flags</span>
+                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Low').length}</span>
+                            <span className="bd-flag-desc">Positive resolution — conditions normalized</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Compliance Note ── */}
+            <div className="bd-compliance-note">
+                <Shield size={14} />
+                <span>
+                    Automated scan runs daily at 12:00 AM. Dashboard reflects the latest completed scan ({scanMeta.batchId}).
+                    Viewing biomarker alerts does not modify any task or audit log records.
+                    Dashboard refreshes automatically every 30 seconds.
+                </span>
+            </div>
+        </div>
+    );
+}

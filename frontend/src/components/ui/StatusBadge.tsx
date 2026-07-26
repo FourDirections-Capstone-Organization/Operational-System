@@ -40,7 +40,7 @@ const BADGE_CLASSES: Record<string, string> = {
     Unverified: 'badge badge-red',
     Synced: 'badge badge-green',
     'Pending Sync': 'badge badge-amber',
-    Critical: 'badge badge-red',
+    Urgent: 'badge badge-red',
     High: 'badge badge-red',
     Medium: 'badge badge-amber',
     Low: 'badge badge-green',

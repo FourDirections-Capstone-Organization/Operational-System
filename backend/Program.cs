@@ -160,6 +160,10 @@ using (var scope = app.Services.CreateScope())
     var notificationSettingsService = scope.ServiceProvider.GetRequiredService<INotificationSettingsService>();
     await notificationSettingsService.SeedDefaultSettingsAsync();
 
+    // Seed demo tasks for presentation
+    var taskService = scope.ServiceProvider.GetRequiredService<ITaskService>();
+    await taskService.SeedDemoTasksAsync();
+
     // Reactivate any deactivated Manager accounts (safety net)
     var deactivatedManagers = await db.Users
         .Where(u => u.Role == UserRole.Manager && (u.IsDeactivated || !u.IsActive))

@@ -100,10 +100,6 @@ const FormModal: React.FC<FormModalProps> = ({
 
     if (!isOpen) return null;
 
-    if (!isOpen) return null;
-
-    if (!isOpen) return null;
-
     const content = (
         <div className="fm-modal-form-container">
             {infoCard && (
@@ -123,6 +119,7 @@ const FormModal: React.FC<FormModalProps> = ({
                 {children}
             </div>
 
+            <div className="fm-ft-divider" />
             <div className="fm-footer">
                 {footer ? (
                     footer
@@ -158,7 +155,7 @@ const FormModal: React.FC<FormModalProps> = ({
     );
 
     return (
-        <div className="fm-overlay" onClick={handleOverlayClick}>
+        <>
             <ConfirmationModal
                 isOpen={showConfirm}
                 variant="warning"
@@ -169,7 +166,8 @@ const FormModal: React.FC<FormModalProps> = ({
                 onConfirm={handleConfirmDiscard}
                 onCancel={() => setShowConfirm(false)}
             />
-            <div
+            <div className="fm-overlay" onClick={handleOverlayClick}>
+                <div
                 className={`fm-card fm-size-${size}`}
                 ref={cardRef}
                 onClick={e => e.stopPropagation()}
@@ -181,8 +179,10 @@ const FormModal: React.FC<FormModalProps> = ({
                         <h3 className="fm-title">{title}</h3>
                         {subtitle && <p className="fm-subtitle">{subtitle}</p>}
                     </div>
-                    <button className="icon-btn" onClick={handleCancelClick}><X size={16} /></button>
+                    <button className="fm-close-btn" onClick={handleCancelClick}><X size={16} /></button>
                 </div>
+
+                <div className="fm-hd-divider" />
 
                 {apiError && (
                     <div className="fm-api-error">
@@ -200,6 +200,7 @@ const FormModal: React.FC<FormModalProps> = ({
                 )}
             </div>
         </div>
+        </>
     );
 };
 

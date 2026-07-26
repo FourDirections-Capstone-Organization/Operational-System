@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../../components/Toast/Toast';
 import api from '../../../api';
-import StatCard from '../../../components/StatCard/StatCard';
+import StatusCard from '../../../components/StatusCard/StatusCard';
 import DataTable, { ActionsDropdown } from '../../../components/ui/DataTable';
 import SubTabNav from '../../../components/ui/SubTabNav';
 import FormModal from '../../../components/FormModal/FormModal';
@@ -1347,10 +1347,10 @@ export default function RoleManagementTab() {
             {subTab === 'roles' && (
                 <>
                     <div className="rm2-stats-grid">
-                        <StatCard icon={<Shield size={18} />} label="Total Roles" value={roles.length} subtext={`${systemRoles} system · ${customRoles} custom`} variant="primary" />
-                        <StatCard icon={<Settings size={18} />} label="Custom Roles" value={customRoles} subtext="Created by administrators" variant="warning" />
-                        <StatCard icon={<Lock size={18} />} label="System Roles" value={systemRoles} subtext="Protected by the system" variant="success" />
-                        <StatCard icon={<Key size={18} />} label="Total Permissions" value={permissions.length} subtext="Available across all roles" variant="primary" />
+                        <StatusCard icon={<Shield size={18} />} label="Total Roles" value={roles.length} subtext={`${systemRoles} system · ${customRoles} custom`} variant='teal' />
+                        <StatusCard icon={<Settings size={18} />} label="Custom Roles" value={customRoles} subtext="Created by administrators" variant="warning" />
+                        <StatusCard icon={<Lock size={18} />} label="System Roles" value={systemRoles} subtext="Protected by the system" variant="success" />
+                        <StatusCard icon={<Key size={18} />} label="Total Permissions" value={permissions.length} subtext="Available across all roles" variant='teal' />
                     </div>
 
                     <DataTable
@@ -1384,10 +1384,10 @@ export default function RoleManagementTab() {
             {subTab === 'departments' && (
                 <>
                     <div className="rm2-stats-grid">
-                        <StatCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext="In the organization" variant="primary" />
-                        <StatCard icon={<CheckCircle2 size={18} />} label="Active Departments" value={activeDepts} subtext="Currently operational" variant="success" />
-                        <StatCard icon={<XCircle size={18} />} label="Inactive Departments" value={departments.length - activeDepts} subtext="Deactivated units" variant="warning" />
-                        <StatCard icon={<Users size={18} />} label="Total Positions" value={positions.length || '—'} subtext="Across all departments" variant="primary" />
+                        <StatusCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext="In the organization" variant='teal' />
+                        <StatusCard icon={<CheckCircle2 size={18} />} label="Active Departments" value={activeDepts} subtext="Currently operational" variant="success" />
+                        <StatusCard icon={<XCircle size={18} />} label="Inactive Departments" value={departments.length - activeDepts} subtext="Deactivated units" variant="warning" />
+                        <StatusCard icon={<Users size={18} />} label="Total Positions" value={positions.length || '—'} subtext="Across all departments" variant='teal' />
                     </div>
 
                     <DataTable
@@ -1442,10 +1442,10 @@ export default function RoleManagementTab() {
             {subTab === 'positions' && (
                 <>
                     <div className="rm2-stats-grid">
-                        <StatCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext="Across all departments" variant="primary" />
-                        <StatCard icon={<CheckCircle2 size={18} />} label="Active Positions" value={activePositions} subtext="Currently operational" variant="success" />
-                        <StatCard icon={<XCircle size={18} />} label="Inactive Positions" value={positions.length - activePositions} subtext="Deactivated positions" variant="warning" />
-                        <StatCard icon={<Building2 size={18} />} label="Departments" value={departments.length} subtext="Available departments" variant="primary" />
+                        <StatusCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext="Across all departments" variant='teal' />
+                        <StatusCard icon={<CheckCircle2 size={18} />} label="Active Positions" value={activePositions} subtext="Currently operational" variant="success" />
+                        <StatusCard icon={<XCircle size={18} />} label="Inactive Positions" value={positions.length - activePositions} subtext="Deactivated positions" variant="warning" />
+                        <StatusCard icon={<Building2 size={18} />} label="Departments" value={departments.length} subtext="Available departments" variant='teal' />
                     </div>
 
                     <DataTable
@@ -1678,10 +1678,10 @@ export default function RoleManagementTab() {
             {subTab === 'client-accounts' && (
                 <>
                     <div className="rm2-stats-grid">
-                        <StatCard icon={<Building2 size={18} />} label="Total Clients" value={clientAccounts.length} subtext="Registered client accounts" variant="primary" />
-                        <StatCard icon={<CheckCircle2 size={18} />} label="Active" value={clientAccounts.filter(c => c.isActive).length} subtext="Currently active" variant="success" />
-                        <StatCard icon={<XCircle size={18} />} label="Inactive" value={clientAccounts.filter(c => !c.isActive).length} subtext="Deactivated" variant="warning" />
-                        <StatCard icon={<Users size={18} />} label="Coordinators" value={coordinators.length} subtext="Available to assign" variant="primary" />
+                        <StatusCard icon={<Building2 size={18} />} label="Total Clients" value={clientAccounts.length} subtext="Registered client accounts" variant='teal' />
+                        <StatusCard icon={<CheckCircle2 size={18} />} label="Active" value={clientAccounts.filter(c => c.isActive).length} subtext="Currently active" variant="success" />
+                        <StatusCard icon={<XCircle size={18} />} label="Inactive" value={clientAccounts.filter(c => !c.isActive).length} subtext="Deactivated" variant="warning" />
+                        <StatusCard icon={<Users size={18} />} label="Coordinators" value={coordinators.length} subtext="Available to assign" variant='teal' />
                     </div>
 
                     <DataTable
@@ -1876,10 +1876,10 @@ export default function RoleManagementTab() {
                 return (
                     <>
                         <div className="rm2-stats-grid">
-                            <StatCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext={`${activeDeptCount} active · ${inactiveDeptCount} inactive`} variant="primary" />
-                            <StatCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext={`${activePosCount} active · ${inactivePosCount} inactive`} variant="success" />
-                            <StatCard icon={<Shield size={18} />} label="Total Roles" value={roles.length} subtext={`${roles.filter(r => r.isSystemDefined).length} system · ${roles.filter(r => !r.isSystemDefined).length} custom`} variant="warning" />
-                            <StatCard icon={<Users size={18} />} label="Employees on Record" value={totalEmployees > 0 ? totalEmployees : '—'} subtext="Across all departments" variant="primary" />
+                            <StatusCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext={`${activeDeptCount} active · ${inactiveDeptCount} inactive`} variant='teal' />
+                            <StatusCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext={`${activePosCount} active · ${inactivePosCount} inactive`} variant="success" />
+                            <StatusCard icon={<Shield size={18} />} label="Total Roles" value={roles.length} subtext={`${roles.filter(r => r.isSystemDefined).length} system · ${roles.filter(r => !r.isSystemDefined).length} custom`} variant="warning" />
+                            <StatusCard icon={<Users size={18} />} label="Employees on Record" value={totalEmployees > 0 ? totalEmployees : '—'} subtext="Across all departments" variant='teal' />
                         </div>
 
                         <div className="rm2-overview-grid">

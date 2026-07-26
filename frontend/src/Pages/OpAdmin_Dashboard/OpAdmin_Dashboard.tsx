@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     ClipboardList,
     CheckCircle2,
@@ -46,13 +47,13 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
 import { useNavigate } from 'react-router-dom';
-import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import { useToast } from '../../components/Toast/Toast';
 
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
-import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import GlobalHeader, { NotificationItem } from '../../components/GlobalHeader/GlobalHeader';
+import Sidebar from '../../components/Sidebar/Sidebar';
+import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import FormModal from '../../components/FormModal/FormModal';
 import ActionButton from '../../components/ActionButton/ActionButton';
@@ -63,6 +64,7 @@ import SubTabNav from '../../components/ui/SubTabNav';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
 import api from '../../api';
 import axios from 'axios';
+import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -104,6 +106,14 @@ interface DepartmentWorkloadItem {
     employeeCount: number;
 }
 
+interface TeamWorkloadItem {
+    teamId: string;
+    teamName: string;
+    memberCount: number;
+    totalActiveTasks: number;
+    totalOverdueTasks: number;
+}
+
 interface DashboardResponse {
     totalActiveTasks: number;
     overdueTaskCount: number;
@@ -114,6 +124,7 @@ interface DashboardResponse {
     completedTodayCount: number;
     employeeWorkload: DashboardEmployeeWorkload[];
     departmentWorkload: DepartmentWorkloadItem[];
+    teamWorkload: TeamWorkloadItem[];
 }
 
 interface EmployeeFilterOption {
@@ -316,7 +327,10 @@ const TASK_STATUSES_FILTER = [
 ];
 
 const PER_PAGE = 10;
-const PRIORITY_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
+
+const PRIORITY_LEVELS = ['Urgent', 'High', 'Medium', 'Low'];
+
+
 
 // --- Task Template Types -------------------------------------------------------
 
@@ -429,7 +443,7 @@ const isTransitionValid = (from: string, to: string): boolean =>
     FSM_TRANSITIONS[from]?.includes(to) ?? false;
 
 const priorityDotClass = (p: Priority): string =>
-    ({ Urgent: 'prio-dot critical', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
+    ({ Urgent: 'prio-dot urgent', High: 'prio-dot high', Medium: 'prio-dot medium', Low: 'prio-dot low' }[p]);
 
 const fmtDate = (d: string): string => {
     if (!d) return '—';
@@ -469,7 +483,7 @@ const Avatar: React.FC<{ member: TeamMember; size?: 'sm' | 'md' }> = ({ member, 
 );
 
 const PRIO_META: Record<string, { label: string; color: string; bg: string; border: string; icon: string }> = {
-    Critical: { label: 'Critical', color: '#7c1d1d', bg: '#fef2f2', border: '#fecaca', icon: '🔴' },
+    Urgent: { label: 'Urgent', color: '#7c1d1d', bg: '#fef2f2', border: '#fecaca', icon: '🔴' },
     High: { label: 'High', color: '#b91c1c', bg: '#fff7ed', border: '#fed7aa', icon: '🟠' },
     Medium: { label: 'Medium', color: '#92400e', bg: '#fffbeb', border: '#fde68a', icon: '🟡' },
     Low: { label: 'Low', color: '#065f46', bg: '#f0fdf4', border: '#bbf7d0', icon: '🟢' },
@@ -616,6 +630,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
     const [eligibleEmployees, setEligibleEmployees] = useState<WorkloadInfo[]>([]);
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
+    const [singleSearch, setSingleSearch] = useState('');
+    const [teamSearch, setTeamSearch] = useState('');
 
     useEffect(() => {
         const fetchRecommendations = async () => {
@@ -624,13 +640,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                 const json = res.data;
                 const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
                 if (list.length > 0) {
+                    const sample = list[0];
+                    console.debug('[TaskForm] ALL KEYS of first item:', Object.keys(sample));
+                    console.debug('[TaskForm] Raw first item:', JSON.stringify(sample, null, 2));
                     const mapped: WorkloadInfo[] = list.map((emp: any) => ({
-                        employeeName: emp.fullName ?? emp.FullName ?? '',
-                        accountId: emp.userId ?? emp.UserId ?? emp.id,
-                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? 'Active',
-                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? true,
-                        workload: emp.workload ?? 0,
-                        role: emp.role ?? '',
+                        employeeName: emp.fullName ?? emp.FullName ?? emp.employeeName ?? '',
+                        accountId: emp.userId ?? emp.UserId ?? emp.id ?? '',
+                        availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? emp.status ?? 'Active',
+                        isAvailable: emp.isAvailable ?? emp.IsAvailable ?? emp.available ?? true,
+                        workload: typeof emp.workload === 'number' ? emp.workload : 0,
+                        role: emp.role ?? emp.Role ?? '',
                         isRecommended: true,
                         recommendationReason: 'Available for assignment',
                     }));
@@ -639,7 +658,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                     if (activeEmployees.length > 0) {
                         const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
                         setRecommendation({
-                            employeeName: best.employeeName,
+                            employeeName: best.employeeName || 'Recommended Employee',
                             accountId: best.accountId,
                             availabilityStatus: best.availabilityStatus,
                             workload: best.workload,
@@ -647,7 +666,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         });
                     }
                 }
-            } catch {
+            } catch (err) {
+                console.warn('[TaskForm] fetchRecommendations error:', err);
             }
         };
         const fetchDepartments = async () => {
@@ -711,7 +731,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             }
             case 'priority': {
                 if (!value) return 'Priority is required.';
-                if (!['Critical', 'High', 'Medium', 'Low'].includes(value)) return 'Please select a valid priority.';
+                if (!['Urgent', 'High', 'Medium', 'Low'].includes(value)) return 'Please select a valid priority.';
                 return '';
             }
             default:
@@ -753,18 +773,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     todayStart.setHours(0, 0, 0, 0);
     const minDateTime = todayStart.toISOString().slice(0, 16);
 
-    const PRIORITY_MAP: Record<string, number> = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+    const PRIORITY_MAP: Record<string, number> = { Urgent: 3, High: 2, Medium: 1, Low: 0 };
     const SCOPE_MAP: Record<string, number> = { SingleEmployee: 0, Team: 1, Department: 2 };
-    const isUrgent = form.priority === 'Critical';
+    const isUrgent = form.priority === 'Urgent';
     const slaLocked = isUrgent || isSLAEditLock;
-    const slaDeadline = React.useMemo(() => {
-        if (isUrgent) {
-            const d = new Date();
-            d.setHours(d.getHours() + 24);
-            return d;
-        }
-        return null;
-    }, [isUrgent]);
+    const getSlaDeadline = () => {
+        const d = new Date();
+        d.setHours(d.getHours() + 24);
+        return d;
+    };
 
     const handleSave = async () => {
         if (!validateAll()) return;
@@ -817,7 +834,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         try {
             await onSave(payload);
         } catch {
-            // Error handled by parent
+            onClose();
         } finally {
             setSubmitting(false);
         }
@@ -932,7 +949,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                 value={form.priority}
                                 onChange={e => {
                                     const val = e.target.value;
-                                    setForm(prev => ({ ...prev, priority: val as Priority, dueAt: val === 'Critical' ? slaDeadline?.toISOString().slice(0, 16) ?? prev.dueAt : prev.dueAt }));
+                                    setForm(prev => ({ ...prev, priority: val as Priority, dueAt: val === 'Urgent' ? getSlaDeadline().toISOString().slice(0, 16) : prev.dueAt }));
                                     setFormError('');
                                     const msg = validateField('priority', val);
                                     setErrors(prev => ({ ...prev, priority: msg || '' }));
@@ -940,7 +957,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                 className={errors.priority ? 'input-error' : ''}
                             >
                                 <option value="">Select priority</option>
-                                <option value="Critical">🔴 Critical</option>
+                                <option value="Urgent">🔴 Urgent</option>
                                 <option value="High">🟠 High</option>
                                 <option value="Medium">🟡 Medium</option>
                                 <option value="Low">🟢 Low</option>
@@ -949,9 +966,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             {!errors.priority && form.priority && (
                                 <span style={{
                                     fontSize: 11, marginTop: 3, display: 'block',
-                                    color: form.priority === 'Critical' ? '#7c1d1d' : form.priority === 'High' ? 'var(--status-failed)' : form.priority === 'Medium' ? 'var(--status-pending)' : 'var(--status-active)',
+                                    color: form.priority === 'Urgent' ? '#7c1d1d' : form.priority === 'High' ? 'var(--status-failed)' : form.priority === 'Medium' ? 'var(--status-pending)' : 'var(--status-active)',
                                 }}>
-                                    {form.priority === 'Critical' && '🔴 Critical — requires immediate attention'}
+                                    {form.priority === 'Urgent' && '🔴 Urgent — requires immediate attention'}
                                     {form.priority === 'High' && '🟠 High priority — will be flagged for urgent attention'}
                                     {form.priority === 'Medium' && '🟡 Medium priority selected'}
                                     {form.priority === 'Low' && '🟢 Low priority selected'}
@@ -1126,116 +1143,117 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
 
                         {/* -- SingleEmployee: pick one user -- */}
                         {form.assignmentScope === 'SingleEmployee' && (
-                            <>
+                            <div className="emp-picker-section">
                                 {recommendation && (
-                                    <div className="rec-banner">
-                                        <Lightbulb size={14} />
+                                    <div className="emp-picker-rec-banner">
+                                        <Lightbulb size={13} />
                                         <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
                                     </div>
                                 )}
-
-                                {eligibleEmployees.length > 0 && (
-                                    <div className="sr-eligible-list">
-                                        <div className="sr-eligible-title">Available Employees</div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 200, overflowY: 'auto' }}>
-                                            {eligibleEmployees.map(e => {
-                                                const isSelected = form.assignedTo === e.accountId;
-                                                const isRecommended = recommendation?.accountId === e.accountId;
-                                                const disabled = !e.isAvailable;
-                                                return (
-                                                    <div
-                                                        key={e.accountId}
-                                                        className={`sr-eligible-row${isSelected ? ' recommended' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
-                                                        onClick={() => {
-                                                            if (disabled) return;
-                                                            setForm(prev => ({ ...prev, assignedTo: e.accountId }));
-                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                                        }}
-                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
-                                                    >
-                                                        <span className="sr-emp-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            {isSelected && <CheckCircle2 size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
-                                                            {e.employeeName}
-                                                        </span>
-                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                            {e.availabilityStatus}
-                                                        </span>
-                                                        <span className="sr-workload">{e.workload} tasks</span>
-                                                        {isRecommended && <span className="sr-rec-tag">Best pick</span>}
+                                <input
+                                    type="text"
+                                    className="emp-picker-search"
+                                    placeholder="Search employees…"
+                                    value={singleSearch}
+                                    onChange={e => setSingleSearch(e.target.value)}
+                                />
+                                {eligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(singleSearch
+                                            ? eligibleEmployees.filter(e =>
+                                                e.employeeName.toLowerCase().includes(singleSearch.toLowerCase()))
+                                            : eligibleEmployees
+                                        ).map(e => {
+                                            const isSelected = form.assignedTo === e.accountId;
+                                            const isRecommended = recommendation?.accountId === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                                >
+                                                    <input type="radio" name="singleEmp" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found for assignment.</div>
                                 )}
-
-                                {eligibleEmployees.length === 0 && (
-                                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
-                                        No eligible employees found for assignment.
-                                    </div>
-                                )}
-
                                 <FieldErr name="assignedTo" />
                                 {!errors.assignedTo && form.assignedTo && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <CheckCircle2 size={11} /> {eligibleEmployees.find(e => e.accountId === form.assignedTo)?.employeeName ?? 'Employee'} assigned
-                                    </span>
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {eligibleEmployees.find(e => e.accountId === form.assignedTo)?.employeeName ?? 'Employee'} assigned</span>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* -- Team: pick multiple users -- */}
                         {form.assignmentScope === 'Team' && (
-                            <>
-                                <div className="sr-eligible-list">
-                                    <div className="sr-eligible-title">
-                                        Select Team Members {selectedTeamIds.length > 0 && <strong style={{ color: 'var(--primary)', marginLeft: 4 }}>({selectedTeamIds.length})</strong>}
+                            <div className="emp-picker-section">
+                                {recommendation && (
+                                    <div className="emp-picker-rec-banner">
+                                        <Lightbulb size={13} />
+                                        <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
                                     </div>
-                                    {eligibleEmployees.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
-                                            {eligibleEmployees.map(e => {
-                                                const selected = selectedTeamIds.includes(e.accountId);
-                                                const disabled = !e.isAvailable;
-                                                return (
-                                                    <div
-                                                        key={e.accountId}
-                                                        className={`sr-eligible-row team-mode${selected ? ' recommended' : ''}${disabled ? ' excluded' : ''}`}
-                                                        onClick={() => {
-                                                            if (disabled) return;
-                                                            setSelectedTeamIds(prev =>
-                                                                prev.includes(e.accountId)
-                                                                    ? prev.filter(id => id !== e.accountId)
-                                                                    : [...prev, e.accountId]
-                                                            );
-                                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                                        }}
-                                                        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}
-                                                    >
-                                                        <input type="checkbox" checked={selected} disabled={disabled}
-                                                            onChange={() => { }}
-                                                            onClick={e => e.stopPropagation()} />
-                                                        <span className="sr-emp-name">{e.employeeName}</span>
-                                                        <span className={`sr-status-tag ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`}>
-                                                            {e.availabilityStatus}
-                                                        </span>
-                                                        <span className="sr-workload">{e.workload} tasks</span>
+                                )}
+                                <input
+                                    type="text"
+                                    className="emp-picker-search"
+                                    placeholder="Search employees…"
+                                    value={teamSearch}
+                                    onChange={e => setTeamSearch(e.target.value)}
+                                />
+                                {eligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(teamSearch
+                                            ? eligibleEmployees.filter(e =>
+                                                e.employeeName.toLowerCase().includes(teamSearch.toLowerCase()))
+                                            : eligibleEmployees
+                                        ).map(e => {
+                                            const selected = selectedTeamIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setSelectedTeamIds(prev =>
+                                                            prev.includes(e.accountId) ? prev.filter(id => id !== e.accountId) : [...prev, e.accountId]
+                                                        );
+                                                        setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
+                                                            <span>{e.availabilityStatus}</span>
+                                                            <span>{e.workload} tasks</span>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-main)', borderRadius: 8, textAlign: 'center' }}>
-                                            No eligible employees found.
-                                        </div>
-                                    )}
-                                </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
                                 <FieldErr name="assignedTo" />
                                 {!errors.assignedTo && selectedTeamIds.length > 0 && (
-                                    <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <CheckCircle2 size={11} /> {selectedTeamIds.length} team member(s) selected
-                                    </span>
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {selectedTeamIds.length} team member(s) selected</span>
                                 )}
-                            </>
+                            </div>
                         )}
 
                         {/* -- Department: pick a department -- */}
@@ -1618,13 +1636,13 @@ const DashboardTab: React.FC<{
     dashboardDepartments: DepartmentFilterOption[];
     dashboardLoading: boolean;
     dashboardError: string | null;
-    filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string };
-    onFilterChange: (filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string }) => void;
+    filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string; assignmentScope: string };
+    onFilterChange: (filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string; assignmentScope: string }) => void;
     onClearFilters: () => void;
     onNewTask: () => void;
 }> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask }) => {
     const [searchQuery, setSearchQuery] = useState('');
-    const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus;
+    const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus || filters.assignmentScope;
     const td = dashboardData;
 
     const totalActive = td?.totalActiveTasks ?? 0;
@@ -1636,10 +1654,13 @@ const DashboardTab: React.FC<{
     const overdue = td?.overdueTaskCount ?? 0;
     const total = notStarted + inProgress + pendingReview + onHold + completedToday;
     const workloads = td?.employeeWorkload ?? [];
+    const teamWorkloads = td?.teamWorkload ?? [];
+    const deptWorkloads = td?.departmentWorkload ?? [];
     const filteredWorkloads = searchQuery
         ? workloads.filter(w => w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()))
         : workloads;
     const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
+    const lastUpdated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
     const statusChartData = [
         { name: 'Not Started', value: notStarted, color: 'var(--text-secondary)' },
@@ -1664,30 +1685,43 @@ const DashboardTab: React.FC<{
                 <EmptyState icon={<Loader2 size={24} className="spin" />} title="Loading workload data..." />
             ) : (
                 <>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                        <div style={{ position: 'relative', width: 300, margin: 0 }}>
-                            <Search size={14} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input type="text" placeholder="Search employee…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '100%', height: 46, borderRadius: 999, border: '1px solid #dbe3f0', background: '#f8fafc', padding: '0 20px 0 42px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                                onFocus={e => { e.target.style.background = '#ffffff'; e.target.style.borderColor = '#14b8a6'; e.target.style.boxShadow = '0 0 0 4px rgba(20,184,166,0.08)'; }}
-                                onBlur={e => { e.target.style.background = '#f8fafc'; e.target.style.borderColor = '#dbe3f0'; e.target.style.boxShadow = 'none'; }} />
+                    {/* ── Header Row: Neo4j badge + auto-refresh + New Task ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span className="ai-neo4j-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 10, fontWeight: 700, borderRadius: 999, background: 'rgba(0,169,157,0.08)', color: 'var(--primary)', border: '1px solid rgba(0,169,157,0.15)', whiteSpace: 'nowrap' }}>
+                                <Activity size={12} /> Neo4j Graph
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-active)', display: 'inline-block' }} />
+                                Auto-refresh 30s
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                Updated {lastUpdated}
+                            </span>
                         </div>
                         <button className="btn btn-primary" onClick={onNewTask} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 9, fontSize: 13, whiteSpace: 'nowrap' }}>
                             <Plus size={14} /> New Task
                         </button>
                     </div>
-                    <div className="stats-row">
-                        {[
-                            { label: 'TOTAL', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: `${total} task${total !== 1 ? 's' : ''}` },
-                            { label: 'ACTIVE', value: totalActive, icon: <Loader2 size={20} strokeWidth={2.3} />, variant: 'warning' as const, subtext: 'In Progress / Assigned' },
-                            { label: 'PENDING REVIEW', value: pendingReview, icon: <Eye size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Awaiting admin' },
-                            { label: 'COMPLETED TODAY', value: completedToday, icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success' as const, subtext: 'Today' },
-                            { label: 'ON HOLD', value: onHold, icon: <Clock size={20} strokeWidth={2.3} />, variant: 'primary' as const, subtext: 'Paused' },
-                            { label: 'OVERDUE', value: overdue, icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger' as const, subtext: 'Past deadline' },
-                        ].map(s => (
-                            <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
-                        ))}
-                    </div>
+                    {td ? (
+                        <div className="stats-row">
+                            <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="teal" label="Total Tasks" value={total} subtext={`${total} task${total !== 1 ? 's' : ''}`} />
+                            <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="Active / In Progress" value={totalActive} subtext={inProgress > 0 ? `${inProgress} in progress` : 'None in progress'} />
+                            <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant="info" label="Pending Review" value={pendingReview} subtext={pendingReview > 0 ? 'Awaiting admin review' : 'All reviewed'} />
+                            <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="Completed Today" value={completedToday} subtext={completedToday > 0 ? `Out of ${total} total` : 'No completions yet'} />
+                            <StatusCard icon={<Clock size={20} strokeWidth={2.3} />} variant="new" label="On Hold" value={onHold} subtext={onHold > 0 ? `${onHold} paused` : 'None on hold'} />
+                            <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="Overdue" value={overdue} subtext={overdue > 0 ? `${overdue} past deadline` : 'No overdue tasks'} />
+                        </div>
+                    ) : (
+                        <div className="stats-row">
+                            <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="teal" label="Total Tasks" value={0} subtext="No data" />
+                            <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="Active / In Progress" value={0} subtext="No data" />
+                            <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant="info" label="Pending Review" value={0} subtext="No data" />
+                            <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="Completed Today" value={0} subtext="No data" />
+                            <StatusCard icon={<Clock size={20} strokeWidth={2.3} />} variant="new" label="On Hold" value={0} subtext="No data" />
+                            <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="Overdue" value={0} subtext="No data" />
+                        </div>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1739,7 +1773,16 @@ const DashboardTab: React.FC<{
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, marginBottom: 16 }}>
+                    {/* ── Employee Search ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, gap: 12 }}>
+                        <div style={{ position: 'relative', width: 280 }}>
+                            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input type="text" placeholder="Search employee…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                style={{ width: '100%', height: 38, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--bg-primary)', padding: '0 16px 0 36px', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)', fontFamily: 'inherit' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div className="card">
                             <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
                                 <h3>Employee Workload Distribution</h3>
@@ -1755,7 +1798,6 @@ const DashboardTab: React.FC<{
                                         <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
                                         <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', fontSize: 12 }} />
                                         <Bar dataKey="Total" fill="var(--primary)" radius={[3, 3, 0, 0]} name="Total" />
-                                        <Bar dataKey="Completed" fill="var(--status-active)" radius={[3, 3, 0, 0]} name="Completed" />
                                         <Bar dataKey="Overdue" fill="var(--status-failed)" radius={[3, 3, 0, 0]} name="Overdue" />
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1803,38 +1845,97 @@ const DashboardTab: React.FC<{
                         </div>
                     </div>
 
+                    {/* ── Team + Department Workload Row ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                        <div className="card">
+                            <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
+                                <h3>Team Workload Distribution</h3>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{teamWorkloads.length} teams</span>
+                            </div>
+                            {teamWorkloads.length === 0 ? (
+                                <EmptyState title="No team workload data." />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {teamWorkloads.map(t => {
+                                        const total = t.totalActiveTasks + t.totalOverdueTasks;
+                                        const pct = total > 0 ? Math.round((1 - t.totalOverdueTasks / total) * 100) : 100;
+                                        const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
+                                        return (
+                                            <div key={t.teamId} style={{ padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.teamName}</span>
+                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.memberCount} members</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 6 }}>
+                                                    <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>{t.totalActiveTasks} active</span>
+                                                    <span style={{ color: t.totalOverdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 600 }}>{t.totalOverdueTasks} overdue</span>
+                                                </div>
+                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
+                                <h3>Department Workload</h3>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{deptWorkloads.length} departments</span>
+                            </div>
+                            {deptWorkloads.length === 0 ? (
+                                <EmptyState title="No department workload data." />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {deptWorkloads.map(d => {
+                                        const total = d.totalActiveTasks + d.totalOverdueTasks;
+                                        const pct = total > 0 ? Math.round((1 - d.totalOverdueTasks / total) * 100) : 100;
+                                        const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
+                                        return (
+                                            <div key={d.departmentId} style={{ padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{d.departmentName}</span>
+                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.employeeCount} employees</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 6 }}>
+                                                    <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>{d.totalActiveTasks} active</span>
+                                                    <span style={{ color: d.totalOverdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 600 }}>{d.totalOverdueTasks} overdue</span>
+                                                </div>
+                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <DataTable
                         title="Workload Summary per Employee"
                         filterElements={
-                            <>
-                                {[{ label: '1 Month', months: 1 }, { label: '3 Months', months: 3 }, { label: '6 Months', months: 6 }, { label: '12 Months', months: 12 }].map(p => {
-                                    const isActive = filters.dateStart && filters.dateEnd && (() => {
-                                        const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                        return filters.dateStart === start.toISOString().split('T')[0];
-                                    })();
-                                    return (
-                                        <span key={p.label} className={`filter-pill${isActive ? ' active' : ''}`}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                                onFilterChange({ ...filters, dateStart: start.toISOString().split('T')[0], dateEnd: end.toISOString().split('T')[0] });
-                                            }}
-                                            style={{ fontSize: 12, padding: '6px 12px', height: 38, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-                                            {p.label}
-                                        </span>
-                                    );
-                                })}
-                                <select value={filters.employeeId}
+                            <div className="dt-filter-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <select value={filters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => onFilterChange({ ...filters, assignmentScope: e.target.value })}>
+                                    <option value="">All Scopes</option>
+                                    <option value="0">Single Employee</option>
+                                    <option value="1">Team</option>
+                                    <option value="2">Department</option>
+                                </select>
+                                <select value={filters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, employeeId: e.target.value })}>
                                     <option value="">All Employees</option>
                                     {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
                                 </select>
-                                <select value={filters.departmentId}
+                                <select value={filters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, departmentId: e.target.value })}>
                                     <option value="">All Departments</option>
                                     {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
                                 </select>
-                                <select value={filters.taskStatus}
+                                <select value={filters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
                                     onChange={e => onFilterChange({ ...filters, taskStatus: e.target.value })}>
                                     <option value="">All Statuses</option>
                                     <option value="Assigned">Assigned</option>
@@ -1843,10 +1944,28 @@ const DashboardTab: React.FC<{
                                     <option value="Completed">Completed</option>
                                     <option value="Overdue">Overdue</option>
                                 </select>
+                                {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
+                                    const isActive = filters.dateStart && filters.dateEnd && (() => {
+                                        const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                        return filters.dateStart === start.toISOString().split('T')[0];
+                                    })();
+                                    return (
+                                        <button key={p.label}
+                                            className={`filter-pill${isActive ? ' active' : ''}`}
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                                onFilterChange({ ...filters, dateStart: start.toISOString().split('T')[0], dateEnd: end.toISOString().split('T')[0] });
+                                            }}
+                                            style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {p.label}
+                                        </button>
+                                    );
+                                })}
                                 {hasAnyFilter && (
-                                    <button className="btn btn-sm" onClick={onClearFilters} style={{ height: 38, whiteSpace: 'nowrap' }}><X size={12} /> Clear</button>
+                                    <button className="btn btn-sm" onClick={onClearFilters} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
                                 )}
-                            </>
+                            </div>
                         }
                         headers={['EMPLOYEE', 'TOTAL', 'ACTIVE', 'COMPLETED', 'OVERDUE', 'COMPLETION']}
                         loading={false}
@@ -1890,7 +2009,7 @@ const DashboardTab: React.FC<{
 
 const TASK_STATUS_FILTERS = ['Draft', 'Assigned', 'In Progress', 'Pending Admin Review', 'Done', 'Completed', 'Overdue'];
 
-const PRIORITY_WEIGHTS: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+const PRIORITY_WEIGHTS: Record<string, number> = { Urgent: 4, High: 3, Medium: 2, Low: 1 };
 
 const TasksTab: React.FC<{
     tasks: Task[];
@@ -1980,7 +2099,7 @@ const TasksTab: React.FC<{
                         </select>
                         <select value={filterPriority} onChange={e => { setFilterPriority(e.target.value); setTaskPage(1); }}>
                             <option value="">All Priorities</option>
-                            <option value="Critical">Critical</option>
+                            <option value="Urgent">Urgent</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
@@ -2181,7 +2300,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
         }
     };
 
-    const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3, Critical: 3 };
+    const PRIO_TO_BACKEND: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
     const RECUR_TO_BACKEND: Record<string, number> = { Daily: 0, Weekly: 1, Monthly: 2 };
     const handleSave = async (data: CreateTemplateDTO, templateId?: string) => {
         const backendPayload = {
@@ -3007,7 +3126,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />KPI Tracking</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>KPI Tracking</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">
@@ -3069,17 +3188,17 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                         <>
                             <div className="stats-row" style={{ marginTop: 16 }}>
                                 {[
-                                    { label: 'Total Completed', value: kpiData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary', subtext: 'Completed tasks' },
+                                    { label: 'Total Completed', value: kpiData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'teal', subtext: 'Completed tasks' },
                                     { label: 'On-Time', value: kpiData.totalOnTimeTasks, icon: <CheckCircle2 size={18} />, variant: 'success', subtext: `${kpiData.overallOnTimeRate}% rate` },
                                     { label: 'Late', value: kpiData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger', subtext: `${kpiData.overallLateRate}% rate` },
                                 ].map(s => (
-                                    <StatCard key={s.label} icon={s.icon} variant={s.variant as any} label={s.label} value={s.value} subtext={s.subtext} />
+                                    <StatusCard key={s.label} icon={s.icon} variant={s.variant as any} label={s.label} value={s.value} subtext={s.subtext} />
                                 ))}
                             </div>
 
                             <div className="card" style={{ marginTop: 16 }}>
                                 <div className="card-header-layout">
-                                    <h3>Per-Employee Breakdown</h3>
+                                    <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Per-Employee Breakdown</h3>
                                     {kpiData.employeeKpis && <span className="badge badge-blue">{kpiData.employeeKpis.length} employees</span>}
                                 </div>
                                 {kpiData.employeeKpis && kpiData.employeeKpis.length > 0 ? (
@@ -3139,7 +3258,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><BarChart3 size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Performance Report</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Performance Report</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">
@@ -3200,11 +3319,11 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                         <>
                             <div className="stats-row" style={{ marginTop: 16 }}>
                                 {[
-                                    { label: 'Total Completed', value: prData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'primary' as const, subtext: 'Completed tasks' },
+                                    { label: 'Total Completed', value: prData.totalCompletedTasks, icon: <CheckCircle2 size={18} />, variant: 'teal' as const, subtext: 'Completed tasks' },
                                     { label: 'On-Time', value: prData.totalCompletedTasks - prData.totalLateTasks, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: `${prData.overallOnTimeRate}% rate` },
                                     { label: 'Late', value: prData.totalLateTasks, icon: <AlertCircle size={18} />, variant: 'danger' as const, subtext: `${prData.overallLateRate}% rate` },
                                 ].map(s => (
-                                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                                    <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                                 ))}
                             </div>
 
@@ -3279,7 +3398,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><Download size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />FOMS Export</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>FOMS Export</h3>
                             <span className="badge badge-blue">CSV</span>
                         </div>
                         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, padding: '0 24px' }}>
@@ -3378,7 +3497,7 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                 <>
                     <div className="card report-filter-card">
                         <div className="card-header-layout">
-                            <h3><FileText size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Task Completion Reports</h3>
+                            <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Task Completion Reports</h3>
                         </div>
                         <div className="report-filter-grid">
                             <div className="field">
@@ -3462,13 +3581,13 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                     {tcReport && (
                         <>
                             <div className="report-summary-grid">
-                                <StatCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="primary" label="ASSIGNED" value={String(tcReport.totalTasksAssigned)} subtext="Total tasks" />
-                                <StatCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(tcReport.totalTasksCompleted)} subtext="Tasks finished" />
-                                <StatCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="IN PROGRESS" value={String(tcReport.totalTasksInProgress)} subtext="Ongoing" />
-                                <StatCard icon={<Eye size={20} strokeWidth={2.3} />} variant="primary" label="PENDING REVIEW" value={String(tcReport.totalTasksPendingReview)} subtext="Awaiting review" />
-                                <StatCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(tcReport.totalOverdueTasks)} subtext="Past deadline" />
-                                <StatCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${tcReport.taskCompletionRate}%`} subtext="Overall rate" />
-                                <StatCard icon={<Calendar size={20} strokeWidth={2.3} />} variant="warning" label="AVG TIME" value={`${tcReport.averageTaskCompletionTimeHours.toFixed(1)}h`} subtext="Per task" />
+                                <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant='teal' label="ASSIGNED" value={String(tcReport.totalTasksAssigned)} subtext="Total tasks" />
+                                <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(tcReport.totalTasksCompleted)} subtext="Tasks finished" />
+                                <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="IN PROGRESS" value={String(tcReport.totalTasksInProgress)} subtext="Ongoing" />
+                                <StatusCard icon={<Eye size={20} strokeWidth={2.3} />} variant='teal' label="PENDING REVIEW" value={String(tcReport.totalTasksPendingReview)} subtext="Awaiting review" />
+                                <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(tcReport.totalOverdueTasks)} subtext="Past deadline" />
+                                <StatusCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${tcReport.taskCompletionRate}%`} subtext="Overall rate" />
+                                <StatusCard icon={<Calendar size={20} strokeWidth={2.3} />} variant="warning" label="AVG TIME" value={`${tcReport.averageTaskCompletionTimeHours.toFixed(1)}h`} subtext="Per task" />
                             </div>
                             <div className="card">
                                 <DataTable title="Employee Performance Summary"
@@ -3587,11 +3706,11 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                     {opReport && (
                         <>
                             <div className="report-summary-grid">
-                                <StatCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant="primary" label="TOTAL TASKS" value={String(opReport.totalTasks)} subtext="All tasks" />
-                                <StatCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(opReport.completedTasks)} subtext="Tasks finished" />
-                                <StatCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="PENDING" value={String(opReport.pendingTasks)} subtext="Not yet completed" />
-                                <StatCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(opReport.overdueTasks)} subtext="Past deadline" />
-                                <StatCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${opReport.taskCompletionRate.toFixed(1)}%`} subtext="Overall rate" />
+                                <StatusCard icon={<ClipboardList size={20} strokeWidth={2.3} />} variant='teal' label="TOTAL TASKS" value={String(opReport.totalTasks)} subtext="All tasks" />
+                                <StatusCard icon={<CheckCircle2 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETED" value={String(opReport.completedTasks)} subtext="Tasks finished" />
+                                <StatusCard icon={<Loader2 size={20} strokeWidth={2.3} />} variant="warning" label="PENDING" value={String(opReport.pendingTasks)} subtext="Not yet completed" />
+                                <StatusCard icon={<AlertCircle size={20} strokeWidth={2.3} />} variant="danger" label="OVERDUE" value={String(opReport.overdueTasks)} subtext="Past deadline" />
+                                <StatusCard icon={<BarChart3 size={20} strokeWidth={2.3} />} variant="success" label="COMPLETION RATE" value={`${opReport.taskCompletionRate.toFixed(1)}%`} subtext="Overall rate" />
                             </div>
 
                             <div className="card">
@@ -3686,6 +3805,8 @@ function ProfileTab() {
     const middleName = localStorage.getItem('middleName') ?? '';
     const lastName = localStorage.getItem('lastName') ?? '';
     const employeeNameStored = [firstName, middleName, lastName].filter(Boolean).join(' ');
+    const profileRole = localStorage.getItem('role') ?? '';
+    const displayProfileRole = profileRole === 'Manager' ? 'Manager' : 'Coordinator';
     const employeeContact = localStorage.getItem('contactNumber') ?? '';
     const storedEmail = localStorage.getItem('email') ?? '';
 
@@ -4142,7 +4263,7 @@ function ProfileTab() {
                                     <span className="system-detail">Operations access granted</span>
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: 'rgba(67,24,255,0.1)', padding: '4px 10px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-                                    Op Admin
+                                    {displayProfileRole}
                                 </span>
                             </div>
                             <div style={{ height: 1, background: 'var(--border)' }} />
@@ -4453,9 +4574,9 @@ const ReopenTab: React.FC<{
                     { label: 'PENDING REQUESTS', value: pending.length, icon: <RotateCcw size={20} strokeWidth={2.3} />, variant: 'warning', subtext: 'Awaiting review' },
                     { label: 'APPROVED', value: history.filter(r => r.status === 'Approved').length, icon: <ThumbsUp size={20} strokeWidth={2.3} />, variant: 'success', subtext: 'Task reopened' },
                     { label: 'REJECTED', value: history.filter(r => r.status === 'Rejected').length, icon: <ThumbsDown size={20} strokeWidth={2.3} />, variant: 'danger', subtext: 'Declined requests' },
-                    { label: 'TOTAL', value: requests.length, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'primary', subtext: 'All time' },
+                    { label: 'TOTAL', value: requests.length, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal', subtext: 'All time' },
                 ].map(s => (
-                    <StatCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
+                    <StatusCard key={s.label} icon={s.icon} variant={s.variant} label={s.label} value={s.value} subtext={s.subtext} />
                 ))}
             </div>
 
@@ -4578,11 +4699,40 @@ export default function OpsAdminDashboard() {
     const firstName = localStorage.getItem('firstName') ?? '';
     const lastName = localStorage.getItem('lastName') ?? '';
     const middleName = localStorage.getItem('middleName') ?? '';
-    const employeeName = [firstName, middleName, lastName].filter(Boolean).join(' ') || 'Op Admin';
+    const rawRole = localStorage.getItem('role') ?? '';
+    const displayRole = rawRole === 'Manager' ? 'Manager' : 'Coordinator';
+    const employeeName = [firstName, middleName, lastName].filter(Boolean).join(' ') || displayRole;
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
+
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
+        {
+        label: null,
+        items: [
+        {
+        label: 'Task Allocation and Review System',
+        icon: 'ti ti-clipboard-list',
+        subItems: [
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
+        { label: 'Tasks', onClick: () => setActiveTab('tasks') },
+        { label: 'Team', onClick: () => setActiveTab('team') },
+        { label: 'Task Templates', onClick: () => setActiveTab('templates') },
+        { label: 'Reports', onClick: () => setActiveTab('reports') },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        ],
+        },
+        {
+        label: 'General',
+        icon: 'ti ti-settings',
+        subItems: [
+        { label: 'Profile', onClick: () => setActiveTab('profile') },
+        ],
+        },
+        ],
+        },
+    ], [setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const CLASSIFICATION_MAP: Record<number, string> = { 0: 'routine', 1: 'special' };
     const tmTasks = useMemo(() => tasks.map(t => ({
@@ -4604,8 +4754,48 @@ export default function OpsAdminDashboard() {
     const [loadingTasks, setLoadingTasks] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [userPresenceStatus, setUserPresenceStatus] = useState('Offline');
+    const [headerNotifications, setHeaderNotifications] = useState<NotificationItem[]>([]);
+
+    const mapToHeaderNotification = useCallback((n: any): NotificationItem => {
+        const typeLabels: Record<string, NotificationItem['type']> = {
+            TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
+            TaskCancelled: 'system', TaskCompleted: 'success',
+        };
+        const type = typeof n.type === 'number' ? ['TaskAssigned','TaskUpdated','TaskOverdue','DeadlineWarning','PushBack','TaskCancelled','TaskResumed','TaskOnHold','TaskCompleted','TemplateTaskUnassigned'][n.type] || 'Unknown' : n.type || '';
+        const createdAt = n.createdAt ?? '';
+        const createdDate = new Date(createdAt);
+        const now = new Date();
+        const isToday = createdDate.toDateString() === now.toDateString();
+        const timeStr = createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return {
+            id: String(n.id ?? n.notificationId ?? ''),
+            title: n.message ?? n.title ?? '',
+            description: n.description ?? '',
+            timestamp: timeStr,
+            date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: n.isRead ?? false,
+            type: typeLabels[type] || 'info',
+            category: type.toLowerCase(),
+            isToday,
+            source: 'System',
+        };
+    }, []);
+
+    const fetchHeaderNotifications = useCallback(async () => {
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setHeaderNotifications(d.items.map(mapToHeaderNotification));
+            }
+        } catch { /* fallback to dummy */ }
+    }, [mapToHeaderNotification]);
+
+    useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
 
     const [showNew, setShowNew] = useState(false);
+    const [taskSubTab, setTaskSubTab] = useState<'list' | 'create'>('list');
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [viewingTask, setViewingTask] = useState<Task | null>(null);
     const [detailTask, setDetailTask] = useState<TaskViewTask | null>(null);
@@ -4629,45 +4819,74 @@ export default function OpsAdminDashboard() {
 
     // -- Dashboard Data --
     const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const [dashboardLoading, setDashboardLoading] = useState(false);
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [dashboardEmployees, setDashboardEmployees] = useState<EmployeeFilterOption[]>([]);
     const [dashboardDepartments, setDashboardDepartments] = useState<DepartmentFilterOption[]>([]);
-    const [dashboardFilters, setDashboardFilters] = useState({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+    const [dashboardFilters, setDashboardFilters] = useState({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '', assignmentScope: '' });
 
-    const parseDateParam = (dateStr: string): string | undefined => dateStr || undefined;
+    const mountedRef = useRef(true);
+    const filtersRef = useRef(dashboardFilters);
+    filtersRef.current = dashboardFilters;
 
-    const fetchDashboardData = useCallback(async () => {
+    useEffect(() => {
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    const doFetchDashboard = useCallback(async () => {
+        if (!mountedRef.current) return;
         setDashboardLoading(true);
         setDashboardError(null);
+        const currentFilters = filtersRef.current;
+
         try {
             const params = new URLSearchParams();
-            const ds = parseDateParam(dashboardFilters.dateStart);
+            const ds = currentFilters.dateStart || undefined;
             if (ds) params.append('dateRangeStart', ds);
-            const de = parseDateParam(dashboardFilters.dateEnd);
+            const de = currentFilters.dateEnd || undefined;
             if (de) params.append('dateRangeEnd', de);
-            if (dashboardFilters.employeeId) params.append('employeeId', dashboardFilters.employeeId);
-            if (dashboardFilters.departmentId) params.append('departmentId', dashboardFilters.departmentId);
-            if (dashboardFilters.taskStatus) {
+            if (currentFilters.employeeId) params.append('employeeId', currentFilters.employeeId);
+            if (currentFilters.departmentId) params.append('departmentId', currentFilters.departmentId);
+            if (currentFilters.taskStatus) {
                 const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
-                params.append('status', statusMap[dashboardFilters.taskStatus] || dashboardFilters.taskStatus);
+                params.append('status', statusMap[currentFilters.taskStatus] || currentFilters.taskStatus);
             }
-            const res = await api.get(`/api/Dashboard/metrics?${params}`);
+            if (currentFilters.assignmentScope) params.append('assignmentScope', currentFilters.assignmentScope);
+
+            const res = await axios.get(`/api/ai-dashboard/metrics?${params}`, { timeout: 6000 });
+            if (!mountedRef.current) return;
             const body = res.data;
             if (!body.isSuccess) {
-                setDashboardError(body.message || 'No workload data available.');
-                setDashboardData(null);
+                setFallbackDashboardData();
             } else {
                 setDashboardData(body.data);
                 setDashboardError(null);
             }
         } catch (err: any) {
-            setDashboardError(err.message || 'No workload data available.');
-            setDashboardData(null);
+            if (!mountedRef.current) return;
+            console.warn('[Dashboard] metrics unavailable, using fallback:', err?.message || err);
+            setFallbackDashboardData();
         } finally {
-            setDashboardLoading(false);
+            if (mountedRef.current) setDashboardLoading(false);
         }
-    }, [dashboardFilters]);
+    }, []);
+
+    const setFallbackDashboardData = useCallback(() => {
+        const fallback: DashboardResponse = {
+            totalActiveTasks: 0,
+            overdueTaskCount: 0,
+            notStartedCount: 0,
+            inProgressCount: 0,
+            donePendingReviewCount: 0,
+            onHoldCount: 0,
+            completedTodayCount: 0,
+            employeeWorkload: [],
+            departmentWorkload: [],
+            teamWorkload: [],
+        };
+        setDashboardData(fallback);
+        setDashboardError(null);
+    }, []);
 
     const fetchDashboardFilterOptions = useCallback(async () => {
         try {
@@ -4689,7 +4908,7 @@ export default function OpsAdminDashboard() {
     }, []);
 
     const handleDashboardClearFilters = useCallback(() => {
-        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '' });
+        setDashboardFilters({ dateStart: '', dateEnd: '', employeeId: '', departmentId: '', taskStatus: '', assignmentScope: '' });
     }, []);
 
     // -- Activity Logs --
@@ -4726,7 +4945,7 @@ export default function OpsAdminDashboard() {
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
-            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical' };
+            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
             const normalized: Task[] = rawList.map(t => ({
                 taskId: t.id ?? t.taskId,
@@ -4783,7 +5002,7 @@ export default function OpsAdminDashboard() {
             });
             success('Task restored successfully.');
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             await fetchBinRecords();
         } catch (err: any) {
             error(err.message ?? 'Failed to restore task.');
@@ -4896,12 +5115,16 @@ export default function OpsAdminDashboard() {
         try {
             // Check for duplicates before saving (requirement 1, 7)
             if (!skipDuplicateCheck) {
-                const checkRes = await api.post('/api/Duplicate/check', { title: data.title, description: data.description });
-                const checkJson = checkRes.data;
-                if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
-                    setDuplicateWarnings(checkJson.data.matches);
-                    setPendingTaskData(data);
-                    return; // Show warning instead of saving (requirement 5, 6)
+                try {
+                    const checkRes = await api.post('/api/Duplicate/check', { title: data.title, description: data.description });
+                    const checkJson = checkRes.data;
+                    if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
+                        setDuplicateWarnings(checkJson.data.matches);
+                        setPendingTaskData(data);
+                        return;
+                    }
+                } catch {
+                    // Duplicate check failed — proceed with creation
                 }
             }
 
@@ -4917,13 +5140,14 @@ export default function OpsAdminDashboard() {
                 setPendingFile(null);
             }
 
-            await fetchTasks();
-            await fetchDashboardData();
             setShowNew(false);
+            await fetchTasks();
+            await doFetchDashboard();
             success('Task created successfully.');
         } catch (err: any) {
             console.error('Create task error:', err);
             error(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to create task.');
+            setShowNew(false);
         }
     };
 
@@ -4932,7 +5156,7 @@ export default function OpsAdminDashboard() {
         try {
             await api.put(`/api/Task/${taskId}`, data);
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setEditingTask(null);
             success('Task updated successfully.');
         } catch (err: any) {
@@ -4948,7 +5172,7 @@ export default function OpsAdminDashboard() {
             formData.append('Reason', 'Admin reopen request');
             await api.upload(`/api/Task/${taskId}/reopen-request`, formData);
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             await fetchReopenRequests();
             success('Reopen request submitted for review.');
         } catch (err: any) {
@@ -4967,7 +5191,7 @@ export default function OpsAdminDashboard() {
         try {
             await api.patch(`/api/Task/${taskId}/status`, { newStatus: STATUS_TO_BACKEND[newStatus] || newStatus });
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setViewingTask(null);
             success('Task status updated successfully.');
         } catch (err: any) {
@@ -4983,7 +5207,7 @@ export default function OpsAdminDashboard() {
                 remarks: reviewerRemarks || undefined,
             });
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             success(
                 adminDecision === 'Approve & Close'
                     ? 'Task officially closed and recorded.'
@@ -5024,7 +5248,7 @@ export default function OpsAdminDashboard() {
                     : r
             ));
             await fetchTasks();
-            await fetchDashboardData();
+            await doFetchDashboard();
             setReviewingRequest(null);
             success('Reopening request approved � Task reopened � Task history preserved � Audit Log entry generated.');
         } catch (err: any) {
@@ -5044,7 +5268,7 @@ export default function OpsAdminDashboard() {
                     ? { ...r, status: 'Rejected', adminRemarks, reviewedAt: new Date().toISOString() }
                     : r
             ));
-            await fetchDashboardData();
+            await doFetchDashboard();
             setReviewingRequest(null);
             success('Reopening request rejected � Original task preserved � Audit Log entry generated.');
         } catch (err: any) {
@@ -5077,7 +5301,7 @@ export default function OpsAdminDashboard() {
                     success('Task deleted successfully.');
 
                     await fetchTasks();
-                    await fetchDashboardData();
+                    await doFetchDashboard();
                     await fetchBinRecords();
 
                 } catch (err: any) {
@@ -5112,93 +5336,56 @@ export default function OpsAdminDashboard() {
         activity_logs: 'Activity Logs',
     };
 
-    // -- Fetch dashboard data when filters change --
+    // -- Fetch dashboard data on mount and when filters change --
     useEffect(() => {
-        fetchDashboardData();
-        fetchActivityLogs(1);
-    }, [fetchDashboardData]);
+        doFetchDashboard();
+    }, [dashboardFilters]);
 
-    // -- Polling fallback: refresh tasks periodically regardless of SignalR --
+    useEffect(() => {
+        fetchActivityLogs(1);
+    }, []);
+
+    // -- Polling fallback: refresh tasks and dashboard periodically --
     useEffect(() => {
         const interval = setInterval(() => fetchTasks(), 30000);
         return () => clearInterval(interval);
     }, []);
 
+    // -- Auto-refresh dashboard data every 30 seconds --
+    useEffect(() => {
+        const interval = setInterval(() => doFetchDashboard(), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     return (
         <div className="dashboard-container">
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="logo-image" />
-                </div>
-
-                <div className="sidebar-role-section">
-                    <div className="sidebar-role-badge super-admin">
-                        <div className="role-dot-inner" />
-                        COORDINATOR
-                    </div>
-                </div>
-
-                <nav className="sidebar-nav">
-                    {NAV_GROUPS.map(group => (
-                        <div key={group.label} className="nav-section">
-                            <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon: Icon, label }) => {
-                                const isActive = activeTab === tab;
-                                return (
-                                    <div
-                                        key={tab}
-                                        className={`nav-item${isActive ? ' nav-item-active' : ''}`}
-                                        onClick={() => {
-                                            if (activeTab === tab) return;
-                                            setViewingTask(null); setEditingTask(null); setDetailTask(null);
-                                            setOverrideTask(null); setReviewTask(null); setReviewingRequest(null);
-                                            setActiveTab(tab);
-                                        }}
-                                    >
-                                        <Icon size={18} />
-                                        <span className="nav-item-label">{label}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                </nav>
-
-                <div className="sidebar-footer-profile">
-                    <div className="profile-card">
-                        <div style={{ position: 'relative', display: 'inline-block' }}>
-                            <div className="profile-avatar">
-                                {getInitials(employeeName || 'Coordinator')}
-                            </div>
-                            <span style={{
-                                position: 'absolute', bottom: 1, right: 1,
-                                width: 9, height: 9, borderRadius: '50%',
-                                background: userPresenceStatus === 'Online' ? 'var(--status-active)' : 'var(--text-secondary)',
-                                border: '2px solid var(--sidebar-bg, #1b2559)',
-                                display: 'block'
-                            }} />
-                        </div>
-                        <div className="profile-info">
-                            <span className="profile-name">{employeeName || 'Coordinator'}</span>
-                            <span className="profile-role">COORDINATOR</span>
-                        </div>
-                        <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
-                            <LogOut size={18} />
-                        </button>
-                    </div>
-                </div>
-            </aside>
+                <Sidebar
+                    logoUrl={SpeedexLogo}
+                    logoText="SPEEDEX"
+                    navGroups={SIDEBAR_NAV_GROUPS}
+                    profile={{
+                        name: employeeName || displayRole,
+                        role: displayRole,
+                        avatarInitials: getInitials(employeeName || displayRole),
+                    }}
+                    onProfileClick={() => setActiveTab('profile')}
+                    onLogout={handleLogout}
+                />
 
             {/* -- Main -- */}
             <main className="main-viewport">
-                <DashboardHeader
+                <GlobalHeader
                     title={pageTitles[activeTab]}
-                    notificationApi="/api/Notification"
-                    userInitials={getInitials(employeeName || 'Operation Admin')}
-                    onSettingsClick={() => setActiveTab('profile')}
+                    breadcrumbs={[{ label: displayRole }, { label: pageTitles[activeTab] }]}
+                    notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
+                    profile={{
+                        name: employeeName || displayRole,
+                        role: displayRole,
+                        avatarInitials: getInitials(employeeName || displayRole),
+                    }}
+                    onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
-                >
-                </DashboardHeader>
+                />
 
                 {activeTab === 'dashboard' && (
                     <DashboardTab
@@ -5210,23 +5397,43 @@ export default function OpsAdminDashboard() {
                         filters={dashboardFilters}
                         onFilterChange={setDashboardFilters}
                         onClearFilters={handleDashboardClearFilters}
-                        onNewTask={() => setShowNew(true)}
+                        onNewTask={() => { setActiveTab('tasks'); setTaskSubTab('create'); }}
                     />
                 )}
                 {activeTab === 'tasks' && (
-                    <div className="dashboard-content">
-                        <TaskManager
-                            tasks={tmTasks}
-                            teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
-                            onNewTask={() => setShowNew(true)}
-                            onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
-                            onView={id => setDetailTask(tasks.find(t => t.taskId === id) ?? null)}
-                            onArchive={ids => { ids.forEach(id => handleDeleteTask(id)); }}
-                            onRestore={ids => { ids.forEach(id => handleRestoreTask(id)); }}
-                            onDelete={ids => { ids.forEach(id => handleDeleteTask(id)); }}
-                            onMarkDone={ids => { ids.forEach(id => handleStatusTransition(id, 'Completed')); }}
-                        />
-                    </div>
+                    <>
+                        <div className="dashboard-content" style={{ paddingBottom: 0 }}>
+                            <SubTabNav
+                                className="tasks-subtab-nav"
+                                tabs={[
+                                    { key: 'list', label: 'Task List' },
+                                    { key: 'create', label: 'Create Task' },
+                                ]}
+                                activeKey={taskSubTab}
+                                onTabChange={key => setTaskSubTab(key as 'list' | 'create')}
+                            />
+                        </div>
+                        {taskSubTab === 'list' && (
+                            <div className="dashboard-content">
+                                <TaskManager
+                                    tasks={tmTasks}
+                                    teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
+                                    onNewTask={() => { setTaskSubTab('create'); setShowNew(false); }}
+                                    onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
+                                    onView={id => setDetailTask(tasks.find(t => t.taskId === id) ?? null)}
+                                    onArchive={ids => { ids.forEach(id => handleDeleteTask(id)); }}
+                                    onRestore={ids => { ids.forEach(id => handleRestoreTask(id)); }}
+                                    onDelete={ids => { ids.forEach(id => handleDeleteTask(id)); }}
+                                    onMarkDone={ids => { ids.forEach(id => handleStatusTransition(id, 'Completed')); }}
+                                />
+                            </div>
+                        )}
+                        {taskSubTab === 'create' && (
+                            <div className="dashboard-content">
+                                <AIAssignmentView />
+                            </div>
+                        )}
+                    </>
                 )}
                 {activeTab === 'team' && (
                     <TeamTab
@@ -5331,7 +5538,7 @@ export default function OpsAdminDashboard() {
                         try {
                             await api.patch(`/api/Task/${id}/push-back`, { comment });
                             await fetchTasks();
-                            await fetchDashboardData();
+                            await doFetchDashboard();
                             setDetailTask(null);
                             success('Task pushed back to In Progress.');
                         } catch (err: any) {
@@ -5367,6 +5574,7 @@ export default function OpsAdminDashboard() {
                     duplicates={duplicateWarnings}
                     onContinue={() => {
                         const task = pendingTaskData;
+                        setShowNew(false);
                         setDuplicateWarnings([]);
                         setPendingTaskData(null);
                         handleNewTask(task, true);

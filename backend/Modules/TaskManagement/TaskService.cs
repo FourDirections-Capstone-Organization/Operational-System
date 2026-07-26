@@ -5,6 +5,7 @@ using Backend.Models.DTOs;
 using Backend.Models.Enums;
 using Backend.Modules.Notifications;
 using Task = System.Threading.Tasks.Task;
+using BackendTask = Backend.Models.Task;
 
 namespace Backend.Modules.TaskManagement;
 
@@ -598,5 +599,151 @@ public class TaskService : ITaskService
             CreatedAt = task.CreatedAt,
             UpdatedAt = task.UpdatedAt
         };
+    }
+
+    public async Task SeedDemoTasksAsync()
+    {
+        var manager = await _db.Users.FirstOrDefaultAsync(u => u.Email == "manager@stars.com");
+        if (manager is null) return;
+
+        var existingTaskCount = await _db.Tasks.CountAsync();
+        if (existingTaskCount > 0) return;
+
+        var departments = await _db.Departments.ToListAsync();
+        var coordinatorDept = departments.FirstOrDefault(d => d.Name == "Coordinator and Customer Service Team");
+        var dispatchDept = departments.FirstOrDefault(d => d.Name == "Dispatch Team");
+        var forwardingDept = departments.FirstOrDefault(d => d.Name == "Forwarding and Delivery Team");
+
+        var users = await _db.Users.ToListAsync();
+        var crd1 = users.First(u => u.EmployeeNumber == "CRD001");
+        var crd2 = users.First(u => u.EmployeeNumber == "CRD002");
+        var dsp1 = users.First(u => u.EmployeeNumber == "DSP001");
+        var dsp2 = users.First(u => u.EmployeeNumber == "DSP002");
+        var enc1 = users.First(u => u.EmployeeNumber == "ENC001");
+        var enc2 = users.First(u => u.EmployeeNumber == "ENC002");
+        var crs1 = users.First(u => u.EmployeeNumber == "CRS001");
+        var crs2 = users.First(u => u.EmployeeNumber == "CRS002");
+
+        var now = DateTime.UtcNow;
+        var demoSeeds = new[]
+        {
+            new
+            {
+                Title = "Urgent Delivery - Downtown Manila",
+                Description = "High-priority parcel requiring immediate dispatch to downtown Manila. Customer is expecting delivery within 4 hours.",
+                Priority = PriorityLevel.Urgent,
+                Classification = TaskClassification.SpecialTask,
+                Status = Models.Enums.TaskStatus.InProgress,
+                Scope = AssignmentScope.Team,
+                Deadline = now.AddHours(4),
+                DeptId = dispatchDept?.Id,
+                UserIds = new[] { dsp1.Id, crs1.Id }
+            },
+            new
+            {
+                Title = "Route Optimization - Quezon City",
+                Description = "Analyze and optimize delivery routes in Quezon City area for better efficiency and fuel savings.",
+                Priority = PriorityLevel.High,
+                Classification = TaskClassification.SpecialTask,
+                Status = Models.Enums.TaskStatus.NotStarted,
+                Scope = AssignmentScope.SingleEmployee,
+                Deadline = now.AddDays(3),
+                DeptId = dispatchDept?.Id,
+                UserIds = new[] { dsp2.Id }
+            },
+            new
+            {
+                Title = "End-of-Day Package Sorting",
+                Description = "Sort all incoming packages by destination area and update tracking records before end of shift.",
+                Priority = PriorityLevel.Medium,
+                Classification = TaskClassification.RoutineDailyTask,
+                Status = Models.Enums.TaskStatus.InProgress,
+                Scope = AssignmentScope.Team,
+                Deadline = now.AddDays(1),
+                DeptId = forwardingDept?.Id,
+                UserIds = new[] { enc1.Id, enc2.Id }
+            },
+            new
+            {
+                Title = "Client A - Bulk Shipment Preparation",
+                Description = "Prepare and label bulk shipment for Client A. Includes 50 boxes requiring special handling documentation.",
+                Priority = PriorityLevel.High,
+                Classification = TaskClassification.SpecialTask,
+                Status = Models.Enums.TaskStatus.DonePendingReview,
+                Scope = AssignmentScope.Team,
+                Deadline = now.AddDays(2),
+                DeptId = coordinatorDept?.Id,
+                UserIds = new[] { crd1.Id, crs2.Id }
+            },
+            new
+            {
+                Title = "Monthly Inventory Reconciliation",
+                Description = "Conduct end-of-month inventory count for all stored parcels and supplies. Submit reconciliation report.",
+                Priority = PriorityLevel.Low,
+                Classification = TaskClassification.RoutineDailyTask,
+                Status = Models.Enums.TaskStatus.Completed,
+                Scope = AssignmentScope.SingleEmployee,
+                Deadline = now.AddDays(-1),
+                DeptId = forwardingDept?.Id,
+                UserIds = new[] { enc1.Id }
+            },
+            new
+            {
+                Title = "Vehicle Maintenance Inspection",
+                Description = "All delivery vehicles due for routine maintenance check. Inspect brakes, tires, and engine oil levels.",
+                Priority = PriorityLevel.Medium,
+                Classification = TaskClassification.RoutineDailyTask,
+                Status = Models.Enums.TaskStatus.OnHold,
+                Scope = AssignmentScope.SingleEmployee,
+                Deadline = now.AddDays(5),
+                DeptId = dispatchDept?.Id,
+                UserIds = new[] { crs1.Id }
+            },
+            new
+            {
+                Title = "New Route Planning - Makati CBD",
+                Description = "Plan and map out efficient delivery routes for the new Makati CBD coverage area. Coordinate with dispatchers.",
+                Priority = PriorityLevel.High,
+                Classification = TaskClassification.SpecialTask,
+                Status = Models.Enums.TaskStatus.InProgress,
+                Scope = AssignmentScope.Team,
+                Deadline = now.AddDays(7),
+                DeptId = dispatchDept?.Id,
+                UserIds = new[] { crd2.Id, dsp1.Id }
+            },
+        };
+
+        foreach (var seed in demoSeeds)
+        {
+            var task = new BackendTask
+            {
+                Title = seed.Title,
+                Description = seed.Description,
+                PriorityLevel = seed.Priority,
+                Classification = seed.Classification,
+                Status = seed.Status,
+                AssignmentScope = seed.Scope,
+                Deadline = seed.Deadline,
+                IsSLALocked = seed.Priority == PriorityLevel.Urgent,
+                CreatedById = manager.Id,
+                AssignedDepartmentId = seed.DeptId,
+                CreatedAt = now
+            };
+
+            _db.Tasks.Add(task);
+            await _db.SaveChangesAsync();
+
+            foreach (var uid in seed.UserIds)
+            {
+                _db.TaskAssignments.Add(new TaskAssignment
+                {
+                    TaskId = task.Id,
+                    AssignedUserId = uid,
+                    AssignedAt = now
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
     }
 }

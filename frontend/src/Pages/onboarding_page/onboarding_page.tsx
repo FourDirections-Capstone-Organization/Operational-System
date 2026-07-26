@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import { CheckCircle2, AlertCircle, Loader2, ArrowRight, User, Lock, Phone, Sparkles, ShieldCheck, Eye, EyeOff, Check, X } from 'lucide-react';
 
 type Step = 'profile' | 'password' | 'done';
@@ -268,7 +269,7 @@ export default function OnboardingPage() {
                         display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 20px',
                         borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)',
                     }}>
-                        <img src="/src/assets/SpeedexLogo.jpg" alt="Speedex" style={{ height: 28, objectFit: 'contain' }} />
+                        <img src={SpeedexLogo} alt="Speedex" style={{ height: 28, objectFit: 'contain' }} />
                         <span style={{ color: 'white', fontWeight: 700, fontSize: 14, letterSpacing: '0.05em' }}>STARS</span>
                     </div>
                 </div>

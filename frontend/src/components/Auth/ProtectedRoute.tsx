@@ -28,11 +28,7 @@ function isTokenValid(): boolean {
         const token = localStorage.getItem('authToken');
         if (!token) return false;
         const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '');
-        const payload = JSON.parse(atob(b64));
-        if (payload.exp && payload.exp * 1000 < Date.now()) {
-            localStorage.removeItem('authToken');
-            return false;
-        }
+        JSON.parse(atob(b64));
         return true;
     } catch {
         return false;

@@ -11,7 +11,7 @@ import DataTable, { ActionsDropdown } from '../../../components/ui/DataTable';
 import SubTabNav from '../../../components/ui/SubTabNav';
 import FormModal from '../../../components/FormModal/FormModal';
 import ConfirmationModal from '../../../components/ConfirmationModal/ConfirmationModal';
-import StatCard from '../../../components/StatCard/StatCard';
+import StatusCard from '../../../components/StatusCard/StatusCard';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import './OrgStructureTab.css';
 import api from '../../../api';
@@ -393,10 +393,10 @@ function DepartmentsView({ departments, employees, onRefresh }: {
     return (
         <div className="org-content">
             <div className="org-stats-grid">
-                <StatCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext="In the organization" variant="primary" />
-                <StatCard icon={<CheckCircle2 size={18} />} label="Active" value={activeDepts} subtext="Currently operational" variant="success" />
-                <StatCard icon={<XCircle size={18} />} label="Inactive" value={departments.length - activeDepts} subtext="Deactivated" variant="warning" />
-                <StatCard icon={<Briefcase size={18} />} label="Positions" value={departments.reduce((s, d) => s + d.positionCount, 0)} subtext="Across all depts" variant="primary" />
+                <StatusCard icon={<Building2 size={18} />} label="Total Departments" value={departments.length} subtext="In the organization" variant='teal' />
+                <StatusCard icon={<CheckCircle2 size={18} />} label="Active" value={activeDepts} subtext="Currently operational" variant="success" />
+                <StatusCard icon={<XCircle size={18} />} label="Inactive" value={departments.length - activeDepts} subtext="Deactivated" variant="warning" />
+                <StatusCard icon={<Briefcase size={18} />} label="Positions" value={departments.reduce((s, d) => s + d.positionCount, 0)} subtext="Across all depts" variant='teal' />
             </div>
 
             <DataTable
@@ -543,10 +543,10 @@ function PositionsView({ positions, departments, employees, onRefresh }: {
     return (
         <div className="org-content">
             <div className="org-stats-grid">
-                <StatCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext="Across all departments" variant="primary" />
-                <StatCard icon={<CheckCircle2 size={18} />} label="Active" value={activePositions} subtext="Currently operational" variant="success" />
-                <StatCard icon={<XCircle size={18} />} label="Inactive" value={positions.length - activePositions} subtext="Deactivated" variant="warning" />
-                <StatCard icon={<Building2 size={18} />} label="Departments" value={departments.length} subtext="Available" variant="primary" />
+                <StatusCard icon={<Briefcase size={18} />} label="Total Positions" value={positions.length} subtext="Across all departments" variant='teal' />
+                <StatusCard icon={<CheckCircle2 size={18} />} label="Active" value={activePositions} subtext="Currently operational" variant="success" />
+                <StatusCard icon={<XCircle size={18} />} label="Inactive" value={positions.length - activePositions} subtext="Deactivated" variant="warning" />
+                <StatusCard icon={<Building2 size={18} />} label="Departments" value={departments.length} subtext="Available" variant='teal' />
             </div>
 
             <DataTable

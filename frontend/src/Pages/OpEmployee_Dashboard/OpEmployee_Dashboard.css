@@ -1,3 +1,9 @@
+.dashboard-container {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg-main);
+}
+
 /* ─── CSS Variables ───────────────────────────────────────────────────────── */
 :root {
     --sidebar-width: 260px;
@@ -33,232 +39,16 @@ body {
    SIDEBAR — copied from SystemAdmin dashboard
 ═══════════════════════════════════════════════════════════════════════════ */
 
-.sidebar {
-    width: var(--sidebar-width);
-    height: 100vh;
-    background: var(--sidebar-bg);
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 100;
-    overflow-y: auto;
-    overflow-x: hidden;
-    border-right: 1px solid var(--sidebar-border);
-}
-
-.sidebar-logo {
-    padding: 36px 24px 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.logo-image, .sidebar-logo-img {
-    width: 100%;
-    max-width: 170px;
-    height: auto;
-    object-fit: contain;
-}
-
-.sidebar-role-section {
-    padding: 0 24px 24px;
-    display: flex;
-    justify-content: center;
-}
-
-.sidebar-role-badge, .sidebar-role-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 20px;
-    background: #00b574;
-    border-radius: var(--radius-full);
-    color: white;
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.8px;
-    box-shadow: 0 0 16px rgba(0, 181, 116, 0.45);
-}
-
-.role-dot-inner {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: white;
-    box-shadow: 0 0 4px white;
-}
-
-.sidebar-nav {
-    flex: 1;
-    padding: 0 0 24px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.nav-section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.nav-section-title, .nav-section-label {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: #4b5563;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 0 24px 6px;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 24px;
-    color: var(--sidebar-text);
-    font-size: 0.88rem;
-    font-weight: 500;
-    transition: all 0.22s ease;
-    position: relative;
-    cursor: pointer;
-}
-
-    .nav-item svg {
-        width: 18px;
-        height: 18px;
-        color: var(--sidebar-text);
-        transition: all 0.22s ease;
-    }
-
-    .nav-item:hover {
-        background: var(--sidebar-bg-hover);
-        color: var(--sidebar-text-hover);
-    }
-
-        .nav-item:hover svg {
-            color: var(--sidebar-text-hover);
-        }
-
-    .nav-item.active {
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--sidebar-text-active);
-        font-weight: 600;
-    }
-
-        .nav-item.active::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: var(--sidebar-text-active);
-            border-top-right-radius: 4px;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 0 10px rgba(5, 205, 153, 0.4);
-        }
-
-        .nav-item.active svg {
-            color: var(--sidebar-text-active);
-        }
-
-.nav-item-label {
-    flex: 1;
-}
-
-.nav-badge {
-    background: var(--sidebar-text-active);
-    color: white;
-    font-size: 0.65rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    min-width: 22px;
-    text-align: center;
-}
-
-.sidebar-footer {
-    margin-top: auto;
-    padding: 16px;
-    border-top: 1px solid var(--sidebar-border);
-}
-
-.profile-card, .user-block {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.profile-avatar, .avatar-circle {
-    width: 42px;
-    height: 42px;
-    background: #00b574;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 0.95rem;
-    flex-shrink: 0;
-}
-
-.profile-info, .user-text {
+.main-viewport {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
+    max-width: none;
+    margin: 0;
 }
 
-    .profile-name, .user-text strong {
-        color: white;
-        font-size: 0.88rem;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-.profile-role, .welcome-text {
-    color: #64748b;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    margin-top: 2px;
-}
-
-.profile-logout, .logout-btn-sidebar {
-    color: var(--sidebar-text);
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.22s ease;
-    flex-shrink: 0;
-}
-
-    .profile-logout:hover, .logout-btn-sidebar:hover {
-        background: rgba(239, 68, 68, 0.1);
-        color: #ef4444;
-        border-color: rgba(239, 68, 68, 0.2);
-    }
-
-/* ─── Main Viewport ──────────────────────────────────────────────────────── */
 .main {
-    margin-left: var(--sidebar-width);
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -297,7 +87,7 @@ body {
 /* ─── Cards ──────────────────────────────────────────────────────────────── */
 .card {
     background: var(--bg-card);
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     padding: 20px;
     box-shadow: var(--shadow);
 }
@@ -343,7 +133,7 @@ body {
     padding: 7px 14px;
     font-size: 0.8rem;
     font-weight: 500;
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
     border: 1px solid var(--border);
     background: var(--bg-card);
     color: var(--text-primary);
@@ -355,22 +145,9 @@ body {
     flex-shrink: 0;
 }
 
-    .btn:hover {
-        background: var(--bg-main);
-        border-color: var(--border-hover);
-    }
+    
 
-.btn-primary {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-}
-
-    .btn-primary:hover {
-        opacity: 0.88;
-        background: var(--primary);
-    }
-
+    
 .btn-sm {
     padding: 6px 12px;
     font-size: 0.75rem;
@@ -379,25 +156,9 @@ body {
     align-self: center;
 }
 
-.btn-ghost {
-    background: transparent;
-    border: 1px solid var(--border);
-}
+    
 
-    .btn-ghost:hover {
-        background: var(--bg-main);
-    }
-
-.btn-danger {
-    color: var(--status-failed);
-    border-color: var(--status-failed);
-    background: transparent;
-}
-
-    .btn-danger:hover {
-        background: var(--status-failed-bg);
-    }
-
+    
 .icon-btn {
     background: none;
     border: none;
@@ -418,50 +179,64 @@ body {
 .badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    font-size: 0.68rem;
+    gap: 4px;
+    font-size: 11px;
     font-weight: 700;
-    padding: 3px 9px;
-    border-radius: var(--radius-full);
+    padding: 4px 10px;
+    border-radius: var(--r-full, 9999px);
     white-space: nowrap;
+    text-transform: capitalize;
+    border: 1px solid transparent;
 }
 
-.badge-blue {
-    background: var(--status-transit-bg);
-    color: var(--primary);
+.badge-blue,
+.badge-info {
+    background: var(--info-bg, rgba(2, 132, 199, 0.08));
+    color: var(--info, #0284C7);
+    border-color: rgba(2, 132, 199, 0.2);
 }
 
-.badge-amber {
-    background: var(--status-pending-bg);
-    color: #9a6e00;
+.badge-amber,
+.badge-warning {
+    background: var(--warn-bg, rgba(217, 119, 6, 0.08));
+    color: var(--warn, #D97706);
+    border-color: rgba(217, 119, 6, 0.2);
 }
 
-.badge-green {
-    background: var(--status-active-bg);
-    color: #047d5b;
+.badge-green,
+.badge-success {
+    background: var(--ok-bg, rgba(5, 150, 105, 0.08));
+    color: var(--ok, #059669);
+    border-color: rgba(5, 150, 105, 0.2);
 }
 
-.badge-red {
-    background: var(--status-failed-bg);
-    color: var(--status-failed);
+.badge-red,
+.badge-danger {
+    background: var(--err-bg, rgba(220, 38, 38, 0.08));
+    color: var(--err, #DC2626);
+    border-color: rgba(220, 38, 38, 0.2);
 }
 
-.badge-gray {
-    background: rgba(163, 174, 208, 0.15);
-    color: #6b7280;
+.badge-gray,
+.badge-neutral {
+    background: rgba(163, 174, 208, 0.12);
+    color: var(--tt, #6B7280);
+    border-color: rgba(163, 174, 208, 0.2);
 }
 
-.badge-purple {
-    background: rgba(118, 73, 255, 0.12);
-    color: #5e35b1;
+.badge-purple,
+.badge-assign {
+    background: var(--new-bg, rgba(79, 70, 229, 0.08));
+    color: var(--new, #4F46E5);
+    border-color: rgba(79, 70, 229, 0.2);
 }
 
 /* ─── Priority Pills ─────────────────────────────────────────────────────── */
 .prio-pill {
-    font-size: 0.67rem;
+    font-size: 11px;
     font-weight: 700;
-    padding: 3px 9px;
-    border-radius: var(--radius-full);
+    padding: 4px 10px;
+    border-radius: var(--r-full, 9999px);
     text-transform: capitalize;
 }
 
@@ -509,14 +284,14 @@ body {
 /* ─── Stat Cards ─────────────────────────────────────────────────────────── */
 .stats-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
 }
 
 /* ─── Welcome Banner ─────────────────────────────────────────────────────── */
 .welcome-banner {
     background: linear-gradient(135deg, #1b254b 0%, #2d3a6b 100%);
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     padding: 24px 28px;
     display: flex;
     align-items: center;
@@ -784,7 +559,7 @@ body {
 
 .filter-pill {
     padding: 6px 14px;
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
     border: 1px solid var(--border);
     background: var(--bg-card);
     color: var(--text-secondary);
@@ -811,7 +586,7 @@ body {
 
 .fp-count {
     background: rgba(255, 255, 255, 0.3);
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
     padding: 1px 7px;
     font-size: 0.68rem;
 }
@@ -831,7 +606,7 @@ body {
 /* ─── Task Card ──────────────────────────────────────────────────────────── */
 .task-card {
     background: var(--bg-card);
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     padding: 18px;
     box-shadow: var(--shadow);
     border: 1px solid var(--border);
@@ -965,7 +740,7 @@ body {
     color: #047d5b;
     background: var(--status-active-bg);
     padding: 3px 9px;
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
 }
 
 /* ─── Empty State ────────────────────────────────────────────────────────── */
@@ -993,7 +768,7 @@ body {
 
 .modal-card {
     background: var(--bg-card);
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     padding: 24px;
     width: 440px;
     max-height: 90vh;
@@ -1156,7 +931,7 @@ body {
     align-items: center;
     gap: 5px;
     padding: 7px 14px;
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
     border: 1.5px solid var(--border);
     background: var(--bg-card);
     font-size: 0.75rem;
@@ -1456,7 +1231,7 @@ body {
 
 .leave-stat-card {
     background: var(--bg-card);
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     padding: 18px 20px;
     box-shadow: var(--shadow);
     display: flex;
@@ -1467,7 +1242,7 @@ body {
 .lst-icon {
     width: 44px;
     height: 44px;
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1515,7 +1290,7 @@ body {
 .leave-modal-icon {
     width: 36px;
     height: 36px;
-    border-radius: var(--radius-md);
+    border-radius: var(--r-md, 12px);
     background: var(--status-transit-bg);
     display: flex;
     align-items: center;
@@ -1596,7 +1371,7 @@ body {
     gap: 5px;
     padding: 4px 12px;
     background: var(--status-transit-bg);
-    border-radius: var(--radius-full);
+    border-radius: var(--r-full, 9999px);
     font-size: 0.75rem;
     color: var(--primary);
     font-weight: 600;

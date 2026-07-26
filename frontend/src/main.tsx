@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import './index.css'
+import './global.css'
 import '@tabler/icons-webfont/dist/tabler-icons.min.css'
 import axios from 'axios'
 
@@ -33,6 +33,11 @@ axios.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+
+        // Don't retry or handle errors from heartbeat refresh requests
+        if (originalRequest.headers?.['X-Heartbeat']) {
+            return Promise.reject(error);
+        }
 
         // Handle SESSION_TIMEOUT from backend
         if (error.response?.data?.code === 'SESSION_TIMEOUT') {
@@ -178,3 +183,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </React.StrictMode>
 )
 // Trigger language stats refresh
+

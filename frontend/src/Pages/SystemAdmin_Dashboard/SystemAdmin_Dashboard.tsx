@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     Users,
     ClipboardList,
@@ -37,11 +38,11 @@ import {
     GitBranch,
     Bell,
     Megaphone,
+    Lightbulb,
 } from 'lucide-react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import './SystemAdmin_Dashboard.css';
 import { useNavigate } from 'react-router-dom';
-import NotificationBell from '../../components/NotificationBell/NotificationBell';
 import { useToast } from '../../components/Toast/Toast';
 import SearchBar from '../../components/ui/SearchBar';
 import EmptyState from '../../components/ui/EmptyState';
@@ -55,8 +56,9 @@ import EmployeeDetailPanel from './EmployeeDetailPanel/EmployeeDetailPanel';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
 import ConfirmationModal from '../../components/ConfirmationModal/ConfirmationModal';
 import RoleManagementTab, { DepartmentResponseDTO, JobPositionResponseDTO } from './RoleManagementTab/RoleManagementTab';
-import DashboardHeader from '../../components/DashboardHeader/DashboardHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import GlobalHeader from '../../components/GlobalHeader/GlobalHeader';
+import Sidebar from '../../components/Sidebar/Sidebar';
+import StatusCard from '../../components/StatusCard/StatusCard';
 import ActionButton from '../../components/ActionButton/ActionButton';
 import DataTable, { ActionsDropdown } from '../../components/ui/DataTable';
 import SubTabNav from '../../components/ui/SubTabNav';
@@ -66,6 +68,21 @@ import TaskManager from '../../components/TaskManager/TaskManager';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
+import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
+
+const BIOMARKER_SCAN_LOGS: ActivityLog[] = [
+    { activityLogId: 'bio-scan-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Scan', description: 'Automated daily scan SCAN-20260723-001 finished. 10 violations detected.', createdAt: '2026-07-23T00:02:00' },
+    { activityLogId: 'bio-flag-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'RED FLAG generated for Jose Rizal (C-0388): Compound SLA + workload violation.', createdAt: '2026-07-23T00:01:00' },
+    { activityLogId: 'bio-flag-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Juan dela Cruz (C-0421): Recurring SLA breach pattern.', createdAt: '2026-07-23T00:01:05' },
+    { activityLogId: 'bio-flag-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Ana Gonzales (C-0612): Workload trending upward.', createdAt: '2026-07-23T00:01:10' },
+    { activityLogId: 'bio-flag-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'GREEN FLAG generated for Carlos Mendoza (C-0724): Workload normalized.', createdAt: '2026-07-23T00:01:15' },
+    { activityLogId: 'bio-viol-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88231 (Juan dela Cruz / Last Mile) breached SLA by 4h 32m. Flagged as Critical.', createdAt: '2026-07-23T00:00:12' },
+    { activityLogId: 'bio-viol-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88190 (Maria Santos / Dispatch) breached SLA by 1h 15m. Flagged as High.', createdAt: '2026-07-23T00:00:14' },
+    { activityLogId: 'bio-viol-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88012 (Pedro Reyes / Logistics) breached SLA by 45m. Flagged as Medium.', createdAt: '2026-07-23T00:00:16' },
+    { activityLogId: 'bio-viol-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0388 (Jose Rizal / Last Mile) has 12 active tasks (threshold: 8). Flagged as Critical.', createdAt: '2026-07-23T00:00:30' },
+    { activityLogId: 'bio-viol-005', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0612 (Ana Gonzales / Dispatch) has 10 active tasks (threshold: 8). Flagged as High.', createdAt: '2026-07-23T00:00:31' },
+    { activityLogId: 'bio-viol-006', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0724 (Carlos Mendoza / Logistics) has 9 active tasks (threshold: 8). Flagged as Low.', createdAt: '2026-07-23T00:00:32' },
+];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,7 +99,8 @@ type NavTab =
     | 'activity_logs'
     | 'tasks'
     | 'profile'
-    | 'org-structure';
+    | 'org-structure'
+    | 'biomarker';
 
 // ─── Updated Types ────────────────────────────────────────────────────────────
 
@@ -216,36 +234,40 @@ const NAV_GROUPS = [
     {
         label: 'MAIN MENU',
         items: [
-            { tab: 'dashboard' as NavTab, icon: LayoutDashboard, label: 'Dashboard' },
-            { tab: 'employees' as NavTab, icon: Users, label: 'Manage Employee' },
+            { tab: 'dashboard' as NavTab, icon: 'LayoutDashboard', label: 'Dashboard' },
+            { tab: 'employees' as NavTab, icon: 'Users', label: 'Manage Employee' },
         ],
     },
     {
         label: 'INTEGRATION',
         items: [
-            { tab: 'delivery' as NavTab, icon: FileText, label: 'Delivery Summary' },
-            { tab: 'tasks' as NavTab, icon: ClipboardList, label: 'Task Management' },
-            { tab: 'finance' as NavTab, icon: BarChart3, label: 'Finance' },
+            { tab: 'delivery' as NavTab, icon: 'FileText', label: 'Delivery Summary' },
+            { tab: 'tasks' as NavTab, icon: 'ClipboardList', label: 'Task Management' },
+            { tab: 'finance' as NavTab, icon: 'BarChart3', label: 'Finance' },
         ],
     },
     {
         label: 'REPORTS',
         items: [
-            { tab: 'reports' as NavTab, icon: BarChart3, label: 'Reports' },
+            { tab: 'reports' as NavTab, icon: 'BarChart3', label: 'Reports' },
         ],
     },
     {
         label: 'SYSTEM',
         items: [
-            { tab: 'announcements' as NavTab, icon: Megaphone, label: 'Announcements' },
-            { tab: 'settings' as NavTab, icon: Settings, label: 'Settings' },
-            { tab: 'roles' as NavTab, icon: Shield, label: 'Role Management' },
-            { tab: 'org-structure' as NavTab, icon: GitBranch, label: 'Org Structure' },
-            { tab: 'notifications' as NavTab, icon: Bell, label: 'Notifications' },
-            { tab: 'activity_logs' as NavTab, icon: Activity, label: 'Activity Logs' },
+            { tab: 'announcements' as NavTab, icon: 'Megaphone', label: 'Announcements' },
+            { tab: 'settings' as NavTab, icon: 'Settings', label: 'Settings' },
+            { tab: 'roles' as NavTab, icon: 'Shield', label: 'Role Management' },
+            { tab: 'org-structure' as NavTab, icon: 'GitBranch', label: 'Org Structure' },
+            { tab: 'notifications' as NavTab, icon: 'Bell', label: 'Notifications' },
+            { tab: 'activity_logs' as NavTab, icon: 'Activity', label: 'Activity Logs' },
         ],
     },
 ];
+
+
+
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -912,11 +934,11 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (!userId) throw new Error('Employee not found.');
 
-                // Activate/deactivate BEFORE updating personal details
-                // (backend blocks PUT on deactivated users)
-                if (form.accountStatus !== employee.accountStatus) {
-                    const isActive = form.accountStatus === 'Active';
-                    await api.patch(`/api/User/${userId}/${isActive ? 'activate' : 'deactivate'}`);
+                // When deactivating: update personal details FIRST (while user is still active),
+                // then deactivate. When activating: activate first so PUT can succeed.
+                const statusChanged = form.accountStatus !== employee.accountStatus;
+                if (statusChanged && form.accountStatus === 'Active') {
+                    await api.patch(`/api/User/${userId}/activate`);
                 }
 
                 await api.put(`/api/User/${userId}`, {
@@ -927,6 +949,10 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                     contactNumber: form.contactNumber,
                     email: form.email.trim(),
                 });
+
+                if (statusChanged && form.accountStatus !== 'Active') {
+                    await api.patch(`/api/User/${userId}/deactivate`);
+                }
                 const newRoleVal = toBackendRole(form.role);
                 const oldRoleVal = typeof employee.role === 'number' ? employee.role : parseInt(employee.role, 10);
                 if (newRoleVal !== oldRoleVal) {
@@ -1225,8 +1251,8 @@ interface DashboardTabProps {
 
 function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSelectEmployee, onEditEmployee, onViewAll, onAddEmployee, rolesCount, activityLogPage, activityLogTotalPages, onActivityLogPageChange }: DashboardTabProps) {
     const [searchQuery, setSearchQuery] = useState('');
-    const activeCount = employees.filter(e => e.accountStatus === 'Active').length;
-    const deactivatedCount = employees.filter(e => e.accountStatus === 'Deactivated').length;
+    const activeCount = (employees || []).filter(e => e.accountStatus === 'Active').length;
+    const deactivatedCount = (employees || []).filter(e => e.accountStatus === 'Deactivated').length;
 
     const roleDistribution = Object.entries(
         employees.reduce<Record<string, number>>((acc, emp) => {
@@ -1278,13 +1304,13 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                 </ActionButton>
             </div>
             <div className="stats-row">
-                {[
-                    { icon: <Users size={20} strokeWidth={2.3} />, variant: 'primary', label: 'TOTAL EMPLOYEES', value: employees.length, subtext: 'All registered staff' },
+                {([
+                    { icon: <Users size={20} strokeWidth={2.3} />, variant: 'teal', label: 'TOTAL EMPLOYEES', value: employees.length, subtext: 'All registered staff' },
                     { icon: <CheckCircle2 size={20} strokeWidth={2.3} />, variant: 'success', label: 'ACTIVE', value: activeCount, subtext: 'Currently active accounts' },
                     { icon: <AlertCircle size={20} strokeWidth={2.3} />, variant: 'danger', label: 'DEACTIVATED', value: deactivatedCount, subtext: 'Accounts needing review' },
                     { icon: <Shield size={20} strokeWidth={2.3} />, variant: 'warning', label: 'ROLES', value: rolesCount ?? SYSTEM_ROLES.length, subtext: 'Available role types' },
-                ].map(({ icon, variant, label, value, subtext }) => (
-                    <StatCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
+                ] as const).map(({ icon, variant, label, value, subtext }) => (
+                    <StatusCard key={label} icon={icon} variant={variant} label={label} value={value} subtext={subtext} />
                 ))}
             </div>
 
@@ -1323,16 +1349,16 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                         <EmptyState message="No data" />
                     ) : (
                         <ResponsiveContainer width="100%" height={260}>
-                            <PieChart>
+                            <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
                                 <Pie
                                     data={statusDistribution}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={55}
-                                    outerRadius={90}
+                                    outerRadius={85}
                                     paddingAngle={3}
                                     dataKey="value"
-                                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                                    label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
                                     labelLine={false}
                                 >
                                     {statusDistribution.map((entry) => (
@@ -1390,12 +1416,12 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                         <EmptyState message="No data available" />
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            {recentEmployees.filter(emp => {
+                            {(recentEmployees || []).filter(emp => {
                                 if (!searchQuery) return true;
                                 const q = searchQuery.toLowerCase();
                                 return getEmployeeDisplayName(emp).toLowerCase().includes(q)
                                     || (emp.employeeNumber && emp.employeeNumber.toLowerCase().includes(q))
-                                    || (emp.role && emp.role.toLowerCase().includes(q));
+                                    || (emp.role != null && String(emp.role).toLowerCase().includes(q));
                             }).slice(0, 7).map(emp => {
                                 const name = getEmployeeDisplayName(emp);
                                 return (
@@ -1431,7 +1457,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                             ? <EmptyState icon={<Loader2 size={22} className="spin" />} message="Loading..." />
                             : activityLogs.length === 0
                                 ? <EmptyState icon={<ClipboardList size={22} />} message="No recent activity" />
-                                : activityLogs.filter(log => {
+                                : (activityLogs || []).filter(log => {
                                     if (!searchQuery) return true;
                                     const q = searchQuery.toLowerCase();
                                     return log.description.toLowerCase().includes(q)
@@ -1989,6 +2015,50 @@ export default function Dashboard() {
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
+        {
+        label: null,
+        items: [
+        {
+        label: 'Task Allocation and Review System',
+        icon: 'ti ti-clipboard-list',
+        subItems: [
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
+        { label: 'Manage Employee', onClick: () => setActiveTab('employees') },
+        { label: 'Task Management', onClick: () => setActiveTab('tasks') },
+        { label: 'Reports', onClick: () => setActiveTab('reports') },
+        { label: 'Role Management', onClick: () => setActiveTab('roles') },
+        { label: 'Org Structure', onClick: () => setActiveTab('org-structure') },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        { label: 'Biomarker Scan', onClick: () => setActiveTab('biomarker') },
+        ],
+        },
+        {
+        label: 'Delivery Management System',
+        icon: 'ti ti-truck-delivery',
+        subItems: [
+        { label: 'Delivery Summary', onClick: () => setActiveTab('delivery') },
+        ],
+        },
+        {
+        label: 'Financial Management System',
+        icon: 'ti ti-currency-dollar',
+        subItems: [
+        { label: 'Finance', onClick: () => setActiveTab('finance') },
+        ],
+        },
+        {
+        label: 'General',
+        icon: 'ti ti-settings',
+        subItems: [
+        { label: 'Announcements', onClick: () => setActiveTab('announcements') },
+        { label: 'Settings', onClick: () => setActiveTab('settings') },
+        { label: 'Notifications', onClick: () => setActiveTab('notifications') },
+        ],
+        },
+        ],
+        },
+    ], [setActiveTab]);
     const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
@@ -1997,9 +2067,9 @@ export default function Dashboard() {
     const [archiveSubmitting, setarchiveSubmitting] = useState(false);
     const [selectedPanelEmployee, setSelectedPanelEmployee] = useState<RecentEmployee | null>(null);
     const [detailPanelInitialSection, setDetailPanelInitialSection] = useState<'overview'>('overview');
-    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [logoutConfirm, setLogoutConfirm] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
+
 
     // ── Employees ──
     const [employees, setEmployees] = useState<RecentEmployee[]>([]);
@@ -2014,15 +2084,39 @@ export default function Dashboard() {
     const [showNewTask, setShowNewTask] = useState(false);
     const [tmDetailTask, setTmDetailTask] = useState<TaskViewTask | null>(null);
     const [tmEditingTask, setTmEditingTask] = useState<TaskViewTask | null>(null);
-    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+    interface WorkloadInfo {
+        employeeName: string;
+        accountId: string;
+        availabilityStatus: string;
+        isAvailable: boolean;
+        workload: number;
+        role: string;
+        isRecommended: boolean;
+        recommendationReason: string;
+    }
+
+    const [newTaskForm, setNewTaskForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [] as string[], supportingEvidenceUrl: '' });
     const [newTaskErrors, setNewTaskErrors] = useState<Record<string, string>>({});
     const [newTaskSubmitting, setNewTaskSubmitting] = useState(false);
     const [newTaskApiError, setNewTaskApiError] = useState('');
-    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+    const [editForm, setEditForm] = useState({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [] as string[], supportingEvidenceUrl: '' });
     const [editErrors, setEditErrors] = useState<Record<string, string>>({});
     const [editSubmitting, setEditSubmitting] = useState(false);
     const [editApiError, setEditApiError] = useState('');
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+    const [newTaskEligibleEmployees, setNewTaskEligibleEmployees] = useState<WorkloadInfo[]>([]);
+    const [rawApiKeys, setRawApiKeys] = useState<string>('');
+    const [editEligibleEmployees, setEditEligibleEmployees] = useState<WorkloadInfo[]>([]);
+    const [newTaskRecommendation, setNewTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
+    const [editTaskRecommendation, setEditTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
+    const [newTaskSingleSearch, setNewTaskSingleSearch] = useState('');
+    const [newTaskTeamSearch, setNewTaskTeamSearch] = useState('');
+    const [newTaskSupportingEvidence, setNewTaskSupportingEvidence] = useState<File | null>(null);
+    const newTaskFileRef = useRef<HTMLInputElement>(null);
+    const [editTaskSingleSearch, setEditTaskSingleSearch] = useState('');
+    const [editTaskTeamSearch, setEditTaskTeamSearch] = useState('');
+    const [editTaskSupportingEvidence, setEditTaskSupportingEvidence] = useState<File | null>(null);
+    const editTaskFileRef = useRef<HTMLInputElement>(null);
     const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
     const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
     const STATUS_LABELS: Record<number, string> = { 0: 'Not Started', 1: 'In Progress', 2: 'Done/Pending Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -2101,6 +2195,48 @@ export default function Dashboard() {
             })
             .catch(() => {});
     }, []);
+
+    const fetchAssignableEmployees = async (setter: (list: WorkloadInfo[]) => void, setRec: (r: any) => void) => {
+        try {
+            const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=50');
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
+            if (list.length > 0) {
+                const sample = list[0];
+                console.debug('[TaskForm] ALL KEYS of first item:', Object.keys(sample));
+                console.debug('[TaskForm] Raw first item:', JSON.stringify(sample, null, 2));
+                console.debug('[TaskForm] Full JSON response (truncated):', JSON.stringify(json).slice(0, 2000));
+                setRawApiKeys(Object.keys(sample).join(', ') + '\n\n' + JSON.stringify(sample, null, 2).slice(0, 800));
+                const mapped: WorkloadInfo[] = list.map((emp: any) => ({
+                    employeeName: emp.fullName ?? emp.FullName ?? emp.employeeName ?? '',
+                    accountId: emp.userId ?? emp.UserId ?? emp.id ?? '',
+                    availabilityStatus: emp.availabilityStatus ?? emp.AvailabilityStatus ?? emp.status ?? 'Active',
+                    isAvailable: emp.isAvailable ?? emp.IsAvailable ?? emp.available ?? true,
+                    workload: typeof emp.workload === 'number' ? emp.workload : 0,
+                    role: emp.role ?? emp.Role ?? '',
+                    isRecommended: true,
+                    recommendationReason: 'Available for assignment',
+                }));
+                setter(mapped);
+                const activeEmployees = mapped.filter(e => e.isAvailable);
+                if (activeEmployees.length > 0) {
+                    const best = activeEmployees.reduce((a, b) => a.workload <= b.workload ? a : b);
+                    setRec({
+                        employeeName: best.employeeName || 'Recommended Employee',
+                        accountId: best.accountId,
+                        availabilityStatus: best.availabilityStatus,
+                        workload: best.workload,
+                        reason: 'Available for assignment',
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('[TaskForm] fetchAssignableEmployees error:', err);
+        }
+    };
+
+    useEffect(() => { if (showNewTask) { fetchAssignableEmployees(setNewTaskEligibleEmployees, setNewTaskRecommendation); } }, [showNewTask]);
+    useEffect(() => { if (tmEditingTask) { fetchAssignableEmployees(setEditEligibleEmployees, setEditTaskRecommendation); } }, [tmEditingTask]);
 
     const handleManagerTaskArchive = async (ids: string[]) => {
         for (const id of ids) {
@@ -2196,6 +2332,9 @@ export default function Dashboard() {
                 isConfidential: tmEditingTask.isConfidential ?? false,
                 assignmentScope: (tmEditingTask.assignmentScope !== undefined ? ['SingleEmployee', 'Team', 'Department'][tmEditingTask.assignmentScope] : 'SingleEmployee') as string,
                 assignedDepartmentId: tmEditingTask.assignedDepartmentId ?? '',
+                assignedTo: '',
+                assignedUserIds: [],
+                supportingEvidenceUrl: '',
             });
             setEditErrors({});
             setEditApiError('');
@@ -2204,9 +2343,11 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (!showNewTask) {
-            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '' });
+            setNewTaskForm({ title: '', description: '', priority: '', deadline: '', classification: '', isConfidential: false, assignmentScope: 'SingleEmployee', assignedDepartmentId: '', assignedTo: '', assignedUserIds: [], supportingEvidenceUrl: '' });
             setNewTaskErrors({});
             setNewTaskApiError('');
+            setNewTaskEligibleEmployees([]);
+            setNewTaskRecommendation(null);
         }
     }, [showNewTask]);
 
@@ -2224,6 +2365,8 @@ export default function Dashboard() {
         if (!newTaskForm.deadline) errs.deadline = 'Deadline is required.';
         if (!newTaskForm.classification) errs.classification = 'Classification is required.';
         if (!newTaskForm.assignmentScope) errs.assignmentScope = 'Assignment scope is required.';
+        if (newTaskForm.assignmentScope === 'SingleEmployee' && !newTaskForm.assignedTo) errs.assignedTo = 'Please select an employee to assign.';
+        if (newTaskForm.assignmentScope === 'Team' && newTaskForm.assignedUserIds.length === 0) errs.assignedUserIds = 'Please select at least one team member.';
         if (newTaskForm.assignmentScope === 'Department' && !newTaskForm.assignedDepartmentId) errs.assignedDepartmentId = 'Department is required for Department scope.';
         if (Object.keys(errs).length) { setNewTaskErrors(errs); return; }
         setNewTaskErrors({});
@@ -2234,6 +2377,11 @@ export default function Dashboard() {
         setNewTaskSubmitting(true);
         setNewTaskApiError('');
         try {
+            const userIds = scopeNum === 0
+                ? (newTaskForm.assignedTo ? [newTaskForm.assignedTo] : [])
+                : scopeNum === 1
+                    ? newTaskForm.assignedUserIds
+                    : [];
             const createPayload: Record<string, any> = {
                 title: t,
                 description: d,
@@ -2241,6 +2389,7 @@ export default function Dashboard() {
                 classification: newTaskForm.classification === 'special' ? 1 : 0,
                 assignmentScope: scopeNum,
                 isConfidential: newTaskForm.isConfidential,
+                assignedUserIds: userIds.length > 0 ? userIds : undefined,
                 assignedDepartmentId: scopeNum === 2 ? newTaskForm.assignedDepartmentId || undefined : undefined,
             };
             if (newTaskForm.priority !== 'Urgent') {
@@ -2280,6 +2429,11 @@ export default function Dashboard() {
         setEditSubmitting(true);
         setEditApiError('');
         try {
+            const editUserIds = scopeNum === 0
+                ? (editForm.assignedTo ? [editForm.assignedTo] : [])
+                : scopeNum === 1
+                    ? editForm.assignedUserIds
+                    : [];
             const updatePayload: Record<string, any> = {
                 title: t,
                 description: d,
@@ -2287,6 +2441,7 @@ export default function Dashboard() {
                 classification: editForm.classification === 'special' ? 1 : 0,
                 assignmentScope: scopeNum,
                 isConfidential: editForm.isConfidential,
+                assignedUserIds: editUserIds.length > 0 ? editUserIds : undefined,
                 assignedDepartmentId: scopeNum === 2 ? editForm.assignedDepartmentId || undefined : undefined,
             };
             if (!tmEditingTask.isSLALocked) {
@@ -2313,13 +2468,53 @@ export default function Dashboard() {
     const ACTIVITY_LOG_PAGE_SIZE = 15;
     const [activityLogSearch, setActivityLogSearch] = useState('');
 
-    // ── Notifications Tab ──
+    // ── Notifications ──
     const NOTIF_TYPE_MAP: Record<number, string> = { 0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning', 4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold', 8: 'TaskCompleted', 9: 'TemplateTaskUnassigned' };
     const [allNotifications, setAllNotifications] = useState<any[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifPage, setNotifPage] = useState(1);
     const [notifTotalPages, setNotifTotalPages] = useState(1);
     const NOTIF_PAGE_SIZE = 20;
+    const [headerNotifications, setHeaderNotifications] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
+
+    const mapToHeaderNotification = (n: any): import('../../components/GlobalHeader/GlobalHeader').NotificationItem => {
+        const typeLabels: Record<string, 'alert' | 'success' | 'info' | 'system'> = {
+            TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
+            PushBack: 'warning' as any, TaskCancelled: 'system', TaskResumed: 'info', TaskOnHold: 'warning' as any,
+            TaskCompleted: 'success', TemplateTaskUnassigned: 'system',
+        };
+        const type = typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '';
+        const createdAt = n.createdAt ?? '';
+        const now = new Date();
+        const createdDate = new Date(createdAt);
+        const isToday = createdDate.toDateString() === now.toDateString();
+        const timeStr = createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return {
+            id: String(n.id ?? n.notificationId ?? ''),
+            title: n.message ?? n.title ?? '',
+            description: n.description ?? '',
+            timestamp: timeStr,
+            date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: n.isRead ?? false,
+            type: typeLabels[type] || 'info',
+            category: type.toLowerCase(),
+            isToday,
+            source: 'System',
+        };
+    };
+
+    const fetchHeaderNotifications = async () => {
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setHeaderNotifications(d.items.map(mapToHeaderNotification));
+            }
+        } catch {
+            // silently fall back to dummy data
+        }
+    };
 
     const fetchAllNotifications = async (page: number) => {
         setNotifLoading(true);
@@ -2348,6 +2543,7 @@ export default function Dashboard() {
         }
     };
 
+    useEffect(() => { fetchHeaderNotifications(); }, []);
     useEffect(() => {
         if (activeTab === 'notifications') {
             fetchAllNotifications(1);
@@ -2398,9 +2594,17 @@ export default function Dashboard() {
         }
     };
 
+    const allActivityLogs = useMemo(() =>
+        [...BIOMARKER_SCAN_LOGS, ...activityLogs],
+    [activityLogs]);
+
+    const combinedTotalPages = useMemo(() =>
+        Math.max(1, Math.ceil(allActivityLogs.length / 10)),
+    [allActivityLogs.length]);
+
     // Re-fetch activity logs when the tab becomes active or any filter changes
     useEffect(() => {
-        if (activeTab === 'activity_logs') {
+        if (activeTab === 'activity_logs' || activeTab === 'dashboard') {
             const timer = setTimeout(() => fetchActivityLogs(1), 400);
             return () => clearTimeout(timer);
         }
@@ -2518,49 +2722,37 @@ export default function Dashboard() {
         delivery: 'Delivery Summary', finance: 'Financial Overview', settings: 'Settings',
         roles: 'Role Management', reports: 'Reports', announcements: 'Announcements', notifications: 'Notifications', activity_logs: 'Activity Logs', profile: 'My Profile',
         tasks: 'Task Manager',
-        'org-structure': 'Organizational Structure'
+        'org-structure': 'Organizational Structure',
+        biomarker: 'Biomarker Alert Dashboard'
     };
 
     return (
         <div className="dashboard-container">
-            {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-            <aside className={`sidebar${sidebarOpen ? ' sidebar--open' : ''}`}>
-                <div className="sidebar-logo"><img src="/src/assets/SpeedexLogo.jpg" alt="Speedex Logo" className="logo-image" /></div>
-                 <div className="sidebar-role-section"><div className="sidebar-role-badge super-admin"><div className="role-dot-inner" />MANAGER</div></div>
-                <nav className="sidebar-nav">
-                    {NAV_GROUPS.map(group => (
-                        <div key={group.label} className="nav-section">
-                            <div className="nav-section-title">{group.label}</div>
-                            {group.items.map(({ tab, icon: Icon, label }) => (
-                                <div key={tab} className={`nav-item${activeTab === tab ? ' nav-item-active' : ''}`} onClick={() => { setActiveTab(tab); setSelectedPanelEmployee(null); }}>
-                                    <Icon size={18} /><span className="nav-item-label">{label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </nav>
-                <div className="sidebar-footer-profile">
-                    <div className="profile-card">
-                        <div className="profile-avatar">{getInitials(employeeName || 'Manager')}</div>
-                        <div className="profile-info"><span className="profile-name">{employeeName || 'Manager'}</span><span className="profile-role">MANAGER</span></div>
-                        <button className="profile-logout" onClick={handleLogout} title="Logout" aria-label="Logout"><LogOut size={18} /></button>
-                    </div>
-                </div>
-            </aside>
+            <Sidebar
+                logoUrl={SpeedexLogo}
+                logoText="SPEEDEX"
+                navGroups={SIDEBAR_NAV_GROUPS}
+                profile={{
+                    name: employeeName || 'Manager',
+                    role: 'MANAGER',
+                    avatarInitials: getInitials(employeeName || 'Manager'),
+                }}
+            />
 
             <main className="main-viewport">
                 {!(activeTab === 'employees' && selectedPanelEmployee) && (
-                    <DashboardHeader
+                    <GlobalHeader
                         title={pageTitles[activeTab]}
-                        userInitials={getInitials(employeeName)}
-                        onSettingsClick={() => setActiveTab('settings')}
-                        onLogout={handleLogout}
-                        onMenuToggle={() => setSidebarOpen(v => !v)}
-                        onViewNotification={(taskId) => {
-                            const found = tmTasks.find(t => t.id === taskId);
-                            if (found) setTmDetailTask(mapManagerTaskToView(found));
+                        breadcrumbs={[{ label: 'System Admin' }, { label: pageTitles[activeTab] }]}
+                        notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
+                        profile={{
+                            name: employeeName || 'Manager',
+                            role: 'MANAGER',
+                            avatarInitials: getInitials(employeeName || 'Manager'),
                         }}
-                        onViewMoreNotifications={() => setActiveTab('notifications')}
+                        onSettings={() => setActiveTab('settings')}
+                        onLogout={handleLogout}
+                        onViewAllNotifications={() => setActiveTab('notifications')}
                     />
                 )}
 
@@ -2614,6 +2806,7 @@ export default function Dashboard() {
                 {activeTab === 'roles' && <RoleManagementTab />}
 
                 {activeTab === 'org-structure' && <OrgStructureTab />}
+                {activeTab === 'biomarker' && <BiomarkerDashboard />}
 
                 {activeTab === 'announcements' && <AnnouncementsTab canCreate={true} />}
 
@@ -2621,7 +2814,7 @@ export default function Dashboard() {
                     <div className="dashboard-content">
                         <div className="card">
                             <div className="card-header-layout">
-                                <h3><Bell size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />Notifications</h3>
+                                <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Notifications</h3>
                             </div>
                             {notifLoading ? (
                                 <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
@@ -2692,7 +2885,17 @@ export default function Dashboard() {
                         />
                     </div>
                 )}
-                {activeTab === 'reports' && <ReportsTab teamMembers={[]} />}
+                {activeTab === 'reports' && (
+                <div className="dashboard-content">
+                    <div className="card" style={{ padding: 24, minHeight: 300 }}>
+                        <div style={{ marginBottom: 16 }}>
+                            <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Reports</h3>
+                            <p style={{ fontSize: 13, color: "var(--ts)", margin: "4px 0 0" }}>View task completion, performance, and operational reports.</p>
+                        </div>
+                        <ReportsTab teamMembers={[]} />
+                    </div>
+                </div>
+            )}
 
                 {activeTab === 'delivery' && <div className="dashboard-content"><div className="card"><EmptyState icon={<Truck size={32} />} message="Delivery module coming soon." /></div></div>}
                 {activeTab === 'finance' && <div className="dashboard-content"><div className="card"><EmptyState icon={<BarChart3 size={32} />} message="Finance module coming soon." /></div></div>}
@@ -2700,7 +2903,7 @@ export default function Dashboard() {
                 {activeTab === 'activity_logs' && (
                     <div className="dashboard-content" style={{ padding: 0 }}>
                         <DataTable
-                            title="System Activity Logs"
+                            title=""
                             headers={['Date & Time', 'Activity Type', 'Employee', 'Description']}
                             searchQuery={activityLogSearch}
                             onSearchChange={val => setActivityLogSearch(val)}
@@ -2727,6 +2930,10 @@ export default function Dashboard() {
                                         <option value="Approval Request Submitted">Approval Request Submitted</option>
                                         <option value="Approval Tier Approved">Approval Tier Approved</option>
                                         <option value="Approval Tier Rejected">Approval Tier Rejected</option>
+                                        <option value="Biomarker Scan">Biomarker Scan</option>
+                                        <option value="Biomarker Flag">Biomarker Flag</option>
+                                        <option value="SLA Breach">SLA Breach</option>
+                                        <option value="Workload Overload">Workload Overload</option>
                                     </select>
                                     <input type="date" value={activityLogDateFrom} onChange={e => setActivityLogDateFrom(e.target.value)}
                                         style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 130, boxSizing: 'border-box', outline: 'none' }} />
@@ -2743,13 +2950,14 @@ export default function Dashboard() {
                             loading={activityLogLoading}
                             emptyMessage="No activity logs found in the system."
                             emptyIcon={<Activity size={24} />}
-                            totalRecords={activityLogs.length}
+                            totalRecords={allActivityLogs.length}
                             currentPage={activityLogPage}
-                            totalPages={activityLogTotalPages}
+                            totalPages={combinedTotalPages}
                             onPageChange={p => fetchActivityLogs(p)}
                         >
-                            {activityLogs.map(log => {
+                            {allActivityLogs.map(log => {
                                 const empName = [log.firstName, log.middleName, log.lastName, log.suffix].filter(Boolean).join(' ');
+                                const isBiomarker = log.activityLogId.startsWith('bio-');
                                 return (
                                     <tr key={log.activityLogId}>
                                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
@@ -2760,15 +2968,15 @@ export default function Dashboard() {
                                                 display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
                                                 background: log.activityType === 'Login' ? 'var(--status-active-bg)' :
                                                     log.activityType === 'Logout' ? 'var(--status-pending-bg)' :
-                                                        'var(--status-new-bg)',
+                                                        isBiomarker ? '#ede9fe' : 'var(--status-new-bg)',
                                                 color: log.activityType === 'Login' ? 'var(--status-active)' :
                                                     log.activityType === 'Logout' ? 'var(--status-pending)' :
-                                                        'var(--status-new)',
+                                                        isBiomarker ? '#6d28d9' : 'var(--status-new)',
                                             }}>
                                                 {log.activityType}
                                             </span>
                                         </td>
-                                        <td style={{ fontSize: 13 }}>{empName || 'System'}</td>
+                                        <td style={{ fontSize: 13 }}>{isBiomarker ? 'Biomarker Scan' : (empName || 'System')}</td>
                                         <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
                                     </tr>
                                 );
@@ -3006,7 +3214,10 @@ export default function Dashboard() {
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 {['SingleEmployee', 'Team', 'Department'].map(scope => (
-                                    <label key={scope} onClick={() => setNewTaskForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                    <label key={scope} onClick={() => setNewTaskForm(p => ({
+                                        ...p, assignmentScope: scope, assignedDepartmentId: '',
+                                        assignedTo: '', assignedUserIds: [],
+                                    }))}
                                         style={{
                                             flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                                             fontSize: 12, fontWeight: 600, border: `2px solid ${newTaskForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
@@ -3046,7 +3257,161 @@ export default function Dashboard() {
                                 )}
                             </div>
                         )}
+
+                        {newTaskForm.assignmentScope === 'SingleEmployee' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Assign To <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {newTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{newTaskRecommendation.employeeName}</strong> — {newTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                {rawApiKeys && (
+                                    <details style={{ fontSize: 10, color: '#666', marginBottom: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, maxHeight: 120, overflow: 'auto' }}>
+                                        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>API Debug: keys of first item</summary>
+                                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{rawApiKeys}</pre>
+                                    </details>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={newTaskSingleSearch}
+                                    onChange={e => setNewTaskSingleSearch(e.target.value)} />
+                                {newTaskEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(newTaskSingleSearch ? newTaskEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(newTaskSingleSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                            const isSelected = newTaskForm.assignedTo === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            const isRecommended = newTaskRecommendation?.accountId === e.accountId;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setNewTaskForm(p => ({ ...p, assignedTo: e.accountId })); }}
+                                                >
+                                                    <input type="radio" name="newTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {newTaskErrors.assignedTo && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.assignedTo}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {newTaskForm.assignmentScope === 'Team' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Select Team Members <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {newTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{newTaskRecommendation.employeeName}</strong> — {newTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={newTaskTeamSearch}
+                                    onChange={e => setNewTaskTeamSearch(e.target.value)} />
+                                {newTaskEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(newTaskTeamSearch ? newTaskEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(newTaskTeamSearch.toLowerCase())) : newTaskEligibleEmployees).map(e => {
+                                            const selected = newTaskForm.assignedUserIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setNewTaskForm(p => ({
+                                                            ...p,
+                                                            assignedUserIds: selected ? p.assignedUserIds.filter(id => id !== e.accountId) : [...p.assignedUserIds, e.accountId],
+                                                        }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {newTaskForm.assignedUserIds.length > 0 && (
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {newTaskForm.assignedUserIds.length} team member(s) selected</span>
+                                )}
+                                {newTaskErrors.assignedUserIds && (
+                                    <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <AlertCircle size={11} />{newTaskErrors.assignedUserIds}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* ── Supporting Document ── */}
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Attachment</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            {newTaskForm.supportingEvidenceUrl && !newTaskSupportingEvidence && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {(newTaskForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
+                                    </span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                <input ref={newTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                            if (!allowed.includes(ext)) { setNewTaskApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
+                                            if (file.size > 20 * 1024 * 1024) { setNewTaskApiError('File size must not exceed 20MB.'); return; }
+                                            setNewTaskApiError('');
+                                            setNewTaskSupportingEvidence(file);
+                                        }
+                                    }}
+                                    style={{ flex: 1, fontSize: 13 }} />
+                                {newTaskSupportingEvidence && (
+                                    <button type="button" onClick={() => { setNewTaskSupportingEvidence(null); if (newTaskFileRef.current) newTaskFileRef.current.value = ''; }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            {newTaskSupportingEvidence && (
+                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
+                                    ✓ {newTaskSupportingEvidence.name} ({(newTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
                         <label className={`conf-card${newTaskForm.isConfidential ? ' active' : ''}`}>
@@ -3199,7 +3564,10 @@ export default function Dashboard() {
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 {['SingleEmployee', 'Team', 'Department'].map(scope => (
-                                    <label key={scope} onClick={() => setEditForm(p => ({ ...p, assignmentScope: scope, assignedDepartmentId: '' }))}
+                                    <label key={scope} onClick={() => setEditForm(p => ({
+                                        ...p, assignmentScope: scope, assignedDepartmentId: '',
+                                        assignedTo: '', assignedUserIds: [],
+                                    }))}
                                         style={{
                                             flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                                             fontSize: 12, fontWeight: 600, border: `2px solid ${editForm.assignmentScope === scope ? 'var(--primary)' : 'var(--border)'}`,
@@ -3229,7 +3597,145 @@ export default function Dashboard() {
                                 </select>
                             </div>
                         )}
+
+                        {editForm.assignmentScope === 'SingleEmployee' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Assign To <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {editTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{editTaskRecommendation.employeeName}</strong> — {editTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={editTaskSingleSearch}
+                                    onChange={e => setEditTaskSingleSearch(e.target.value)} />
+                                {editEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(editTaskSingleSearch ? editEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(editTaskSingleSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                            const isSelected = editForm.assignedTo === e.accountId;
+                                            const disabled = !e.isAvailable;
+                                            const isRecommended = editTaskRecommendation?.accountId === e.accountId;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => { if (disabled) return; setEditForm(p => ({ ...p, assignedTo: e.accountId })); }}
+                                                >
+                                                    <input type="radio" name="editTaskAssignee" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                    {isRecommended && <span className="emp-picker-tag best">Best pick</span>}
+                                                    {isSelected && <span className="emp-picker-tag selected-tag"><CheckCircle2 size={11} /> Selected</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                            </div>
+                        )}
+
+                        {newTaskForm.assignmentScope === 'Team' && (
+                            <div className="fm-field" style={{ marginTop: 10 }}>
+                                <label className="fm-label">Select Team Members <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                {editTaskRecommendation && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'linear-gradient(135deg, rgba(0,169,157,0.06), rgba(0,169,157,0.02))', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 6, marginBottom: 8, fontSize: 12 }}>
+                                        <Lightbulb size={12} />
+                                        <span>Recommended: <strong style={{ color: 'var(--primary)' }}>{editTaskRecommendation.employeeName}</strong> — {editTaskRecommendation.reason}</span>
+                                    </div>
+                                )}
+                                <input type="text" className="emp-picker-search" placeholder="Search employees…" value={editTaskTeamSearch}
+                                    onChange={e => setEditTaskTeamSearch(e.target.value)} />
+                                {editEligibleEmployees.length > 0 ? (
+                                    <div className="emp-picker-list">
+                                        {(editTaskTeamSearch ? editEligibleEmployees.filter(e => (e.employeeName || '').toLowerCase().includes(editTaskTeamSearch.toLowerCase())) : editEligibleEmployees).map(e => {
+                                            const selected = editForm.assignedUserIds.includes(e.accountId);
+                                            const disabled = !e.isAvailable;
+                                            const status = e.availabilityStatus || 'Unknown';
+                                            const statusDot = e.isAvailable ? 'active' : status === 'Offline' ? 'offline' : 'leave';
+                                            return (
+                                                <div key={e.accountId}
+                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
+                                                    onClick={() => {
+                                                        if (disabled) return;
+                                                        setEditForm(p => ({
+                                                            ...p,
+                                                            assignedUserIds: selected ? p.assignedUserIds.filter(id => id !== e.accountId) : [...p.assignedUserIds, e.accountId],
+                                                        }));
+                                                    }}
+                                                >
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <div className="emp-picker-info">
+                                                        <span className="emp-picker-name">{e.employeeName || `ID: ${e.accountId || '?'}`}</span>
+                                                        <div className="emp-picker-meta">
+                                                            <span className={`emp-picker-dot ${statusDot}`} />
+                                                            <span>{status}</span>
+                                                            <span>{typeof e.workload === 'number' ? e.workload : 0} tasks</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="emp-picker-empty">No eligible employees found.</div>
+                                )}
+                                {editForm.assignedUserIds.length > 0 && (
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {editForm.assignedUserIds.length} team member(s) selected</span>
+                                )}
+                            </div>
+                        )}
                     </div>
+
+                    {/* ── Supporting Document (Edit) ── */}
+                    <div className="fm-section">
+                        <h5 className="fm-section-title">Attachment</h5>
+                        <div className="fm-field">
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            {editForm.supportingEvidenceUrl && !editTaskSupportingEvidence && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {(editForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
+                                    </span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                <input ref={editTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                            if (!allowed.includes(ext)) { setEditApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
+                                            if (file.size > 20 * 1024 * 1024) { setEditApiError('File size must not exceed 20MB.'); return; }
+                                            setEditApiError('');
+                                            setEditTaskSupportingEvidence(file);
+                                        }
+                                    }}
+                                    style={{ flex: 1, fontSize: 13 }} />
+                                {editTaskSupportingEvidence && (
+                                    <button type="button" onClick={() => { setEditTaskSupportingEvidence(null); if (editTaskFileRef.current) editTaskFileRef.current.value = ''; }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            {editTaskSupportingEvidence && (
+                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
+                                    ✓ {editTaskSupportingEvidence.name} ({(editTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="fm-section">
                         <h5 className="fm-section-title">Visibility</h5>
                         <label className={`conf-card${editForm.isConfidential ? ' active' : ''}`}>
