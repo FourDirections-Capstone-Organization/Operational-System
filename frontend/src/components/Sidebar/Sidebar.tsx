@@ -276,8 +276,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                     <span className="nav-label">{item.label}</span>
                     
-                    {/* Pin button visible on hover on expanded sidebar */}
-                    {showPinToggle && !collapsed && (
+                    {/* Pin button — always visible for pinned items so users can unpin */}
+                    {(showPinToggle || isPinned) && !collapsed && (
                       <button
                         className={`sb-pin-btn ${isPinned ? "active" : ""}`}
                         onClick={(e) => {

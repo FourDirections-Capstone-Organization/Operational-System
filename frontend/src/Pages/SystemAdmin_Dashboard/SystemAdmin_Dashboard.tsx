@@ -1154,35 +1154,6 @@ const gateConsentRef = useRef(false);
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                         Enter your password to confirm these changes.
                     </p>
-                    <div style={{ position: 'relative' }}>
-                        <input
-                            id="gate-pw-input"
-                            type={showGatePassword ? 'text' : 'password'}
-                            placeholder="Enter your current password"
-                            style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box' }}
-                            autoFocus
-                            onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                    const btn = document.getElementById('gate-confirm-btn');
-                                    btn?.click();
-                                }
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowGatePassword(p => !p)}
-                            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}
-                            tabIndex={-1}
-                        >
-                            {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
-                    </div>
-                    {gateError && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-danger)' }}>
-                            <AlertCircle size={12} />{gateError}
-                        </div>
-                    )}
                 </div>
             ),
             notice: 'For security, your identity must be verified before saving any changes.',
@@ -1196,12 +1167,14 @@ const gateConsentRef = useRef(false);
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
                 setGateLoading(true);
+                setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
                 try {
                     const adminId = localStorage.getItem('employeeId') ?? '';
                     const res = await api.post('/api/Auth/verify-password', { employeeID: adminId, password: pw });
                     const verifyData = res.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
+                    setConfirmModal(CONFIRM_CLOSED);
                     await doSave();
                 } catch (err: any) {
                     setGateError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Incorrect password. Please try again.');
@@ -1371,14 +1344,47 @@ const gateConsentRef = useRef(false);
                 description={confirmModal.description}
                 notice={confirmModal.notice}
                 confirmLabel={confirmModal.confirmLabel}
-                isLoading={submitting || gateLoading}
-                extraContent={confirmModal.variant === 'warning' && form.accountStatus !== 'Active' ? (
-                    <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                        <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
-                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
-                            <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
-                            <span>I understand and agree to proceed with deactivation.</span>
-                        </label>
+                isLoading={confirmModal.isLoading || submitting || gateLoading}
+                extraContent={confirmModal.isOpen ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {confirmModal.variant === 'warning' && form.accountStatus !== 'Active' && (
+                            <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                                <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
+                                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
+                                    <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
+                                    <span>I understand and agree to proceed with deactivation.</span>
+                                </label>
+                            </div>
+                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="gate-pw-input"
+                                type={showGatePassword ? 'text' : 'password'}
+                                placeholder="Enter your current password"
+                                style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }}
+                                autoFocus
+                                onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        const btn = document.getElementById('gate-confirm-btn');
+                                        btn?.click();
+                                    }
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowGatePassword(p => !p)}
+                                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center' }}
+                                tabIndex={-1}
+                            >
+                                {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                        </div>
+                        {gateError && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}>
+                                <AlertCircle size={12} />{gateError}
+                            </div>
+                        )}
                     </div>
                 ) : undefined}
                 onConfirm={confirmModal.onConfirm}
@@ -1874,43 +1880,9 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
             variant: 'success',
             title: 'Confirm your identity',
             description: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                        Enter your password to save profile changes.
-                    </p>
-                    <div style={{ position: 'relative' }}>
-                        <input
-                            id="gate-pw-input"
-                            type={showGatePassword ? 'text' : 'password'}
-                            placeholder="Enter your current password"
-                            style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box' }}
-                            autoFocus
-                            onChange={e => {
-                                setGatePassword(e.target.value);
-                                setGateError('');
-                            }}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                    const btn = document.getElementById('gate-confirm-btn');
-                                    btn?.click();
-                                }
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowGatePassword(p => !p)}
-                            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center' }}
-                            tabIndex={-1}
-                        >
-                            {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
-                    </div>
-                    {gateError && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-danger)' }}>
-                            <AlertCircle size={12} />{gateError}
-                        </div>
-                    )}
-                </div>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                    Enter your password to save profile changes.
+                </p>
             ),
             notice: 'For your security, identity verification is required before saving any profile changes.',
             confirmLabel: 'Verify & save',
@@ -1919,11 +1891,13 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
                 setGateLoading(true);
+                setConfirmModal(prev => ({ ...prev, isLoading: true }));
                 setGateError('');
                 try {
                     const res = await api.post('/api/Auth/verify-password', { employeeID: employeeId, password: pw });
                     const verifyData = res.data;
                     if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password. Please try again.'); }
+                    setConfirmModal(CONFIRM_CLOSED);
                     // Verified — now save
                     setProfileSaving(true);
                     const fd = new FormData();
@@ -1947,7 +1921,6 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                     }
                     success('Profile updated successfully.');
                     setEditingProfile(false);
-                    setConfirmModal(CONFIRM_CLOSED);
                 } catch (err: any) {
                     setGateError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Incorrect password. Please try again.');
                 } finally {
@@ -2143,7 +2116,40 @@ function ProfileTab({ onProfileUpdate }: { onProfileUpdate?: (fullName: string) 
                 notice={confirmModal.notice}
                 confirmLabel={confirmModal.confirmLabel}
                 cancelLabel={confirmModal.cancelLabel}
-                isLoading={gateLoading || pwSaving}
+                isLoading={confirmModal.isLoading || gateLoading || pwSaving}
+                extraContent={confirmModal.isOpen && confirmModal.title === 'Confirm your identity' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="gate-pw-input"
+                                type={showGatePassword ? 'text' : 'password'}
+                                placeholder="Enter your current password"
+                                style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }}
+                                autoFocus
+                                onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        const btn = document.getElementById('gate-confirm-btn');
+                                        btn?.click();
+                                    }
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowGatePassword(p => !p)}
+                                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center' }}
+                                tabIndex={-1}
+                            >
+                                {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                        </div>
+                        {gateError && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}>
+                                <AlertCircle size={12} />{gateError}
+                            </div>
+                        )}
+                    </div>
+                ) : undefined}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
             />
@@ -3269,6 +3275,10 @@ export default function Dashboard() {
                         } catch {
                             error('Failed to reject task.');
                         }
+                    }}
+                    onUpdate={(updated) => {
+                        setTmDetailTask(updated);
+                        fetchManagerTasks();
                     }}
                 />
             )}

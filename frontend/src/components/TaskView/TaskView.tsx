@@ -7,6 +7,8 @@ import {
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
 import StatusBadge from '../ui/StatusBadge';
+import ConfirmationModal from '../ConfirmationModal/ConfirmationModal';
+import { useToast } from '../Toast/Toast';
 import api from '../../api';
 import axios from 'axios';
 import './TaskView.css';
@@ -73,6 +75,7 @@ interface TaskViewProps {
     onReject?: (taskId: string, reason: string) => void;
     onDeleteAttachment?: (attachmentId: string) => void;
     onPushBack?: (taskId: string, comment: string) => void;
+    onUpdate?: (updatedTask: TaskViewTask) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,7 +150,7 @@ const RejectModal: React.FC<{
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TaskView: React.FC<TaskViewProps> = ({
-    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment, onPushBack,
+    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment, onPushBack, onUpdate,
 }) => {
     const [reopening, setReopening] = useState(false);
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
@@ -166,6 +169,9 @@ const TaskView: React.FC<TaskViewProps> = ({
     const [cancelReason, setCancelReason] = useState('');
     const [cancelling, setCancelling] = useState(false);
     const [downloadError, setDownloadError] = useState('');
+    const [confidentialConfirm, setConfidentialConfirm] = useState<{ open: boolean; pendingValue: boolean }>({ open: false, pendingValue: false });
+    const [confidentialSaving, setConfidentialSaving] = useState(false);
+    const { success: toastSuccess, error: toastError } = useToast();
 
     const token = localStorage.getItem('authToken');
 
@@ -553,18 +559,9 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <input
                                     type="checkbox"
                                     checked={!!task.isConfidential}
-                                    onChange={async e => {
-                                        const checked = e.target.checked;
-                                        try {
-                                            const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(task.assignedTo)}`).catch(() => null);
-                                            const empNum = localStorage.getItem('employeeId') || task.assignedTo;
-                                            const userRes = await api.get(`/api/User/employee-number/${encodeURIComponent(empNum)}`);
-                                            const userId = userRes.data?.data?.id || userRes.data?.id;
-                                            if (userId) {
-                                                await api.put(`/api/User/${userId}`, { isConfidential: checked } as any);
-                                            }
-                                        } catch { /* fallback */ }
-                                        window.location.reload();
+                                    onChange={e => {
+                                        e.preventDefault();
+                                        setConfidentialConfirm({ open: true, pendingValue: e.target.checked });
                                     }}
                                     style={{ accentColor: 'var(--teal, #00A99D)', width: 16, height: 16, cursor: 'pointer' }}
                                 />
@@ -897,6 +894,37 @@ const TaskView: React.FC<TaskViewProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* Confidential Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={confidentialConfirm.open}
+                variant={confidentialConfirm.pendingValue ? 'warning' : 'info'}
+                title={confidentialConfirm.pendingValue ? 'Mark task as Confidential?' : 'Remove Confidential status?'}
+                description={
+                    confidentialConfirm.pendingValue
+                        ? 'This task will be hidden from Encoders, Dispatchers, and Couriers. Only Coordinators and Managers will be able to see it in lists, searches, and notifications.'
+                        : 'This task will become visible to all assigned roles, including Encoders, Dispatchers, and Couriers.'
+                }
+                confirmLabel={confidentialConfirm.pendingValue ? 'Mark as Confidential' : 'Remove Confidential'}
+                isLoading={confidentialSaving}
+                onConfirm={async () => {
+                    setConfidentialSaving(true);
+                    try {
+                        await api.put(`/api/Task/${task.taskId}`, { isConfidential: confidentialConfirm.pendingValue });
+                        toastSuccess(confidentialConfirm.pendingValue ? 'Task marked as confidential.' : 'Confidential status removed.');
+                        if (onUpdate) {
+                            onUpdate({ ...task, isConfidential: confidentialConfirm.pendingValue });
+                        }
+                    } catch (err: any) {
+                        const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to update confidentiality.';
+                        toastError(msg);
+                    } finally {
+                        setConfidentialSaving(false);
+                        setConfidentialConfirm({ open: false, pendingValue: false });
+                    }
+                }}
+                onCancel={() => setConfidentialConfirm({ open: false, pendingValue: false })}
+            />
         </>
     );
 };

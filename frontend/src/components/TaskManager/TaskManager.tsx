@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock } from 'lucide-react';
-import DataTable from '../ui/DataTable';
+import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock, Eye, Pencil } from 'lucide-react';
+import DataTable, { ActionsDropdown } from '../ui/DataTable';
 import StatusBadge from '../ui/StatusBadge';
 import StatusCard from '../StatusCard/StatusCard';
 
@@ -211,7 +211,7 @@ export default function TaskManager({
                     </select>
                 </> : undefined}
                 actionButton={tab === 'active' ? { label: 'New Task', icon: <Plus size={14} />, onClick: onNewTask } : undefined}
-                headers={['', '#', 'Task', 'Assignee', 'Priority', 'Due Date', 'Status']}
+                headers={['', '#', 'Task', 'Assignee', 'Priority', 'Due Date', 'Status', '']}
                 loading={false}
                 emptyMessage="No tasks found."
                 emptyIcon={<Package size={20} />}
@@ -264,6 +264,20 @@ export default function TaskManager({
                                         <div style={{ width: `${getProgress(t.status)}%`, height: '100%', background: t.status === 'Done' ? '#059669' : '#4318ff', borderRadius: 2 }} />
                                     </div>
                                 </div>
+                            </td>
+                            <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                                <ActionsDropdown
+                                    actions={[
+                                        ...(tab !== 'bin' ? [
+                                            { label: 'View Details', icon: <Eye size={12} />, onClick: () => onView(t.id) },
+                                            { label: 'Edit', icon: <Pencil size={12} />, onClick: () => onEdit(t.id) },
+                                            { label: 'Archive', icon: <Trash2 size={12} />, onClick: () => { onArchive([t.id]); setSelectedIds(p => { const n = new Set(p); n.delete(t.id); return n; }); }, variant: 'danger' as const },
+                                        ] as const : [
+                                            { label: 'Restore', icon: <CheckCircle2 size={12} />, onClick: () => onRestore?.([t.id]), variant: 'success' as const },
+                                            { label: 'Delete Permanently', icon: <Trash2 size={12} />, onClick: () => { onDelete([t.id]); setSelectedIds(p => { const n = new Set(p); n.delete(t.id); return n; }); }, variant: 'danger' as const },
+                                        ] as const),
+                                    ]}
+                                />
                             </td>
                         </tr>
                     );

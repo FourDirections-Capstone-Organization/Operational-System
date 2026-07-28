@@ -886,6 +886,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             placeholder="e.g. Route planning update"
                             className={errors.taskTitle ? 'input-error' : ''}
                             maxLength={150}
+                            style={{ outline: 'none' }}
                         />
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <FieldErr name="taskTitle" />
@@ -1645,7 +1646,9 @@ const DashboardTab: React.FC<{
     onFilterChange: (filters: { dateStart: string; dateEnd: string; employeeId: string; departmentId: string; taskStatus: string; assignmentScope: string }) => void;
     onClearFilters: () => void;
     onNewTask: () => void;
-}> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask }) => {
+    tasks?: any[];
+    onViewTask?: (task: any) => void;
+}> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask, tasks, onViewTask }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus || filters.assignmentScope;
     const td = dashboardData;
@@ -2004,6 +2007,68 @@ const DashboardTab: React.FC<{
                             );
                         })}
                     </DataTable>
+
+                    {/* ── Recent Tasks ── */}
+                    {tasks && tasks.length > 0 && (
+                        <DataTable
+                            title={`Recent Tasks (${tasks.filter((t: any) => t.taskStatus !== 'Completed' && t.taskStatus !== 'Done').length} active)`}
+                            headers={['#', 'Task', 'Assignee', 'Priority', 'Due Date', 'Status', '']}
+                            loading={false}
+                            emptyMessage="No tasks found."
+                            totalRecords={tasks.length}
+                        >
+                            {tasks.slice(0, 10).map((t: any) => {
+                                const refDisplay = t.referenceNumber || t.taskId?.slice(0, 8).toUpperCase() || '#';
+                                const status = t.taskStatus || t.status;
+                                const prio = t.priority || 'Medium';
+                                const due = t.dueAt || t.dueDate;
+                                const assignee = t.assignedEmployee || t.assignee?.name || '—';
+                                const isOverdue = due && status !== 'Completed' && status !== 'Done' && new Date(due) < new Date();
+                                return (
+                                    <tr key={t.taskId || t.id} onClick={() => onViewTask?.(t)} style={{ cursor: 'pointer' }}>
+                                        <td style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                                            #{refDisplay}
+                                        </td>
+                                        <td style={{ fontWeight: 600 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                <span>{t.taskTitle || t.name}</span>
+                                                {t.isConfidential && (
+                                                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--status-failed)', background: 'rgba(238,93,80,0.08)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                                        <Lock size={9} /> CONFIDENTIAL
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ fontSize: 13 }}>{assignee}</td>
+                                        <td>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                                                background: prio === 'Urgent' ? '#fef2f2' : prio === 'High' ? '#fff7ed' : prio === 'Medium' ? '#fffbeb' : '#eff6ff',
+                                                color: prio === 'Urgent' ? '#dc2626' : prio === 'High' ? '#ea580c' : prio === 'Medium' ? '#d97706' : '#2563eb' }}>
+                                                {prio}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontSize: 12, color: isOverdue ? '#dc2626' : 'var(--text-secondary)', fontWeight: isOverdue ? 700 : 400 }}>
+                                            {due ? new Date(due).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                        </td>
+                                        <td>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                                                background: status === 'Completed' || status === 'Done' ? 'rgba(5,150,105,0.1)' : isOverdue ? 'rgba(220,38,38,0.1)' : 'rgba(0,169,157,0.08)',
+                                                color: status === 'Completed' || status === 'Done' ? '#059669' : isOverdue ? '#dc2626' : 'var(--primary)' }}>
+                                                {status || '—'}
+                                            </span>
+                                        </td>
+                                        <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                                            <ActionsDropdown
+                                                actions={[
+                                                    { label: 'View Details', icon: <Eye size={12} />, onClick: () => onViewTask?.(t) },
+                                                ]}
+                                            />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </DataTable>
+                    )}
                 </>
             )}
         </div>
@@ -5469,6 +5534,8 @@ export default function OpsAdminDashboard() {
                         onFilterChange={setDashboardFilters}
                         onClearFilters={handleDashboardClearFilters}
                         onNewTask={() => { setActiveTab('tasks'); setTaskSubTab('create'); }}
+                        tasks={tasks}
+                        onViewTask={task => setDetailTask(task)}
                     />
                 )}
                 {activeTab === 'tasks' && (
@@ -5527,7 +5594,7 @@ export default function OpsAdminDashboard() {
                     <div className="dashboard-content">
                         <DataTable
                             title="My Activity Logs"
-                            headers={['Date & Time', 'Activity Type', 'Description']}
+                            headers={['Date & Time', 'Description']}
                             loading={false}
                             emptyMessage="No activity logs found."
                             emptyIcon={<Activity size={24} />}
@@ -5537,20 +5604,9 @@ export default function OpsAdminDashboard() {
                             onPageChange={p => fetchActivityLogs(p)}
                         >
                             {activityLogs.map((log: any) => (
-                                <tr key={log.activityLogId}>
+                                <tr key={log.id}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                        {fmtDateTime(log.createdAt)}
-                                    </td>
-                                    <td>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
-                                            background: log.activityType === 'Login' ? 'var(--status-active-bg)' :
-                                                log.activityType === 'Logout' ? 'var(--status-pending-bg)' : 'var(--status-new-bg)',
-                                            color: log.activityType === 'Login' ? 'var(--status-active)' :
-                                                log.activityType === 'Logout' ? 'var(--status-pending)' : 'var(--status-new)',
-                                        }}>
-                                            {log.activityType}
-                                        </span>
+                                        {fmtDateTime(log.timestamp)}
                                     </td>
                                     <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
                                 </tr>
@@ -5668,6 +5724,10 @@ export default function OpsAdminDashboard() {
                         } catch (err: any) {
                             error(err.message ?? 'Push back failed.');
                         }
+                    }}
+                    onUpdate={(updated) => {
+                        setDetailTask(updated);
+                        fetchTasks();
                     }}
                 />
             )}

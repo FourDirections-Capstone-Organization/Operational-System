@@ -29,7 +29,7 @@
     width: 48px;
     height: 48px;
     border-radius: var(--r-sm);
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, #00A99D, #0891B2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -135,31 +135,6 @@
     font-size: 0.75rem;
     color: var(--text-secondary);
     white-space: nowrap;
-}
-
-.bd-scan-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 18px;
-    border-radius: var(--r-sm);
-    border: none;
-    background: var(--teal, #0d9488);
-    color: #fff;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s;
-}
-
-.bd-scan-btn:hover:not(:disabled) {
-    background: var(--teal-hover, #0f766e);
-}
-
-.bd-scan-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .spin {
@@ -386,74 +361,7 @@
 
 /* ── Biomarker Flags Summary ── */
 .bd-flags-summary {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
     padding: 16px 20px;
-}
-
-.bd-flag-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 16px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--border);
-}
-
-.bd-flag-card.flag-red {
-    background: #fef2f2;
-    border-color: #fecaca;
-}
-
-.bd-flag-card.flag-amber {
-    background: #fffbeb;
-    border-color: #fde68a;
-}
-
-.bd-flag-card.flag-green {
-    background: #f0fdf4;
-    border-color: #bbf7d0;
-}
-
-.bd-flag-icon {
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.flag-red .bd-flag-icon { color: #dc2626; }
-.flag-amber .bd-flag-icon { color: #d97706; }
-.flag-green .bd-flag-icon { color: #16a34a; }
-
-.bd-flag-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.bd-flag-label {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-}
-
-.bd-flag-count {
-    font-size: 1.6rem;
-    font-weight: 800;
-    line-height: 1;
-}
-
-.flag-red .bd-flag-count { color: #dc2626; }
-.flag-amber .bd-flag-count { color: #d97706; }
-.flag-green .bd-flag-count { color: #16a34a; }
-
-.bd-flag-desc {
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-    margin-top: 2px;
 }
 
 /* ── Compliance Note ── */
@@ -491,8 +399,5 @@
     .bd-scan-header {
         flex-direction: column;
         align-items: stretch;
-    }
-    .bd-scan-btn {
-        justify-content: center;
     }
 }

@@ -296,15 +296,6 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 : 'Enter your password to save these changes.',
             confirmLabel: 'Verify & save',
             isLoading: false,
-            extraContent: isDeactivating ? (
-                <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                    <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
-                        <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
-                        <span>I understand and agree to proceed with deactivation.</span>
-                    </label>
-                </div>
-            ) : undefined,
             onConfirm: async () => {
                 if (isDeactivating && !gateConsentRef.current) {
                     setGateError('You must agree to the archiving of historical data before deactivating.');
@@ -419,6 +410,15 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 isLoading={confirmModal.isLoading}
                 extraContent={confirmModal.isOpen ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {confirmModal.variant === 'warning' && form.accountStatus !== 'Active' && (
+                            <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                                <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
+                                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
+                                    <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
+                                    <span>I understand and agree to proceed with deactivation.</span>
+                                </label>
+                            </div>
+                        )}
                         <div style={{ position: 'relative' }}>
                             <input id="gate-pw-input" type={showGatePassword ? 'text' : 'password'} placeholder="Enter your current password" style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }} autoFocus onChange={e => { setGatePassword(e.target.value); setGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('gate-confirm-btn')?.click(); }} />
                             <button type="button" onClick={() => setShowGatePassword(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>{showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>

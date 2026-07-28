@@ -446,9 +446,10 @@ export default function BiomarkerDashboard() {
                     </div>
                 </div>
                 <button
-                    className="bd-scan-btn"
+                    className="btn btn--primary"
                     onClick={handleManualScan}
                     disabled={scanning}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 9, fontSize: 13, whiteSpace: 'nowrap' }}
                 >
                     {scanning ? (
                         <><Loader2 size={16} className="spin" /> Scanning...</>
@@ -516,31 +517,28 @@ export default function BiomarkerDashboard() {
                 <div className="bd-section-header">
                     <h4>Biomarker Flag Summary — {scanMeta.batchId}</h4>
                 </div>
-                <div className="bd-flags-summary">
-                    <div className="bd-flag-card flag-red">
-                        <div className="bd-flag-icon"><XCircle size={24} /></div>
-                        <div className="bd-flag-body">
-                            <span className="bd-flag-label">Red Flags</span>
-                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Critical').length}</span>
-                            <span className="bd-flag-desc">Immediate action required — compound violations</span>
-                        </div>
-                    </div>
-                    <div className="bd-flag-card flag-amber">
-                        <div className="bd-flag-icon"><AlertTriangle size={24} /></div>
-                        <div className="bd-flag-body">
-                            <span className="bd-flag-label">Amber Flags</span>
-                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && (v.severity === 'High' || v.severity === 'Medium')).length}</span>
-                            <span className="bd-flag-desc">Requires monitoring — recurring or trending patterns</span>
-                        </div>
-                    </div>
-                    <div className="bd-flag-card flag-green">
-                        <div className="bd-flag-icon"><CheckCircle2 size={24} /></div>
-                        <div className="bd-flag-body">
-                            <span className="bd-flag-label">Green Flags</span>
-                            <span className="bd-flag-count">{violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Low').length}</span>
-                            <span className="bd-flag-desc">Positive resolution — conditions normalized</span>
-                        </div>
-                    </div>
+                <div className="bd-flags-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                    <StatusCard
+                        variant="danger"
+                        label="Red Flags"
+                        value={violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Critical').length}
+                        icon={<XCircle size={22} />}
+                        subtext="Immediate action required — compound violations"
+                    />
+                    <StatusCard
+                        variant="warning"
+                        label="Amber Flags"
+                        value={violations.filter(v => v.type === 'biomarker_flag' && (v.severity === 'High' || v.severity === 'Medium')).length}
+                        icon={<AlertTriangle size={22} />}
+                        subtext="Requires monitoring — recurring or trending patterns"
+                    />
+                    <StatusCard
+                        variant="success"
+                        label="Green Flags"
+                        value={violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Low').length}
+                        icon={<CheckCircle2 size={22} />}
+                        subtext="Positive resolution — conditions normalized"
+                    />
                 </div>
             </div>
 

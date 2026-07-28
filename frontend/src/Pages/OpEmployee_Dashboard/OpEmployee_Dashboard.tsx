@@ -1727,7 +1727,7 @@ export default function EmployeeDashboard() {
                     <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>
                         <DataTable
                             title=""
-                            headers={['Date & Time', 'Activity Type', 'Description']}
+                            headers={['Date & Time', 'Description']}
                             loading={false}
                             emptyMessage="No activity logs found."
                             emptyIcon={<Activity size={24} />}
@@ -1737,20 +1737,9 @@ export default function EmployeeDashboard() {
                             onPageChange={p => fetchActivityLogs(p)}
                         >
                             {activityLogs.map((log: any) => (
-                                <tr key={log.activityLogId}>
+                                <tr key={log.id}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                        {log.createdAt ? new Date(log.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
-                                    </td>
-                                    <td>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
-                                            background: log.activityType === 'Login' ? 'var(--status-active-bg)' :
-                                                log.activityType === 'Logout' ? 'var(--status-pending-bg)' : 'var(--status-new-bg)',
-                                            color: log.activityType === 'Login' ? 'var(--status-active)' :
-                                                log.activityType === 'Logout' ? 'var(--status-pending)' : 'var(--status-new)',
-                                        }}>
-                                            {log.activityType}
-                                        </span>
+                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
                                     </td>
                                     <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
                                 </tr>
