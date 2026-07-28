@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
     User,
     Phone,
@@ -42,6 +42,7 @@ interface ConfirmModalState {
     confirmLabel?: string;
     cancelLabel?: string;
     isLoading?: boolean;
+    extraContent?: React.ReactNode;
     onConfirm: () => void;
 }
 
@@ -58,6 +59,10 @@ const CONFIRM_CLOSED: ConfirmModalState = {
 interface RecentEmployee {
     employeeNumber: string;
     employeeName: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    suffix?: string;
     contactNumber: string;
     role: string;
     accountStatus: string;
@@ -85,6 +90,7 @@ interface ActivityLog {
     id: number;
     description: string;
     timestamp: string;
+    activityType?: string;
 }
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -127,7 +133,9 @@ const fmtDate = (d: string | null) => {
 
 const fmtDateTime = (d: string | null) => {
     if (!d) return '—';
-    return new Date(d).toLocaleString('en-US', {
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return '—';
+    return date.toLocaleString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -162,7 +170,10 @@ interface EditModalProps {
 
 function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalProps) {
     const [form, setForm] = useState({
-        employeeName: profile.employeeName,
+        firstName: profile.firstName ?? '',
+        middleName: profile.middleName ?? '',
+        lastName: profile.lastName ?? '',
+        suffix: profile.suffix ?? '',
         contactNumber: profile.contactNumber,
         role: toDisplayRole(profile.role),
         accountStatus: profile.accountStatus,
@@ -176,9 +187,14 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
     const [gateError, setGateError] = useState('');
     const [gateLoading, setGateLoading] = useState(false);
     const [showGatePassword, setShowGatePassword] = useState(false);
+    const [gateConsent, setGateConsent] = useState(false);
+    const gateConsentRef = useRef(false);
 
     const initialValues = {
-        employeeName: profile.employeeName,
+        firstName: profile.firstName ?? '',
+        middleName: profile.middleName ?? '',
+        lastName: profile.lastName ?? '',
+        suffix: profile.suffix ?? '',
         contactNumber: profile.contactNumber,
         role: toDisplayRole(profile.role),
         accountStatus: profile.accountStatus,
@@ -198,32 +214,6 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
     const doSave = async () => {
         setSubmitting(true);
         try {
-            const nameParts = form.employeeName.trim().split(/\s+/);
-            let firstName = '';
-            let middleName = '';
-            let lastName = '';
-            let suffix = '';
-
-            if (nameParts.length === 1) {
-                firstName = nameParts[0];
-            } else if (nameParts.length === 2) {
-                firstName = nameParts[0];
-                lastName = nameParts[1];
-            } else if (nameParts.length >= 3) {
-                const lastPart = nameParts[nameParts.length - 1];
-                const isSuffix = ['jr', 'sr', 'ii', 'iii', 'iv', 'v'].includes(lastPart.toLowerCase().replace(/\./g, ''));
-                if (isSuffix) {
-                    suffix = lastPart;
-                    lastName = nameParts[nameParts.length - 2];
-                    firstName = nameParts[0];
-                    middleName = nameParts.slice(1, nameParts.length - 2).join(' ');
-                } else {
-                    lastName = lastPart;
-                    firstName = nameParts[0];
-                    middleName = nameParts.slice(1, nameParts.length - 1).join(' ');
-                }
-            }
-
             // Look up user GUID by employee number
             const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
             const lookupData = lookupRes.data;
@@ -238,10 +228,10 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
 
             // Update personal details
             await api.put(`/api/User/${userId}`, {
-                firstName,
-                middleName,
-                lastName,
-                suffix,
+                firstName: form.firstName.trim(),
+                middleName: form.middleName.trim(),
+                lastName: form.lastName.trim(),
+                suffix: form.suffix.trim(),
                 contactNumber: form.contactNumber,
                 email: form.email.trim(),
             });
@@ -258,11 +248,16 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 await api.patch(`/api/Role/user/${userId}/role`, { newRole: newRoleVal, reason: 'Role updated via admin panel' });
             }
 
+            const newEmployeeName = [form.firstName.trim(), form.middleName.trim(), form.lastName.trim()].filter(Boolean).join(' ');
             onSaved({
                 ...profile,
-                employeeName: form.employeeName,
+                firstName: form.firstName.trim(),
+                middleName: form.middleName.trim(),
+                lastName: form.lastName.trim(),
+                suffix: form.suffix.trim(),
+                employeeName: newEmployeeName || form.lastName.trim(),
                 contactNumber: form.contactNumber,
-                role: toBackendRole(form.role),
+                role: String(toBackendRole(form.role)),
                 accountStatus: form.accountStatus,
                 email: form.email.trim(),
             });
@@ -279,14 +274,17 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
     };
 
     const handleSave = () => {
-        if (!form.employeeName.trim()) {
-            setApiError('Full name is required.');
+        if (!form.firstName.trim() || !form.lastName.trim()) {
+            setApiError('First name and last name are required.');
             return;
         }
         setGatePassword('');
         setGateError('');
         setShowGatePassword(false);
+        setGateConsent(false);
+        gateConsentRef.current = false;
         const isStatusChanging = form.accountStatus !== profile.accountStatus;
+        const isDeactivating = isStatusChanging && form.accountStatus !== 'Active';
         setConfirmModal({
             isOpen: true,
             variant: isStatusChanging ? (form.accountStatus === 'Active' ? 'success' : 'warning') : 'info',
@@ -294,11 +292,24 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 ? `${form.accountStatus === 'Active' ? 'Activate' : 'Deactivate'} Account`
                 : 'Confirm your identity',
             description: isStatusChanging
-                ? `You are about to ${form.accountStatus === 'Active' ? 'activate' : 'deactivate'} ${profile.employeeName}. Enter your password to confirm.`
+                ? `You are about to ${form.accountStatus === 'Active' ? 'activate' : 'deactivate'} ${[profile.firstName, profile.lastName].filter(Boolean).join(' ') || profile.employeeName}. Enter your password to confirm.`
                 : 'Enter your password to save these changes.',
             confirmLabel: 'Verify & save',
             isLoading: false,
+            extraContent: isDeactivating ? (
+                <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
+                        <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
+                        <span>I understand and agree to proceed with deactivation.</span>
+                    </label>
+                </div>
+            ) : undefined,
             onConfirm: async () => {
+                if (isDeactivating && !gateConsentRef.current) {
+                    setGateError('You must agree to the archiving of historical data before deactivating.');
+                    return;
+                }
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
                 setConfirmModal(prev => ({ ...prev, isLoading: true }));
@@ -320,8 +331,8 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
     };
 
     const infoCard = {
-        avatarText: form.employeeName || '?',
-        title: form.employeeName,
+        avatarText: [form.firstName, form.lastName].filter(Boolean).join(' ') || '?',
+        title: [form.firstName, form.middleName, form.lastName, form.suffix].filter(Boolean).join(' ') || 'Employee',
         subtitle: `Employee No. ${profile.employeeNumber}`,
         badgeText: form.accountStatus ?? 'Active',
         badgeStatus: form.accountStatus ?? 'Active'
@@ -345,9 +356,21 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
                 <div className="fm-section">
                     <h5 className="fm-section-title">Personal Information</h5>
                     <div className="fm-field-grid">
-                        <div className="fm-field fm-field-full">
-                            <label className="fm-label">Full Name</label>
-                            <input type="text" value={form.employeeName} onChange={set('employeeName')} className="fm-input" />
+                        <div className="fm-field">
+                            <label className="fm-label">First Name <span style={{ color: 'var(--status-failed)' }}>*</span></label>
+                            <input type="text" value={form.firstName} onChange={set('firstName')} className="fm-input" maxLength={50} placeholder="e.g. Juan" />
+                        </div>
+                        <div className="fm-field">
+                            <label className="fm-label">Middle Initial <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            <input type="text" value={form.middleName} onChange={set('middleName')} className="fm-input" maxLength={50} placeholder="e.g. S" />
+                        </div>
+                        <div className="fm-field">
+                            <label className="fm-label">Last Name <span style={{ color: 'var(--status-failed)' }}>*</span></label>
+                            <input type="text" value={form.lastName} onChange={set('lastName')} className="fm-input" maxLength={50} placeholder="e.g. Dela Cruz" />
+                        </div>
+                        <div className="fm-field">
+                            <label className="fm-label">Suffix <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                            <input type="text" value={form.suffix} onChange={set('suffix')} className="fm-input" maxLength={10} placeholder="e.g. Jr., III" />
                         </div>
                         <div className="fm-field">
                             <label className="fm-label">Email</label>
@@ -468,6 +491,7 @@ export default function EmployeeDetailPanel({
                         id: log.id ?? log.activityLogId,
                         description: log.description ?? '',
                         timestamp: log.timestamp ?? log.createdAt ?? '',
+                        activityType: log.actionType ?? log.activityType ?? '',
                     })));
                 } else {
                     setActivityLogs([]);
@@ -486,12 +510,15 @@ export default function EmployeeDetailPanel({
     const [gateError, setGateError] = useState('');
     const [gateLoading, setGateLoading] = useState(false);
     const [showGatePassword, setShowGatePassword] = useState(false);
+    const [gateConsent, setGateConsent] = useState(false);
+    const gateConsentRef = useRef(false);
     const [pendingAction, setPendingAction] = useState<{ type: 'archive' | 'toggle'; nextStatus?: string } | null>(null);
 
     const showPasswordGate = (title: string, description: string, variant: 'danger' | 'warning' | 'info', action: { type: 'archive' | 'toggle'; nextStatus?: string }) => {
         setGatePassword('');
         setGateError('');
         setShowGatePassword(false);
+        gateConsentRef.current = false;
         setPendingAction(action);
         setConfirmModal({
             isOpen: true,
@@ -501,6 +528,11 @@ export default function EmployeeDetailPanel({
             isLoading: false,
             confirmLabel: 'Verify & proceed',
             onConfirm: async () => {
+                const isDeactivation = action.type === 'archive' || (action.type === 'toggle' && action.nextStatus !== 'Active');
+                if (isDeactivation && !gateConsentRef.current) {
+                    setGateError('You must agree to the archiving of historical data before deactivating.');
+                    return;
+                }
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
                 setConfirmModal(prev => ({ ...prev, isLoading: true }));
@@ -863,15 +895,24 @@ export default function EmployeeDetailPanel({
                 confirmLabel={confirmModal.confirmLabel}
                 cancelLabel={confirmModal.cancelLabel}
                 isLoading={confirmModal.isLoading}
-                extraContent={pendingAction ? (
+                extraContent={confirmModal.extraContent ?? (pendingAction ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {(pendingAction.type === 'archive' || (pendingAction.type === 'toggle' && pendingAction.nextStatus !== 'Active')) && (
+                            <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                                <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
+                                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
+                                    <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
+                                    <span>I understand and agree to proceed with deactivation.</span>
+                                </label>
+                            </div>
+                        )}
                         <div style={{ position: 'relative' }}>
                             <input id="gate-pw-input" type={showGatePassword ? 'text' : 'password'} placeholder="Enter your current password" style={{ width: '100%', paddingRight: 40, boxSizing: 'border-box', height: 38, borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, padding: '0 40px 0 12px', fontSize: 13, outline: 'none' }} autoFocus onChange={e => { setGatePassword(e.target.value); setGateError(''); }} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('gate-confirm-btn')?.click(); }} />
                             <button type="button" onClick={() => setShowGatePassword(p => !p)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }} tabIndex={-1}>{showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                         </div>
                         {gateError && <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}><AlertCircle size={12} />{gateError}</div>}
                     </div>
-                ) : undefined}
+                ) : undefined)}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
             />

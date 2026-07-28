@@ -1160,12 +1160,14 @@
         outline: none;
     }
 
-        .field input:focus,
-        .field textarea:focus,
-        .field select:focus {
-            border-color: var(--primary);
-            background: var(--bg-card);
-        }
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+    border-color: var(--primary) !important;
+    background: var(--bg-card);
+    box-shadow: 0 0 0 3px rgba(0, 169, 157, 0.12) !important;
+    outline: none !important;
+}
 
     .field textarea {
         resize: vertical;
@@ -1618,6 +1620,7 @@ input.input-sla-locked {
 .report-select:focus {
     border-color: var(--primary);
     background: var(--bg-card);
+    box-shadow: 0 0 0 3px rgba(0, 169, 157, 0.12);
 }
 
 .report-input-error,

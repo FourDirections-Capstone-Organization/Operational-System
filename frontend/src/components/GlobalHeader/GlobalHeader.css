@@ -252,6 +252,7 @@
 .notification-dropdown-list {
   max-height: 320px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .notification-group-section {
@@ -346,12 +347,14 @@
 }
 
 .notification-dropdown-item-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--tp, #0F172A);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 
 .notification-dropdown-unread-dot {
@@ -363,11 +366,11 @@
 }
 
 .notification-dropdown-item-desc {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--ts, #374151);
-  line-height: 1.4;
+  line-height: 1.35;
   margin: 0;
-  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .notification-dropdown-item-time {
@@ -968,6 +971,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .notification-category-badge {

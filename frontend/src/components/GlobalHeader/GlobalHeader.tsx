@@ -394,6 +394,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                   if (!n.read) {
                                     setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
                                   }
+                                  onNotificationAction?.(n);
                                 }}
                               >
                                 <div className="notification-dropdown-item-content">
@@ -471,6 +472,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                   if (!n.read) {
                                     setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
                                   }
+                                  onNotificationAction?.(n);
                                 }}
                               >
                                 <div className="notification-dropdown-item-content">

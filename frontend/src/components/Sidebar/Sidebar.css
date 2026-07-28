@@ -502,17 +502,25 @@
 }
 
 .sb-pin-btn:hover {
-  color: rgba(255, 255, 255, 0.7) !important;
-  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .sb-pin-btn.active {
   opacity: 1 !important;
-  color: #FBBF24 !important; /* Star Gold */
+  color: #FBBF24 !important;
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.4);
 }
 
-/* Hover-reveal (Salesforce-style) */
+/* Always show pin button for pinned items */
+.sb-pin-btn.active:hover {
+  color: #f59e0b !important;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+/* Hover-reveal for unpinned items (Salesforce-style) */
 .nav-item:hover .sb-pin-btn { opacity: 0.65; }
+.nav-item:hover .sb-pin-btn.active { opacity: 1 !important; }
 
 /* ── Collapsed Tooltip (icon-only mode) ──────────────────────────────────── */
 

@@ -59,19 +59,23 @@
     /* ── Status Badge Tier Colors (6-tier system) ── */
     /* Consolidated from StatusBadge.css — single source of truth */
     --status-success: #059669;
-    /* Positive / Terminal Green */
     --status-info: #0284C7;
-    /* Informative / In-Progress Sky Blue */
     --status-warning: #D97706;
-    /* Attention / Pending Amber */
     --status-danger: #DC2626;
-    /* Critical / Negative Red */
     --status-neutral: #64748B;
-    /* Neutral / Terminated Slate Grey */
     --status-assign: #4F46E5;
-    /* Assignment / Ownership Indigo */
     --status-warn-danger: #EA580C;
-    /* Alert / Aging Warn-Danger Orange-Red (60-90 days) */
+
+    /* ── Dashboards convenience aliases (used extensively but never defined) ── */
+    --status-failed: var(--err, #DC2626);
+    --status-pending: var(--warn, #D97706);
+    --status-active: var(--ok, #059669);
+    --status-new: var(--new, #4F46E5);
+    --status-failed-bg: var(--err-bg, rgba(220, 38, 38, 0.1));
+    --status-pending-bg: var(--warn-bg, rgba(217, 119, 6, 0.1));
+    --status-active-bg: var(--ok-bg, rgba(5, 150, 105, 0.1));
+    --status-new-bg: var(--new-bg, rgba(79, 70, 229, 0.1));
+    --status-transit-bg: rgba(0, 169, 157, 0.1);
 
     /* ── Chart / Graph Color Tokens ── */
     /* Consolidated from DashboardLayout — exported as CSS tokens */
@@ -116,6 +120,19 @@
     --r-md: 12px;
     --r-lg: 16px;
     --r-full: 9999px;
+
+    /* backward-compatible aliases (many pages reference --radius-* instead of --r-*) */
+    --radius-xs: var(--r-xs);
+    --radius-sm: var(--r-sm);
+    --radius-md: var(--r-md);
+    --radius-lg: var(--r-lg);
+    --radius-xl: 20px;
+    --radius-full: var(--r-full);
+
+    /* backward-compatible aliases for --text-* tokens (used throughout but never defined) */
+    --text-primary: var(--tp, #0F172A);
+    --text-secondary: var(--ts, #374151);
+    --text-muted: var(--tm, #9CA3AF);
 
     /* ── Layout ── */
     --sw: 272px;

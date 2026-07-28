@@ -32,6 +32,7 @@ import {
     Mail,
     Activity,
     Search,
+    Bell,
 } from 'lucide-react';
 import './OpEmployee_Dashboard.css';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
@@ -45,6 +46,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import DataTable from '../../components/ui/DataTable';
 import TaskComments from '../../components/TaskComments/TaskComments';
 import api from '../../api';
+import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 
 // --- Helpers ------------------------------------------------------------------
 
@@ -61,7 +63,7 @@ const getAccountIdFromToken = (): string => {
 
 type Priority = 'high' | 'medium' | 'low';
 type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
-type NavTab = 'dashboard' | 'my-tasks' | 'task-progress-review' | 'profile' | 'activity_logs';
+type NavTab = 'dashboard' | 'my-tasks' | 'task-progress-review' | 'profile' | 'activity_logs' | 'announcements' | 'notifications';
 
 interface Task {
     id: string;
@@ -124,6 +126,11 @@ interface UserProfile {
 
 const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
 const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+const NOTIF_TYPE_MAP: Record<number, string> = {
+    0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning',
+    4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold',
+    8: 'TaskCompleted', 9: 'TemplateTaskUnassigned'
+};
 
 const dtoToTask = (dto: TaskResponseDTO): Task => {
     const taskId = dto.id ?? dto.taskId ?? '';
@@ -168,7 +175,7 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
 // --- Helpers ------------------------------------------------------------------
 
 const fmtDate = (d: string): string => {
-    if (!d) return '�';
+    if (!d) return '—';
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric',
     });
@@ -268,7 +275,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
     const accountId = getAccountIdFromToken();
 
     return (
-        <FormModal isOpen onClose={onClose} title={task.isConfidential ? `?? ${task.name}` : task.name} subtitle={sm.label} size="md"
+        <FormModal isOpen onClose={onClose} title={task.isConfidential ? `[CONFIDENTIAL] ${task.name}` : task.name} subtitle={sm.label} size="md"
             footer={
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose}>Close</button>
@@ -416,7 +423,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                        {saving ? <><Loader2 size={13} className="spin" /> Saving�</> : <><Save size={13} /> Save</>}
+                        {saving ? <><Loader2 size={13} className="spin" /> Saving…</> : <><Save size={13} /> Save</>}
                     </button>
                 </div>
             }
@@ -439,7 +446,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
             ) : (
                 <>
                     <div className="field">
-                        <label>Status � <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>current: {statusMeta[baseStatus]?.label ?? baseStatus}</span></label>
+                        <label>Status — <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>current: {statusMeta[baseStatus]?.label ?? baseStatus}</span></label>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {statusOptions.map(opt => (
                                 <button
@@ -454,7 +461,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                     </div>
 
                     <div className="field">
-                        <label>Progress � {progress}%</label>
+                        <label>Progress — {progress}%</label>
                         <input
                             type="range" min={0} max={100} step={5} value={progress}
                             onChange={e => setProgress(Number(e.target.value))}
@@ -474,7 +481,7 @@ const ProgressModal: React.FC<ProgressModalProps> = ({ task, onSave, onClose }) 
                 <label>Remarks <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
                 <textarea
                     className="leave-reason-textarea" rows={3} maxLength={300}
-                    placeholder="Add any notes about your progress�"
+                    placeholder="Add any notes about your progress…"
                     value={remarks}
                     onChange={e => setRemarks(e.target.value)}
                 />
@@ -572,7 +579,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                 <div className="wb-left">
                     <div className="wb-avatar">{initials}</div>
                     <div>
-                        <h2 className="wb-name">Good day, {firstName} ??</h2>
+                        <h2 className="wb-name">Good day, {firstName}!</h2>
                         <p className="wb-sub">{toDisplayRole(user.role)}</p>
                     </div>
                 </div>
@@ -603,7 +610,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
                 <div style={{ position: 'relative', width: 300 }}>
                     <Search size={14} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input type="text" placeholder="Search task�" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    <input type="text" placeholder="Search task…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                         style={{ width: '100%', height: 46, borderRadius: 999, border: '1px solid #dbe3f0', background: '#f8fafc', padding: '0 20px 0 42px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                         onFocus={e => { e.target.style.background = '#ffffff'; e.target.style.borderColor = '#14b8a6'; e.target.style.boxShadow = '0 0 0 4px rgba(20,184,166,0.08)'; }}
                         onBlur={e => { e.target.style.background = '#f8fafc'; e.target.style.borderColor = '#dbe3f0'; e.target.style.boxShadow = 'none'; }} />
@@ -628,7 +635,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                         <button className="link-btn" onClick={onGoTasks}>All tasks <ChevronRight size={13} /></button>
                     </div>
                     {urgent.length === 0 ? (
-                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks � great work!</p></div>
+                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks — great work!</p></div>
                     ) : urgent.map(t => (
                         <div key={t.id} className="dash-task-row" onClick={() => onView(t.id)}>
                             <div className="dtr-left">
@@ -712,7 +719,7 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
                 <div className="card">
                     <div className="empty-state">
                         <Loader2 size={22} className="spin" />
-                        <p>Loading your tasks�</p>
+                        <p>Loading your tasks…</p>
                     </div>
                 </div>
             </div>
@@ -807,7 +814,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
 
     const requestSave = () => {
         if (!form.firstName.trim() || !/^[A-Za-z\s]{1,50}$/.test(form.firstName.trim())) { error('Given Name must contain letters only and be up to 50 characters.'); return; }
-        if (form.middleName.trim() && !/^[A-Za-z\s]{1,50}$/.test(form.middleName.trim())) { error('Middle Name must contain letters only and be up to 50 characters.'); return; }
+        if (form.middleName.trim() && !/^[A-Za-z\s.]{1,50}$/.test(form.middleName.trim())) { error('Middle Initial must contain letters, spaces, or periods only.'); return; }
         if (!form.lastName.trim() || !/^[A-Za-z\s]{1,50}$/.test(form.lastName.trim())) { error('Last Name must contain letters only and be up to 50 characters.'); return; }
 
         const email = form.email.trim();
@@ -945,7 +952,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                         <button className="btn" onClick={() => setPasswordGate(false)} disabled={gateLoading}>Cancel</button>
                         <button className="btn btn-primary" onClick={handleGateConfirm} disabled={gateLoading || !gatePassword}>
                             {gateLoading
-                                ? <><Loader2 size={13} className="spin" /> Verifying�</>
+                                ? <><Loader2 size={13} className="spin" /> Verifying…</>
                                 : <><Shield size={13} /> Confirm & Save</>
                             }
                         </button>
@@ -980,7 +987,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
             <div className="profile-hero card">
                 <div className="ph-avatar">{initials}</div>
                 <div className="ph-info">
-                    <h2 className="ph-name">{user.fullName || '�'}</h2>
+                    <h2 className="ph-name">{user.fullName || '—'}</h2>
                     <p className="ph-role">{toDisplayRole(user.role)}</p>
                     <div className="ph-badges">
                         <span className="badge badge-blue">{user.employeeId}</span>
@@ -1018,7 +1025,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                         {editMode && (
                             <button className="btn btn-primary" onClick={requestSave} disabled={profileSaving}>
                                 {profileSaving
-                                    ? <><Loader2 size={13} className="spin" /> Saving�</>
+                                    ? <><Loader2 size={13} className="spin" /> Saving…</>
                                     : <><Save size={13} /> Save</>
                                 }
                             </button>
@@ -1029,7 +1036,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             <label>Employee ID</label>
                             <div className="if-value">
                                 <span className="if-icon"><Hash size={15} /></span>
-                                <span className="read-only-val">{user.employeeId || '�'}</span>
+                                <span className="read-only-val">{user.employeeId || '—'}</span>
                             </div>
                         </div>
                         {editMode ? (
@@ -1043,10 +1050,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                     {validationErrors['firstName'] && <span style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>{validationErrors['firstName']}</span>}
                                 </div>
                                 <div className="info-field">
-                                    <label>Middle Name <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>(optional)</span></label>
+                                    <label>Middle Initial <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>(optional)</span></label>
                                     <div className="if-input-wrap" style={validationErrors['middleName'] ? { borderColor: 'var(--danger)' } : {}}>
                                         <span className="if-icon"><User size={15} /></span>
-                                        <input type="text" value={form.middleName} onChange={setF('middleName')} placeholder="Middle Name" maxLength={50} />
+                                        <input type="text" value={form.middleName} onChange={setF('middleName')} placeholder="e.g. S" maxLength={50} />
                                     </div>
                                     {validationErrors['middleName'] && <span style={{ color: 'var(--danger)', fontSize: 11, marginTop: 4 }}>{validationErrors['middleName']}</span>}
                                 </div>
@@ -1064,7 +1071,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                 <label>Full Name</label>
                                 <div className="if-value">
                                     <span className="if-icon"><User size={15} /></span>
-                                    <span>{user.fullName || '�'}</span>
+                                    <span>{user.fullName || '—'}</span>
                                 </div>
                             </div>
                         )}
@@ -1081,7 +1088,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             ) : (
                                 <div className="if-value">
                                     <span className="if-icon"><Mail size={15} /></span>
-                                    <span>{form.email || '�'}</span>
+                                    <span>{form.email || '—'}</span>
                                 </div>
                             )}
                         </div>
@@ -1098,7 +1105,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             ) : (
                                 <div className="if-value">
                                     <span className="if-icon"><Phone size={15} /></span>
-                                    <span>{user.phone || '�'}</span>
+                                    <span>{user.phone || '—'}</span>
                                 </div>
                             )}
                         </div>
@@ -1113,7 +1120,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                             <label>Role</label>
                             <div className="if-value">
                                 <span className="if-icon"><Shield size={15} /></span>
-                                <span className="read-only-val">{toDisplayRole(user.role) || '�'}</span>
+                                <span className="read-only-val">{toDisplayRole(user.role) || '—'}</span>
                             </div>
                         </div>
                         <div className="info-field">
@@ -1198,7 +1205,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                                     disabled={pwdSaving}
                                 >
                                     {pwdSaving
-                                        ? <><Loader2 size={13} className="spin" /> Saving�</>
+                                        ? <><Loader2 size={13} className="spin" /> Saving…</>
                                         : <><Lock size={13} /> Update Password</>
                                     }
                                 </button>
@@ -1231,7 +1238,7 @@ const TaskProgressReviewTab: React.FC<{
                 <div className="card">
                     <div className="empty-state">
                         <Loader2 size={22} className="spin" />
-                        <p>Loading review data�</p>
+                        <p>Loading review data…</p>
                     </div>
                 </div>
             </div>
@@ -1399,22 +1406,24 @@ export default function EmployeeDashboard() {
         label: 'Task Allocation and Review System',
         icon: 'ti ti-clipboard-list',
         subItems: [
-        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
-        { label: 'My Tasks', onClick: () => setActiveTab('my-tasks') },
-        { label: 'Task Progress Review', onClick: () => setActiveTab('task-progress-review') },
-        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
+        { label: 'My Tasks', onClick: () => setActiveTab('my-tasks'), active: activeTab === 'my-tasks' },
+        { label: 'Task Progress Review', onClick: () => setActiveTab('task-progress-review'), active: activeTab === 'task-progress-review' },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
+        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
+        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
         ],
         },
         {
         label: 'General',
         icon: 'ti ti-settings',
         subItems: [
-        { label: 'Profile', onClick: () => setActiveTab('profile') },
+        { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
         ],
         },
         ],
         },
-    ], [setActiveTab]);
+    ], [activeTab, setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [tasksLoading, setTasksLoading] = useState(true);
     const [tasksError, setTasksError] = useState('');
@@ -1457,6 +1466,8 @@ export default function EmployeeDashboard() {
             category: type.toLowerCase(),
             isToday,
             source: 'System',
+            relatedEntityId: n.relatedTaskId ?? n.taskId ?? null,
+            relatedEntityType: n.relatedTaskId || n.taskId ? 'task' as const : undefined,
         };
     }, []);
 
@@ -1472,6 +1483,46 @@ export default function EmployeeDashboard() {
     }, [mapToHeaderNotification]);
 
     useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
+
+    // ── Full Notifications Tab ──
+    const NOTIF_PAGE_SIZE = 20;
+    const [allNotifications, setAllNotifications] = useState<any[]>([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [notifPage, setNotifPage] = useState(1);
+    const [notifTotalPages, setNotifTotalPages] = useState(1);
+
+    const fetchAllNotifications = useCallback(async (page: number) => {
+        setNotifLoading(true);
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setAllNotifications(d.items.map((n: any) => ({
+                    notificationId: n.id ?? n.notificationId,
+                    taskId: n.relatedTaskId ?? n.taskId ?? null,
+                    notificationType: typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '',
+                    message: n.message ?? n.title ?? '',
+                    isRead: n.isRead ?? false,
+                    createdAt: n.createdAt ?? '',
+                })));
+                setNotifPage(d.pageNumber || page);
+                setNotifTotalPages(d.totalPages || 1);
+            } else {
+                setAllNotifications([]);
+            }
+        } catch {
+            setAllNotifications([]);
+        } finally {
+            setNotifLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'notifications') {
+            fetchAllNotifications(1);
+        }
+    }, [activeTab, fetchAllNotifications]);
 
     // -- Activity Logs --
     const [activityLogs, setActivityLogs] = useState<any[]>([]);
@@ -1600,6 +1651,8 @@ export default function EmployeeDashboard() {
         'task-progress-review': 'Task Progress Review',
         profile: 'My Profile',
         activity_logs: 'Activity Logs',
+        announcements: 'Announcements',
+        notifications: 'Notifications',
     };
 
     const today = new Date().toLocaleDateString('en-US', {
@@ -1619,6 +1672,8 @@ export default function EmployeeDashboard() {
                     role: toDisplayRole(user.role) || 'Employee',
                     avatarInitials: initials,
                 }}
+                onProfileClick={() => setActiveTab('profile')}
+                onLogout={handleLogout}
             />
 
             {/* -- Main -- */}
@@ -1626,7 +1681,7 @@ export default function EmployeeDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: 'Employee' }, { label: pageTitles[activeTab] }]}
-                    notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
+                    notifications={headerNotifications}
                     profile={{
                         name: user.fullName || 'Employee',
                         role: toDisplayRole(user.role) || 'Employee',
@@ -1634,6 +1689,14 @@ export default function EmployeeDashboard() {
                     }}
                     onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
+                    onViewAllNotifications={() => setActiveTab('notifications')}
+                    onNotificationAction={n => {
+                        if (n.relatedEntityId && n.relatedEntityType === 'task') {
+                            const found = tasks.find(t => t.id === n.relatedEntityId);
+                            if (found) { setViewingId(found.id); return; }
+                        }
+                        if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
+                    }}
                 />
 
                 {activeTab === 'dashboard' && (
@@ -1676,7 +1739,7 @@ export default function EmployeeDashboard() {
                             {activityLogs.map((log: any) => (
                                 <tr key={log.activityLogId}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                        {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        {log.createdAt ? new Date(log.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                     </td>
                                     <td>
                                         <span style={{
@@ -1693,6 +1756,59 @@ export default function EmployeeDashboard() {
                                 </tr>
                             ))}
                         </DataTable>
+                    </div>
+                )}
+                {activeTab === 'announcements' && (
+                    <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>
+                        <AnnouncementsTab canCreate={false} />
+                    </div>
+                )}
+                {activeTab === 'notifications' && (
+                    <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Notifications</h3>
+                            </div>
+                            {notifLoading ? (
+                                <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
+                            ) : allNotifications.length === 0 ? (
+                                <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
+                            ) : (
+                                <DataTable
+                                    headers={['Date', 'Type', 'Message', 'Status']}
+                                    loading={false}
+                                    emptyMessage="No notifications"
+                                    currentPage={notifPage}
+                                    totalPages={notifTotalPages}
+                                    onPageChange={p => fetchAllNotifications(p)}
+                                    totalRecords={allNotifications.length}
+                                >
+                                    {allNotifications.map(n => {
+                                        const badge = (() => {
+                                            switch (n.notificationType) {
+                                                case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
+                                                case 'TaskUpdated': return { label: 'Updated', cls: 'task-assigned' };
+                                                case 'TaskOverdue': return { label: 'Overdue', cls: 'deadline' };
+                                                case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
+                                                case 'PushBack': return { label: 'Pushed back', cls: 'default' };
+                                                case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                default: return { label: n.notificationType, cls: 'default' };
+                                            }
+                                        })();
+                                        return (
+                                            <tr key={n.notificationId}>
+                                                <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                    {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td><span className={`badge ${badge.cls}`} style={{ fontSize: 11 }}>{badge.label}</span></td>
+                                                <td style={{ fontSize: 13, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</td>
+                                                <td>{n.isRead ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Read</span> : <span className="badge badge-blue" style={{ fontSize: 11 }}>New</span>}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </DataTable>
+                            )}
+                        </div>
                     </div>
                 )}
             </main>

@@ -459,27 +459,23 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
             priorityLevel: PRIORITY_MAP[form.priority as Priority] ?? 1,
             classification: form.classification,
             assignmentScope: scopeNum,
-            deadline: form.dueAt ? new Date(form.dueAt).toISOString() : new Date().toISOString(),
-            assignedUserIds: scope === 'SingleEmployee' ? [selectedEmployeeId] : scope === 'Team' && selectedTeam ? [] : [],
-            assignedTeamId: scope === 'Team' ? selectedTeamId : undefined,
+            deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+            assignedUserIds: scope === 'SingleEmployee' ? [selectedEmployeeId] : [],
             assignedDepartmentId: scope === 'Department' ? selectedDepartmentId : undefined,
             isConfidential: form.isConfidential,
         };
 
         try {
-            // Attempt real API; fall back to simulated success
-            await api.post('/api/Task/ai-create', payload);
+            await api.post('/api/Task', payload);
             setStep('submitted');
             success('Task assigned successfully — Neo4j graph updated, notifications sent, audit log recorded.');
         } catch (err: any) {
-            if (err.response?.status === 404) {
-                // Backend not available yet — simulate success
-                setStep('submitted');
-                success('Task assignment simulated. Backend will handle Neo4j, notifications, and audit log when available.');
-            } else {
-                setFormError(err.response?.data?.message || err.message || 'Failed to create task assignment.');
-                setSubmitting(false);
-            }
+            const status = err.response?.status;
+            const serverMsg = err.response?.data?.message || err.response?.data?.Message || err.response?.data?.title || '';
+            const detail = err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join('. ') : '';
+            const fallback = status === 500 ? 'Server error. Please check task data and try again.' : 'Failed to create task assignment.';
+            setFormError(serverMsg || detail || fallback);
+            setSubmitting(false);
         }
     };
 
@@ -630,7 +626,6 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
             {/* ── SECTION 1: Task Details (Step 1) ── */}
             <div className="ai-card">
                 <div className="ai-card-header">
-                    <span className="ai-step-badge">Step 1</span>
                     <h3>Task Details</h3>
                 </div>
                 <p className="ai-card-desc">Fill in the details for the AI task you want to assign.</p>
@@ -796,7 +791,6 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
             {/* ── SECTION 2: Assignment Scope (Step 2) ── */}
             <div className="ai-card">
                 <div className="ai-card-header">
-                    <span className="ai-step-badge">Step 2</span>
                     <h3>Assignment Scope</h3>
                 </div>
                 <p className="ai-card-desc">Select exactly one scope for this task assignment.</p>
@@ -832,7 +826,6 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
             {scope && (
                 <div className="ai-card">
                     <div className="ai-card-header">
-                        <span className="ai-step-badge">Step {scope === 'SingleEmployee' ? '4' : scope === 'Team' ? '5' : '6'}</span>
                         <h3>
                             {scope === 'SingleEmployee' ? 'Select Employee' : scope === 'Team' ? 'Select Team' : 'Select Department'}
                         </h3>
@@ -1152,9 +1145,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                 <Shield size={14} />
                                 <span>The system will validate that the destination exists, is active, and that the employee is currently available.</span>
                             </div>
-                            <button className="btn btn-primary" onClick={handleReview} disabled={!selectedEmployeeId && !selectedTeamId && !selectedDepartmentId}>
-                                <CheckCircle2 size={14} /> Review & Validate Assignment
-                            </button>
+        <button className="btn btn-primary" onClick={handleReview} disabled={!selectedEmployeeId && !selectedTeamId && !selectedDepartmentId}
+            style={{ background: 'var(--teal, #00A99D)', borderColor: 'var(--teal, #00A99D)', color: '#fff', boxShadow: '0 4px 14px rgba(0, 169, 157, 0.3)' }}>
+            <CheckCircle2 size={14} /> Review & Validate Assignment
+        </button>
                         </div>
                     )}
                 </div>

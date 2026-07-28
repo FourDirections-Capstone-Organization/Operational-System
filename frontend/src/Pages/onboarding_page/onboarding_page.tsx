@@ -106,23 +106,26 @@ function ToggleBtn({ visible, setter }: { visible: boolean; setter: (v: boolean)
 }
 
 function StepPill({ index, label, state }: { index: number; label: string; state: 'done' | 'active' | 'pending' }) {
-    const bg = state === 'active' ? 'var(--primary)' : state === 'done' ? 'var(--status-active)' : 'var(--bg-main)';
+    const bg = state === 'active' ? 'var(--primary)' : state === 'done' ? 'var(--status-active)' : 'transparent';
     const color = state === 'active' || state === 'done' ? 'white' : 'var(--text-muted)';
+    const borderCls = state === 'pending' ? '1.5px solid rgba(255,255,255,0.15)' : '1.5px solid transparent';
     return (
         <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 18px',
             borderRadius: 'var(--radius-full)', background: bg, color,
-            border: state === 'pending' ? '1.5px solid var(--border)' : '1.5px solid transparent',
-            fontSize: 12, fontWeight: 600, letterSpacing: '0.02em',
+            border: borderCls,
+            fontSize: 13, fontWeight: 700, letterSpacing: '0.02em',
+            boxShadow: state === 'active' ? '0 4px 12px rgba(0,169,157,0.3)' : 'none',
+            transition: 'all 0.2s ease',
         }}>
             <span style={{
-                width: 20, height: 20, borderRadius: '50%',
-                background: state === 'pending' ? 'var(--bg-card)' : 'rgba(255,255,255,0.2)',
+                width: 24, height: 24, borderRadius: '50%',
+                background: state === 'pending' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)',
                 color: state === 'pending' ? 'var(--text-muted)' : 'white',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700,
+                fontSize: 12, fontWeight: 700,
             }}>
-                {state === 'done' ? <Check size={12} /> : index}
+                {state === 'done' ? <Check size={13} /> : index}
             </span>
             {label}
         </div>
@@ -148,6 +151,32 @@ export default function OnboardingPage() {
 
     const [profile, setProfile] = useState({ firstName: '', middleName: '', lastName: '', suffix: '', contactNumber: '' });
     const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        const fetchExistingProfile = async () => {
+            try {
+                const res = await axios.get('/api/Auth/me');
+                const data = res.data?.data;
+                if (data) {
+                    setProfile({
+                        firstName: data.firstName ?? '',
+                        middleName: data.middleName ?? '',
+                        lastName: data.lastName ?? '',
+                        suffix: data.suffix ?? '',
+                        contactNumber: data.contactNumber ?? '',
+                    });
+                    if (data.firstName) localStorage.setItem('firstName', data.firstName);
+                    if (data.lastName) localStorage.setItem('lastName', data.lastName);
+                    if (data.middleName) localStorage.setItem('middleName', data.middleName);
+                    if (data.suffix) localStorage.setItem('suffix', data.suffix);
+                    if (data.contactNumber) localStorage.setItem('contactNumber', data.contactNumber);
+                    const fullName = [data.firstName, data.middleName, data.lastName, data.suffix].filter(Boolean).join(' ').trim();
+                    if (fullName) localStorage.setItem('employeeName', fullName);
+                }
+            } catch { /* silently ignore */ }
+        };
+        fetchExistingProfile();
+    }, []);
 
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
     const [pwErrors, setPwErrors] = useState<Record<string, string>>({});

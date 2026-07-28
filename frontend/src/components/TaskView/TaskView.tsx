@@ -546,6 +546,33 @@ const TaskView: React.FC<TaskViewProps> = ({
                             </div>
                         </div>
 
+                        {/* Confidential Toggle */}
+                        <div className="tv-section">
+                            <span className="tv-section-label">Visibility</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0', fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!task.isConfidential}
+                                    onChange={async e => {
+                                        const checked = e.target.checked;
+                                        try {
+                                            const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(task.assignedTo)}`).catch(() => null);
+                                            const empNum = localStorage.getItem('employeeId') || task.assignedTo;
+                                            const userRes = await api.get(`/api/User/employee-number/${encodeURIComponent(empNum)}`);
+                                            const userId = userRes.data?.data?.id || userRes.data?.id;
+                                            if (userId) {
+                                                await api.put(`/api/User/${userId}`, { isConfidential: checked } as any);
+                                            }
+                                        } catch { /* fallback */ }
+                                        window.location.reload();
+                                    }}
+                                    style={{ accentColor: 'var(--teal, #00A99D)', width: 16, height: 16, cursor: 'pointer' }}
+                                />
+                                <Lock size={13} color="var(--text-secondary)" />
+                                <span>Confidential — {task.isConfidential ? 'Only Coordinators & Manager can view' : 'Visible to all assigned roles'}</span>
+                            </label>
+                        </div>
+
                         {/* Description */}
                         <div className="tv-section">
                             <span className="tv-section-label">Description</span>

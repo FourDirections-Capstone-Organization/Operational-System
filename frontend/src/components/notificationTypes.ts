@@ -30,4 +30,8 @@ export interface NotificationItem {
   source: string;
   /** Optional inline call-to-action, e.g. "View Route #8" */
   actionLabel?: string;
+  /** Related entity ID for navigation (task ID, announcement ID, etc.) */
+  relatedEntityId?: string;
+  /** Related entity type for navigation routing */
+  relatedEntityType?: 'task' | 'announcement';
 }

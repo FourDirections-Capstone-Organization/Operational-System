@@ -172,58 +172,63 @@
 }
 
 /* Confirm base */
-.cm-btn-confirm {
+.cm-actions .cm-btn.cm-btn-confirm {
     border: none;
 }
 
 /* ── Confirm button variants — solid filled, high-contrast ── */
-.cm-btn-danger {
-    background: var(--status-failed);
-    color: var(--bg-card);
+.cm-actions .cm-btn.cm-btn-danger {
+    background: var(--status-failed) !important;
+    color: #fff !important;
     box-shadow: 0 2px 8px rgba(239, 68, 68, 0.30);
 }
-.cm-btn-danger:hover:not(:disabled) {
-    background: var(--status-failed);
+.cm-actions .cm-btn.cm-btn-danger:hover:not(:disabled) {
+    background: #b91c1c !important;
+    color: #fff !important;
     box-shadow: 0 4px 14px rgba(239, 68, 68, 0.40);
 }
 
-.cm-btn-warning {
-    background: var(--status-pending);
-    color: var(--bg-card);
+.cm-actions .cm-btn.cm-btn-warning {
+    background: var(--status-pending) !important;
+    color: #fff !important;
     box-shadow: 0 2px 8px rgba(245, 158, 11, 0.30);
 }
-.cm-btn-warning:hover:not(:disabled) {
-    background: var(--status-pending);
+.cm-actions .cm-btn.cm-btn-warning:hover:not(:disabled) {
+    background: #b45309 !important;
+    color: #fff !important;
     box-shadow: 0 4px 14px rgba(245, 158, 11, 0.40);
 }
 
-.cm-btn-info {
-    background: var(--primary);
-    color: var(--bg-card);
+.cm-actions .cm-btn.cm-btn-info {
+    background: var(--primary) !important;
+    color: #fff !important;
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.30);
 }
-.cm-btn-info:hover:not(:disabled) {
-    background: var(--primary);
+.cm-actions .cm-btn.cm-btn-info:hover:not(:disabled) {
+    background: var(--primary) !important;
+    color: #fff !important;
     box-shadow: 0 4px 14px rgba(59, 130, 246, 0.40);
 }
 
-.cm-btn-success {
-    background: var(--status-active);
-    color: var(--bg-card);
+.cm-actions .cm-btn.cm-btn-success {
+    background: var(--status-active) !important;
+    color: #fff !important;
     box-shadow: 0 2px 8px rgba(34, 197, 94, 0.30);
 }
-.cm-btn-success:hover:not(:disabled) {
-    background: var(--status-active);
+.cm-actions .cm-btn.cm-btn-success:hover:not(:disabled) {
+    background: #047857 !important;
+    color: #fff !important;
     box-shadow: 0 4px 14px rgba(34, 197, 94, 0.40);
 }
 
-.cm-btn-neutral {
-    background: var(--primary);
-    color: var(--bg-card);
+.cm-actions .cm-btn.cm-btn-neutral {
+    background: var(--primary) !important;
+    color: #fff !important;
     box-shadow: 0 2px 8px rgba(67, 24, 255, 0.25);
 }
-.cm-btn-neutral:hover:not(:disabled) {
-    background: var(--primary-dark-hover);
+.cm-actions .cm-btn.cm-btn-neutral:hover:not(:disabled) {
+    background: var(--primary-dark-hover) !important;
+    color: #fff !important;
     box-shadow: 0 4px 14px rgba(67, 24, 255, 0.35);
 }
 

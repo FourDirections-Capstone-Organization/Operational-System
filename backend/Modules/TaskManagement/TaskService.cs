@@ -28,24 +28,26 @@ public class TaskService : ITaskService
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId, string? ipAddress = null)
     {
-        var creator = await _db.Users.FindAsync(creatorId);
-        if (creator is null)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Creator not found");
+        try
+        {
+            var creator = await _db.Users.FindAsync(creatorId);
+            if (creator is null)
+                return ApiResponseDTO<TaskResponseDTO>.Failure("Creator not found");
 
-        if (creator.Role != UserRole.Coordinator && creator.Role != UserRole.Manager)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators and Managers can create tasks");
+            if (creator.Role != UserRole.Coordinator && creator.Role != UserRole.Manager)
+                return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators and Managers can create tasks");
 
-        if (string.IsNullOrWhiteSpace(dto.Title))
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Task title is required");
+            if (string.IsNullOrWhiteSpace(dto.Title))
+                return ApiResponseDTO<TaskResponseDTO>.Failure("Task title is required");
 
-        if (string.IsNullOrWhiteSpace(dto.Description))
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Task description is required");
+            if (string.IsNullOrWhiteSpace(dto.Description))
+                return ApiResponseDTO<TaskResponseDTO>.Failure("Task description is required");
 
-        var now = DateTime.UtcNow;
-        var deadline = dto.Deadline;
-        var isSLALocked = false;
+            var now = DateTime.UtcNow;
+            var deadline = dto.Deadline;
+            var isSLALocked = false;
 
-        if (dto.PriorityLevel == PriorityLevel.Urgent)
+            if (dto.PriorityLevel == PriorityLevel.Urgent)
         {
             deadline = now.AddHours(24);
             isSLALocked = true;
@@ -117,31 +119,33 @@ public class TaskService : ITaskService
 
         await _db.SaveChangesAsync();
 
-        await _slaRiskService.PredictRiskAsync(task.Id);
+        try { await _slaRiskService.PredictRiskAsync(task.Id); } catch { /* SLA prediction failure must not block task creation */ }
 
-        await _auditLogService.LogAsync(
-            creatorId,
-            AuditActionType.Create,
-            "Task",
-            task.Id,
-            ipAddress,
-            $"Task '{task.Title}' created",
-            "TaskManagement");
+        try { await _auditLogService.LogAsync(creatorId, AuditActionType.Create, "Task", task.Id, ipAddress, $"Task '{task.Title}' created", "TaskManagement"); } catch { /* audit log failure must not block task creation */ }
 
         if (assignedUserIds.Count > 0)
         {
-            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
-            await _notificationService.SendBulkNotificationAsync(
-                assignedUserIds,
-                NotificationType.TaskAssigned,
-                "New Task Assigned",
-                $"You have been assigned task '{taskTitle}' with deadline {task.Deadline:MMM dd, yyyy h:mm tt}.",
-                task.Id);
+            try
+            {
+                var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
+                await _notificationService.SendBulkNotificationAsync(
+                    assignedUserIds,
+                    NotificationType.TaskAssigned,
+                    "New Task Assigned",
+                    $"You have been assigned task '{taskTitle}' with deadline {task.Deadline:MMM dd, yyyy h:mm tt}.",
+                    task.Id);
+            }
+            catch { /* notification failure must not block task creation */ }
         }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
             await MapToResponseDTOAsync(task),
             "Task created and assigned successfully");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponseDTO<TaskResponseDTO>.Failure($"Task creation failed: {ex.Message}");
+        }
     }
 
     public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>> GetAllAsync(

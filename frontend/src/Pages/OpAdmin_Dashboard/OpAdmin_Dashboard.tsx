@@ -43,6 +43,7 @@ import {
     Building,
     Clock,
     Play,
+    Bell,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
@@ -65,6 +66,7 @@ import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
 import api from '../../api';
 import axios from 'axios';
 import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
+import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 
 interface ConfirmModalState {
     isOpen: boolean;
@@ -156,7 +158,9 @@ type NavTab =
     | 'reopen'
     | 'templates'
     | 'approvals'
-    | 'activity_logs';
+    | 'activity_logs'
+    | 'announcements'
+    | 'notifications';
 
 interface TeamMember {
     accountId: string;
@@ -196,7 +200,7 @@ interface CreateTaskDTO {
     priorityLevel: number;
     classification: number;
     assignmentScope: number;
-    deadline: string;
+    deadline: string | null;
     assignedUserIds?: string[];
     assignedDepartmentId?: string;
     isConfidential?: boolean;
@@ -823,7 +827,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             priorityLevel: PRIORITY_MAP[form.priority] ?? 1,
             classification: form.classification,
             assignmentScope: scopeNum,
-            deadline: form.dueAt ? new Date(form.dueAt).toISOString() : new Date().toISOString(),
+            deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
             assignedUserIds,
             assignedDepartmentId,
             isConfidential: form.isConfidential,
@@ -986,12 +990,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                     key={opt.value}
                                     onClick={() => { setForm(prev => ({ ...prev, classification: opt.value })); setErrors(prev => ({ ...prev, classification: '' })); }}
                                     style={{
-                                        flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                                        fontSize: 12, fontWeight: 600,
-                                        border: `2px solid ${form.classification === opt.value ? 'var(--primary)' : 'var(--border)'}`,
-                                        background: form.classification === opt.value ? 'rgba(0,169,157,0.06)' : 'var(--bg-card)',
+                                        flex: 1, padding: '9px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                                        fontSize: '0.85rem', fontWeight: 600,
+                                        border: `1.5px solid ${form.classification === opt.value ? 'var(--primary)' : 'var(--border)'}`,
+                                        background: form.classification === opt.value ? 'var(--teal-bg, rgba(0,169,157,0.06))' : 'var(--bg-main)',
                                         color: form.classification === opt.value ? 'var(--primary)' : 'var(--text-secondary)',
-                                        transition: 'all 0.15s ease',
+                                        transition: 'border-color 0.15s, background 0.15s, color 0.15s',
+                                        fontFamily: 'inherit',
                                     }}
                                 >
                                     <input type="radio" name="classification" value={opt.value}
@@ -1308,7 +1313,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         <button className="btn" onClick={onClose} disabled={submitting}>Cancel</button>
                         <button className="btn btn-primary" onClick={handleSave} disabled={submitting}>
                             {submitting
-                                ? <><Loader2 size={13} className="spin" /> Saving�</>
+                                ? <><Loader2 size={13} className="spin" /> Saving…</>
                                 : <><Save size={13} /> Save Changes</>}
                         </button>
                     </div>
@@ -1357,7 +1362,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ task, onEdit, onReopen, onStatusC
                 <div className="view-modal-meta">
                     <div className="view-modal-meta-item">
                         <span className="view-modal-label">Due Date</span>
-                        <span className="view-modal-meta-value">{task.dueAt ? fmtDate(task.dueAt) : '�'}</span>
+                        <span className="view-modal-meta-value">{task.dueAt ? fmtDate(task.dueAt) : '—'}</span>
                     </div>
                     <div className="view-modal-meta-item">
                         <span className="view-modal-label">Priority</span>
@@ -1567,7 +1572,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ task, onSubmit, onClo
                     <button className="btn" onClick={onClose} disabled={submitting}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !decision}>
                         {submitting
-                            ? <><Loader2 size={13} className="spin" /> Submitting�</>
+                            ? <><Loader2 size={13} className="spin" /> Submitting…</>
                             : <><Shield size={13} /> Submit Review Decision</>
                         }
                     </button>
@@ -1699,7 +1704,7 @@ const DashboardTab: React.FC<{
                                 Updated {lastUpdated}
                             </span>
                         </div>
-                        <button className="btn btn-primary" onClick={onNewTask} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 9, fontSize: 13, whiteSpace: 'nowrap' }}>
+                        <button className="btn btn-primary" onClick={onNewTask} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 9, fontSize: 13, whiteSpace: 'nowrap', background: 'var(--teal, #00A99D)', borderColor: 'var(--teal, #00A99D)', color: '#fff' }}>
                             <Plus size={14} /> New Task
                         </button>
                     </div>
@@ -2331,7 +2336,7 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
         setShowModal(true);
     };
 
-    const fmtTemplateDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '�';
+    const fmtTemplateDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
     const tmplTotalPages = Math.max(1, Math.ceil(templates.length / PER_PAGE));
     const pagedTemplates = templates.slice((templatePage - 1) * PER_PAGE, templatePage * PER_PAGE);
@@ -2489,7 +2494,7 @@ const TemplateModal: React.FC<TemplateModalProps> = ({ template, teamMembers, on
                 <>
                     <button className="btn" onClick={onClose}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-                        {submitting ? <><Loader2 size={13} className="spin" /> Saving�</> : <><Save size={13} /> {isEdit ? 'Update Template' : 'Create Template'}</>}
+                        {submitting ? <><Loader2 size={13} className="spin" /> Saving…</> : <><Save size={13} /> {isEdit ? 'Update Template' : 'Create Template'}</>}
                     </button>
                 </>
             }
@@ -4012,7 +4017,7 @@ function ProfileTab() {
                         <>
                             <button className="btn" onClick={() => setPasswordGate(false)} disabled={gateLoading}>Cancel</button>
                             <button className="btn btn-primary" onClick={handleGateConfirm} disabled={gateLoading || !gatePassword}>
-                                {gateLoading ? <><Loader2 size={13} className="spin" /> Verifying�</> : <><Shield size={13} /> Confirm & Save</>}
+                                {gateLoading ? <><Loader2 size={13} className="spin" /> Verifying…</> : <><Shield size={13} /> Confirm & Save</>}
                             </button>
                         </>
                     }
@@ -4144,7 +4149,7 @@ function ProfileTab() {
                             <div className="detail-grid" style={{ marginTop: 4 }}>
                                 <div className="detail-item">
                                     <span className="detail-label">Employee ID</span>
-                                    <span className="detail-value">{employeeId || '�'}</span>
+                                    <span className="detail-value">{employeeId || '—'}</span>
                                 </div>
                                 <div className="detail-item">
                                     <span className="detail-label">Role</span>
@@ -4174,7 +4179,7 @@ function ProfileTab() {
                                     disabled={profileSaving}
                                 >
                                     {profileSaving
-                                        ? <><Loader2 size={13} className="spin" /> Saving�</>
+                                        ? <><Loader2 size={13} className="spin" /> Saving…</>
                                         : <><Save size={13} /> Save Changes</>
                                     }
                                 </button>
@@ -4186,31 +4191,31 @@ function ProfileTab() {
                                 <span className="detail-label">
                                     <Hash size={11} style={{ display: 'inline', marginRight: 4 }} />Employee ID
                                 </span>
-                                <span className="detail-value">{employeeId || '�'}</span>
+                                <span className="detail-value">{employeeId || '—'}</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
                                     <UserCircle2 size={11} style={{ display: 'inline', marginRight: 4 }} />First Name
                                 </span>
-                                <span className="detail-value">{profileForm.firstName || '�'}</span>
+                                <span className="detail-value">{profileForm.firstName || '—'}</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
                                     <UserCircle2 size={11} style={{ display: 'inline', marginRight: 4 }} />Middle Name
                                 </span>
-                                <span className="detail-value">{profileForm.middleName || '�'}</span>
+                                <span className="detail-value">{profileForm.middleName || '—'}</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
                                     <UserCircle2 size={11} style={{ display: 'inline', marginRight: 4 }} />Last Name
                                 </span>
-                                <span className="detail-value">{profileForm.lastName || '�'}</span>
+                                <span className="detail-value">{profileForm.lastName || '—'}</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
                                     <Mail size={11} style={{ display: 'inline', marginRight: 4 }} />Email Address
                                 </span>
-                                <span className="detail-value">{profileForm.email || '�'}</span>
+                                <span className="detail-value">{profileForm.email || '—'}</span>
                             </div>
                             <div className="detail-item">
                                 <span className="detail-label">
@@ -4222,7 +4227,7 @@ function ProfileTab() {
                                 <span className="detail-label">
                                     <Phone size={11} style={{ display: 'inline', marginRight: 4 }} />Contact
                                 </span>
-                                <span className="detail-value">{displayContact || '�'}</span>
+                                <span className="detail-value">{displayContact || '—'}</span>
                             </div>
                         </div>
                     )}
@@ -4391,7 +4396,7 @@ function ProfileTab() {
                                     disabled={pwSaving}
                                 >
                                     {pwSaving
-                                        ? <><Loader2 size={13} className="spin" /> Saving�</>
+                                        ? <><Loader2 size={13} className="spin" /> Saving…</>
                                         : <><Save size={13} /> Update Password</>
                                     }
                                 </button>
@@ -4470,7 +4475,7 @@ const ReopenApprovalModal: React.FC<ReopenApprovalModalProps> = ({ request, onAp
                     <div style={{ flex: 1 }} />
                     <button className="btn" onClick={onClose} disabled={submitting}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting || !decision}>
-                        {submitting ? <><Loader2 size={13} className="spin" /> Submitting�</> : <><ThumbsUp size={13} /> Submit Decision</>}
+                        {submitting ? <><Loader2 size={13} className="spin" /> Submitting…</> : <><ThumbsUp size={13} /> Submit Decision</>}
                     </button>
                 </>
             }
@@ -4627,8 +4632,8 @@ const ReopenTab: React.FC<{
                                 <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.taskTitle}</div></td>
                                 <td style={{ fontSize: 13 }}>{r.employeeName}</td>
                                 <td><StatusBadge status={r.status} size="sm" /></td>
-                                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 }}>{r.adminRemarks || '�'}</td>
-                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.reviewedAt ? fmtDate(r.reviewedAt) : '�'}</td>
+                                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 }}>{r.adminRemarks || '—'}</td>
+                                <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.reviewedAt ? fmtDate(r.reviewedAt) : '—'}</td>
                             </tr>
                         ))}
                     </DataTable>
@@ -4715,24 +4720,26 @@ export default function OpsAdminDashboard() {
         label: 'Task Allocation and Review System',
         icon: 'ti ti-clipboard-list',
         subItems: [
-        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
-        { label: 'Tasks', onClick: () => setActiveTab('tasks') },
-        { label: 'Team', onClick: () => setActiveTab('team') },
-        { label: 'Task Templates', onClick: () => setActiveTab('templates') },
-        { label: 'Reports', onClick: () => setActiveTab('reports') },
-        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
+        { label: 'Tasks', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
+        { label: 'Team', onClick: () => setActiveTab('team'), active: activeTab === 'team' },
+        { label: 'Task Templates', onClick: () => setActiveTab('templates'), active: activeTab === 'templates' },
+        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
+        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
+        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
         ],
         },
         {
         label: 'General',
         icon: 'ti ti-settings',
         subItems: [
-        { label: 'Profile', onClick: () => setActiveTab('profile') },
+        { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
         ],
         },
         ],
         },
-    ], [setActiveTab]);
+    ], [activeTab, setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const CLASSIFICATION_MAP: Record<number, string> = { 0: 'routine', 1: 'special' };
     const tmTasks = useMemo(() => tasks.map(t => ({
@@ -4778,6 +4785,8 @@ export default function OpsAdminDashboard() {
             category: type.toLowerCase(),
             isToday,
             source: 'System',
+            relatedEntityId: n.relatedTaskId ?? n.taskId ?? null,
+            relatedEntityType: n.relatedTaskId || n.taskId ? 'task' as const : undefined,
         };
     }, []);
 
@@ -4793,6 +4802,51 @@ export default function OpsAdminDashboard() {
     }, [mapToHeaderNotification]);
 
     useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
+
+    // ── Full Notifications Tab ──
+    const NOTIF_TYPE_MAP: Record<number, string> = {
+        0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning',
+        4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold',
+        8: 'TaskCompleted', 9: 'TemplateTaskUnassigned'
+    };
+    const NOTIF_PAGE_SIZE = 20;
+    const [allNotifications, setAllNotifications] = useState<any[]>([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const [notifPage, setNotifPage] = useState(1);
+    const [notifTotalPages, setNotifTotalPages] = useState(1);
+
+    const fetchAllNotifications = useCallback(async (page: number) => {
+        setNotifLoading(true);
+        try {
+            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setAllNotifications(d.items.map((n: any) => ({
+                    notificationId: n.id ?? n.notificationId,
+                    taskId: n.relatedTaskId ?? n.taskId ?? null,
+                    notificationType: typeof n.type === 'number' ? NOTIF_TYPE_MAP[n.type] || 'Unknown' : n.type || '',
+                    message: n.message ?? n.title ?? '',
+                    isRead: n.isRead ?? false,
+                    createdAt: n.createdAt ?? '',
+                })));
+                setNotifPage(d.pageNumber || page);
+                setNotifTotalPages(d.totalPages || 1);
+            } else {
+                setAllNotifications([]);
+            }
+        } catch {
+            setAllNotifications([]);
+        } finally {
+            setNotifLoading(false);
+        }
+    }, [NOTIF_TYPE_MAP]);
+
+    useEffect(() => {
+        if (activeTab === 'notifications') {
+            fetchAllNotifications(1);
+        }
+    }, [activeTab, fetchAllNotifications]);
 
     const [showNew, setShowNew] = useState(false);
     const [taskSubTab, setTaskSubTab] = useState<'list' | 'create'>('list');
@@ -4973,6 +5027,7 @@ export default function OpsAdminDashboard() {
             setAllTasks(normalized);
             setTasks(normalized.filter(t => !t.deleted));
         } catch {
+            console.warn('[fetchTasks] Failed to load tasks');
         } finally {
             setLoadingTasks(false);
         }
@@ -5141,12 +5196,18 @@ export default function OpsAdminDashboard() {
             }
 
             setShowNew(false);
-            await fetchTasks();
-            await doFetchDashboard();
             success('Task created successfully.');
+            fetchTasks().catch(() => {});
+            doFetchDashboard().catch(() => {});
         } catch (err: any) {
-            console.error('Create task error:', err);
-            error(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to create task.');
+            const status = err.response?.status;
+            const respData = err.response?.data;
+            const serverMsg = respData?.message || respData?.Message || respData?.title || '';
+            const detail = respData?.errors ? Object.values(respData.errors).flat().join('. ') : '';
+            const rawText = typeof respData === 'string' ? respData : JSON.stringify(respData || '');
+            console.error('[handleNewTask] status:', status, 'response:', rawText);
+            const fallback = status === 500 ? 'Server error - check console for details.' : 'Failed to create task.';
+            error(serverMsg || detail || fallback);
             setShowNew(false);
         }
     };
@@ -5229,7 +5290,7 @@ export default function OpsAdminDashboard() {
             });
             await fetchTasks();
             setOverrideTask(null);
-            success('Administrator override applied � Task reopened � Audit Log entry generated.');
+            success('Administrator override applied — Task reopened — Audit Log entry generated.');
         } catch (err: any) {
             error(err.message ?? 'Administrator override failed.');
         }
@@ -5250,7 +5311,7 @@ export default function OpsAdminDashboard() {
             await fetchTasks();
             await doFetchDashboard();
             setReviewingRequest(null);
-            success('Reopening request approved � Task reopened � Task history preserved � Audit Log entry generated.');
+            success('Reopening request approved — Task reopened — Task history preserved — Audit Log entry generated.');
         } catch (err: any) {
             error(err.message ?? 'Failed to approve reopen request.');
         }
@@ -5270,7 +5331,7 @@ export default function OpsAdminDashboard() {
             ));
             await doFetchDashboard();
             setReviewingRequest(null);
-            success('Reopening request rejected � Original task preserved � Audit Log entry generated.');
+            success('Reopening request rejected — Original task preserved — Audit Log entry generated.');
         } catch (err: any) {
             error(err.message ?? 'Failed to reject reopen request.');
         }
@@ -5315,7 +5376,7 @@ export default function OpsAdminDashboard() {
         const token = localStorage.getItem('authToken');
 
         if (token) {
-            await api.post('/api/Auth/logout', {}).catch(() => { }); // non-fatal � clear localStorage regardless
+            await api.post('/api/Auth/logout', {}).catch(() => { }); // non-fatal — clear localStorage regardless
         }
 
         ['employeeId', 'refreshToken', 'authToken', 'employeeName',
@@ -5334,6 +5395,8 @@ export default function OpsAdminDashboard() {
         templates: 'Task Templates',
         approvals: 'Approvals',
         activity_logs: 'Activity Logs',
+        announcements: 'Announcements',
+        notifications: 'Notifications',
     };
 
     // -- Fetch dashboard data on mount and when filters change --
@@ -5377,7 +5440,7 @@ export default function OpsAdminDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: displayRole }, { label: pageTitles[activeTab] }]}
-                    notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
+                    notifications={headerNotifications}
                     profile={{
                         name: employeeName || displayRole,
                         role: displayRole,
@@ -5385,6 +5448,14 @@ export default function OpsAdminDashboard() {
                     }}
                     onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
+                    onViewAllNotifications={() => setActiveTab('notifications')}
+                    onNotificationAction={n => {
+                        if (n.relatedEntityId && n.relatedEntityType === 'task') {
+                            const found = tasks.find(t => t.taskId === n.relatedEntityId!) || allTasks.find(t => t.taskId === n.relatedEntityId!);
+                            if (found) { setViewingTask(found); return; }
+                        }
+                        if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
+                    }}
                 />
 
                 {activeTab === 'dashboard' && (
@@ -5409,7 +5480,7 @@ export default function OpsAdminDashboard() {
                                     { key: 'list', label: 'Task List' },
                                     { key: 'create', label: 'Create Task' },
                                 ]}
-                                activeKey={taskSubTab}
+                                activeTab={taskSubTab}
                                 onTabChange={key => setTaskSubTab(key as 'list' | 'create')}
                             />
                         </div>
@@ -5468,7 +5539,7 @@ export default function OpsAdminDashboard() {
                             {activityLogs.map((log: any) => (
                                 <tr key={log.activityLogId}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                        {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        {fmtDateTime(log.createdAt)}
                                     </td>
                                     <td>
                                         <span style={{
@@ -5485,6 +5556,59 @@ export default function OpsAdminDashboard() {
                                 </tr>
                             ))}
                         </DataTable>
+                    </div>
+                )}
+                {activeTab === 'announcements' && (
+                    <div className="dashboard-content">
+                        <AnnouncementsTab canCreate={false} />
+                    </div>
+                )}
+                {activeTab === 'notifications' && (
+                    <div className="dashboard-content">
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3 style={{ fontSize: 0, margin: 0, padding: 0, visibility: 'hidden', height: 0, overflow: 'hidden' }}>Notifications</h3>
+                            </div>
+                            {notifLoading ? (
+                                <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
+                            ) : allNotifications.length === 0 ? (
+                                <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
+                            ) : (
+                                <DataTable
+                                    headers={['Date', 'Type', 'Message', 'Status']}
+                                    loading={false}
+                                    emptyMessage="No notifications"
+                                    currentPage={notifPage}
+                                    totalPages={notifTotalPages}
+                                    onPageChange={p => fetchAllNotifications(p)}
+                                    totalRecords={allNotifications.length}
+                                >
+                                    {allNotifications.map(n => {
+                                        const badge = (() => {
+                                            switch (n.notificationType) {
+                                                case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
+                                                case 'TaskUpdated': return { label: 'Updated', cls: 'task-assigned' };
+                                                case 'TaskOverdue': return { label: 'Overdue', cls: 'deadline' };
+                                                case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
+                                                case 'PushBack': return { label: 'Pushed back', cls: 'default' };
+                                                case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                default: return { label: n.notificationType, cls: 'default' };
+                                            }
+                                        })();
+                                        return (
+                                            <tr key={n.notificationId}>
+                                                <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                    {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                <td><span className={`badge ${badge.cls}`} style={{ fontSize: 11 }}>{badge.label}</span></td>
+                                                <td style={{ fontSize: 13, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</td>
+                                                <td>{n.isRead ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Read</span> : <span className="badge badge-blue" style={{ fontSize: 11 }}>New</span>}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </DataTable>
+                            )}
+                        </div>
                     </div>
                 )}
             </main>

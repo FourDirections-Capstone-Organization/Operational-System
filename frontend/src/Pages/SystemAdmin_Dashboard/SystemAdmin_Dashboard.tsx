@@ -69,6 +69,7 @@ import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
 import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
+import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 
 const BIOMARKER_SCAN_LOGS: ActivityLog[] = [
     { activityLogId: 'bio-scan-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Scan', description: 'Automated daily scan SCAN-20260723-001 finished. 10 violations detected.', createdAt: '2026-07-23T00:02:00' },
@@ -190,6 +191,7 @@ interface ConfirmModalState {
     confirmLabel?: string;
     cancelLabel?: string;
     isLoading?: boolean;
+    extraContent?: React.ReactNode;
     onConfirm: () => void;
 }
 
@@ -298,6 +300,24 @@ const getEmployeeDisplayName = (emp: RecentEmployee): string => {
 function validate(form: FormState): FieldError {
     const errs: FieldError = {};
 
+    // First Name
+    if (!form.firstName.trim()) {
+        errs.firstName = 'First name is required.';
+    } else if (!/^[A-Za-z\s\-']+$/.test(form.firstName.trim())) {
+        errs.firstName = 'Letters and spaces only.';
+    } else if (form.firstName.trim().length > 50) {
+        errs.firstName = 'Max 50 characters.';
+    }
+
+    // Last Name
+    if (!form.lastName.trim()) {
+        errs.lastName = 'Last name is required.';
+    } else if (!/^[A-Za-z\s\-']+$/.test(form.lastName.trim())) {
+        errs.lastName = 'Letters and spaces only.';
+    } else if (form.lastName.trim().length > 50) {
+        errs.lastName = 'Max 50 characters.';
+    }
+
     // Email
     const email = form.email.trim();
     if (!email) {
@@ -325,6 +345,11 @@ function validate(form: FormState): FieldError {
         errs.contactNumber = 'Contact number is required.';
     } else if (!/^09\d{9}$/.test(contact)) {
         errs.contactNumber = 'Enter a valid PH mobile number (09xxxxxxxxx).';
+    }
+
+    // Employment Status
+    if (!form.employmentStatus) {
+        errs.employmentStatus = 'Please select an employment status.';
     }
 
     return errs;
@@ -422,6 +447,10 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
     const [availableRoles, setAvailableRoles] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [loadingOrg, setLoadingOrg] = useState(true);
     const { success } = useToast();
+    const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
+    const [gatePassword, setGatePassword] = useState('');
+    const [gateError, setGateError] = useState('');
+    const [gateLoading, setGateLoading] = useState(false);
 
     useEffect(() => {
         const loadOrgData = async () => {
@@ -533,10 +562,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
         setErrors(prev => ({ ...prev, [key]: errMsg || undefined }));
     };
 
-    const handleSubmit = async () => {
-        if (submitting || empNumLoading || !form.employeeNumber) return;
-        const errs = validate(form);
-        if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    const doRegister = async () => {
         setSubmitting(true);
         setApiError('');
         try {
@@ -551,6 +577,7 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 email: form.email.trim(),
                 departmentId: form.departmentId || null,
                 jobPositionId: form.jobPositionId || null,
+                employmentStatus: form.employmentStatus || null,
             });
 
             const responseData = res.data;
@@ -584,6 +611,34 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
             setApiError(msg || err.message || 'Employee registration failed. Please try again.');
         } finally {
             setSubmitting(false);
+            setShowRegisterConfirm(false);
+        }
+    };
+
+    const handleSubmit = () => {
+        if (submitting || empNumLoading || !form.employeeNumber) return;
+        const errs = validate(form);
+        if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+        setGatePassword('');
+        setGateError('');
+        setShowRegisterConfirm(true);
+    };
+
+    const handleConfirmRegister = async () => {
+        if (!gatePassword) { setGateError('Please enter your password.'); return; }
+        setGateLoading(true);
+        setGateError('');
+        try {
+            const adminId = localStorage.getItem('employeeId') ?? '';
+            const verifyRes = await api.post('/api/Auth/verify-password', { employeeID: adminId, password: gatePassword });
+            const verifyData = verifyRes.data;
+            if (!verifyData.isSuccess) { throw new Error(verifyData.message || verifyData.Message || 'Incorrect password.'); }
+            setShowRegisterConfirm(false);
+            await doRegister();
+        } catch (err: any) {
+            setGateError(err.response?.data?.message || err.message || 'Incorrect password. Please try again.');
+        } finally {
+            setGateLoading(false);
         }
     };
 
@@ -659,6 +714,46 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                             )}
                         </div>
 
+                        {/* First Name */}
+                        <div className="fm-field">
+                            <label className="fm-label" htmlFor="emp-fname">
+                                First Name <span style={{ color: 'var(--status-failed)' }}>*</span>
+                            </label>
+                            <input id="emp-fname" type="text" placeholder="e.g. Juan"
+                                value={form.firstName} onChange={handleChange('firstName')}
+                                className="fm-input" style={inputStyle(errors.firstName)} maxLength={50} />
+                            <FieldErr msg={errors.firstName} />
+                        </div>
+                        {/* Middle Name */}
+                        <div className="fm-field">
+                            <label className="fm-label" htmlFor="emp-mname">
+                                Middle Name <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+                            </label>
+                            <input id="emp-mname" type="text" placeholder="e.g. Santos"
+                                value={form.middleName} onChange={handleChange('middleName')}
+                                className="fm-input" style={inputStyle(errors.middleName)} maxLength={50} />
+                            <FieldErr msg={errors.middleName} />
+                        </div>
+                        {/* Last Name */}
+                        <div className="fm-field">
+                            <label className="fm-label" htmlFor="emp-lname">
+                                Last Name <span style={{ color: 'var(--status-failed)' }}>*</span>
+                            </label>
+                            <input id="emp-lname" type="text" placeholder="e.g. Dela Cruz"
+                                value={form.lastName} onChange={handleChange('lastName')}
+                                className="fm-input" style={inputStyle(errors.lastName)} maxLength={50} />
+                            <FieldErr msg={errors.lastName} />
+                        </div>
+                        {/* Suffix */}
+                        <div className="fm-field">
+                            <label className="fm-label" htmlFor="emp-suffix">
+                                Suffix <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</span>
+                            </label>
+                            <input id="emp-suffix" type="text" placeholder="e.g. Jr., III"
+                                value={form.suffix} onChange={handleChange('suffix')}
+                                className="fm-input" style={inputStyle(errors.suffix)} maxLength={10} />
+                            <FieldErr msg={errors.suffix} />
+                        </div>
                         {/* Email Address */}
                         <div className="fm-field">
                             <label className="fm-label" htmlFor="emp-email">
@@ -787,6 +882,52 @@ function AddEmployeeModal({ onClose, onSuccess }: AddEmployeeModalProps) {
                 </div>
             </FormModal>
 
+            {/* ── Registration Confirmation ── */}
+            <FormModal isOpen={showRegisterConfirm} onClose={() => setShowRegisterConfirm(false)}
+                title="Confirm Employee Registration"
+                subtitle="Review the details before creating this account."
+                size="md"
+                footer={
+                    <>
+                        <button className="btn" onClick={() => setShowRegisterConfirm(false)} disabled={gateLoading}>Cancel</button>
+                        <button className="btn btn-primary" onClick={handleConfirmRegister} disabled={gateLoading || !gatePassword}>
+                            {gateLoading ? <><Loader2 size={13} className="fm-spin" /> Verifying…</> : <><Shield size={13} /> Register Employee</>}
+                        </button>
+                    </>
+                }
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0' }}>
+                    <div style={{ background: 'var(--bg-input)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {[
+                            { label: 'Employee ID', value: form.employeeNumber },
+                            { label: 'Name', value: [form.firstName, form.middleName, form.lastName, form.suffix].filter(Boolean).join(' ') },
+                            { label: 'Email', value: form.email },
+                            { label: 'Contact', value: form.contactNumber },
+                            { label: 'Role', value: form.role },
+                            { label: 'Department', value: departments.find(d => d.id === form.departmentId)?.name || form.departmentId },
+                            { label: 'Employment Status', value: form.employmentStatus },
+                        ].map(item => (
+                            <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{item.label}</span>
+                                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{item.value || '—'}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ position: 'relative', marginTop: 8 }}>
+                        <input id="gate-pw-input" type="password" placeholder="Enter your password to confirm"
+                            value={gatePassword} onChange={e => { setGatePassword(e.target.value); setGateError(''); }}
+                            onKeyDown={e => { if (e.key === 'Enter') handleConfirmRegister(); }}
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${gateError ? '#dc2626' : '#e2e8f0'}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                            autoFocus />
+                    </div>
+                    {gateError && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626' }}>
+                            <AlertCircle size={12} />{gateError}
+                        </div>
+                    )}
+                </div>
+            </FormModal>
+
             {/* ── Success Screen ── */}
             <FormModal isOpen={!!successData} onClose={() => { setSuccessData(null); onClose(); }} size="sm"
                 title="Employee registered"
@@ -872,6 +1013,8 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
     const [gateError, setGateError] = useState('');
     const [gateLoading, setGateLoading] = useState(false);
     const [showGatePassword, setShowGatePassword] = useState(false);
+    const [gateConsent, setGateConsent] = useState(false);
+const gateConsentRef = useRef(false);
 
     // Track whether the form has unsaved changes compared to when editing started
     const isDirty = isEditing && initialFormRef.current !== null &&
@@ -988,6 +1131,7 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
         setGatePassword('');
         setGateError('');
         setShowGatePassword(false);
+        gateConsentRef.current = false;
         setConfirmModal({
             isOpen: true,
             variant: form.accountStatus !== employee.accountStatus
@@ -1044,6 +1188,11 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
             notice: 'For security, your identity must be verified before saving any changes.',
             confirmLabel: 'Verify & save',
             onConfirm: async () => {
+                const isDeactivating = form.accountStatus !== 'Active' && form.accountStatus !== employee.accountStatus;
+                if (isDeactivating && !gateConsentRef.current) {
+                    setGateError('You must agree to the archiving of historical data before deactivating.');
+                    return;
+                }
                 const pw = (document.getElementById('gate-pw-input') as HTMLInputElement)?.value ?? gatePassword;
                 if (!pw) { setGateError('Please enter your password.'); return; }
                 setGateLoading(true);
@@ -1223,6 +1372,15 @@ function EmployeeDetailModal({ employee, onClose, onUpdated, initialEditMode = f
                 notice={confirmModal.notice}
                 confirmLabel={confirmModal.confirmLabel}
                 isLoading={submitting || gateLoading}
+                extraContent={confirmModal.variant === 'warning' && form.accountStatus !== 'Active' ? (
+                    <div style={{ padding: '10px 12px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                        <strong style={{ color: 'var(--status-failed)' }}>Warning:</strong> Historical tasks, comment logs, and recommendations will be archived in a read-only state.
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer', fontWeight: 500 }}>
+                            <input type="checkbox" checked={gateConsent} onChange={e => { setGateConsent(e.target.checked); gateConsentRef.current = e.target.checked; setGateError(''); }} style={{ marginTop: 2, accentColor: 'var(--status-failed)' }} />
+                            <span>I understand and agree to proceed with deactivation.</span>
+                        </label>
+                    </div>
+                ) : undefined}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={() => setConfirmModal(CONFIRM_CLOSED)}
             />
@@ -1476,7 +1634,7 @@ function DashboardTab({ employees, recentEmployees, activityLogs, loading, onSel
                                                 <span className="activity-feed-text" style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: 13 }}>{log.description}</span>
                                                 <span className="activity-feed-time" style={{ color: 'var(--text-secondary)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                                     <Clock size={10} />
-                                                    {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                                 </span>
                                             </div>
                                         </div>
@@ -2023,42 +2181,42 @@ export default function Dashboard() {
         label: 'Task Allocation and Review System',
         icon: 'ti ti-clipboard-list',
         subItems: [
-        { label: 'Dashboard', onClick: () => setActiveTab('dashboard') },
-        { label: 'Manage Employee', onClick: () => setActiveTab('employees') },
-        { label: 'Task Management', onClick: () => setActiveTab('tasks') },
-        { label: 'Reports', onClick: () => setActiveTab('reports') },
-        { label: 'Role Management', onClick: () => setActiveTab('roles') },
-        { label: 'Org Structure', onClick: () => setActiveTab('org-structure') },
-        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs') },
-        { label: 'Biomarker Scan', onClick: () => setActiveTab('biomarker') },
+        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
+        { label: 'Manage Employee', onClick: () => setActiveTab('employees'), active: activeTab === 'employees' },
+        { label: 'Task Management', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
+        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
+        { label: 'Role Management', onClick: () => setActiveTab('roles'), active: activeTab === 'roles' },
+        { label: 'Org Structure', onClick: () => setActiveTab('org-structure'), active: activeTab === 'org-structure' },
+        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
+        { label: 'Biomarker Scan', onClick: () => setActiveTab('biomarker'), active: activeTab === 'biomarker' },
         ],
         },
         {
         label: 'Delivery Management System',
         icon: 'ti ti-truck-delivery',
         subItems: [
-        { label: 'Delivery Summary', onClick: () => setActiveTab('delivery') },
+        { label: 'Delivery Summary', onClick: () => setActiveTab('delivery'), active: activeTab === 'delivery' },
         ],
         },
         {
         label: 'Financial Management System',
         icon: 'ti ti-currency-dollar',
         subItems: [
-        { label: 'Finance', onClick: () => setActiveTab('finance') },
+        { label: 'Finance', onClick: () => setActiveTab('finance'), active: activeTab === 'finance' },
         ],
         },
         {
         label: 'General',
         icon: 'ti ti-settings',
         subItems: [
-        { label: 'Announcements', onClick: () => setActiveTab('announcements') },
-        { label: 'Settings', onClick: () => setActiveTab('settings') },
-        { label: 'Notifications', onClick: () => setActiveTab('notifications') },
+        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
+        { label: 'Settings', onClick: () => setActiveTab('settings'), active: activeTab === 'settings' },
+        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
         ],
         },
         ],
         },
-    ], [setActiveTab]);
+    ], [activeTab, setActiveTab]);
     const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
@@ -2082,6 +2240,7 @@ export default function Dashboard() {
     const [tmTasks, setTmTasks] = useState<any[]>([]);
     const [tmLoading, setTmLoading] = useState(false);
     const [showNewTask, setShowNewTask] = useState(false);
+    const [taskSubTab, setTaskSubTab] = useState<'list' | 'create'>('list');
     const [tmDetailTask, setTmDetailTask] = useState<TaskViewTask | null>(null);
     const [tmEditingTask, setTmEditingTask] = useState<TaskViewTask | null>(null);
     interface WorkloadInfo {
@@ -2737,14 +2896,16 @@ export default function Dashboard() {
                     role: 'MANAGER',
                     avatarInitials: getInitials(employeeName || 'Manager'),
                 }}
+                onProfileClick={() => setActiveTab('profile')}
+                onLogout={handleLogout}
             />
 
             <main className="main-viewport">
                 {!(activeTab === 'employees' && selectedPanelEmployee) && (
                     <GlobalHeader
                         title={pageTitles[activeTab]}
-                        breadcrumbs={[{ label: 'System Admin' }, { label: pageTitles[activeTab] }]}
-                        notifications={headerNotifications.length > 0 ? headerNotifications : undefined}
+                        breadcrumbs={[{ label: 'Manager' }, { label: pageTitles[activeTab] }]}
+                        notifications={headerNotifications}
                         profile={{
                             name: employeeName || 'Manager',
                             role: 'MANAGER',
@@ -2753,6 +2914,11 @@ export default function Dashboard() {
                         onSettings={() => setActiveTab('settings')}
                         onLogout={handleLogout}
                         onViewAllNotifications={() => setActiveTab('notifications')}
+                        onNotificationAction={n => {
+                            if (n.relatedEntityType === 'task') setActiveTab('tasks');
+                            else if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
+                            else setActiveTab('notifications');
+                        }}
                     />
                 )}
 
@@ -2866,24 +3032,43 @@ export default function Dashboard() {
                 )}
 
                 {activeTab === 'tasks' && (
-                    <div className="dashboard-content">
-                        <TaskManager
-                            tasks={tmTasks}
-                            teamMembers={[]}
-                            onNewTask={() => setShowNewTask(true)}
-                            onEdit={id => {
-                                const found = tmTasks.find(t => t.id === id);
-                                if (found) {
-                                    setTmEditingTask(mapManagerTaskToView(found));
-                                }
-                            }}
-                            onView={handleManagerTaskView}
-                            onArchive={ids => handleManagerTaskArchive(ids)}
-                            onRestore={ids => handleManagerTaskRestore(ids)}
-                            onDelete={ids => handleManagerTaskDelete(ids)}
-                            onMarkDone={ids => handleManagerTaskMarkDone(ids)}
-                        />
-                    </div>
+                    <>
+                        <div className="dashboard-content" style={{ paddingBottom: 0 }}>
+                            <SubTabNav
+                                tabs={[
+                                    { key: 'list', label: 'Task List' },
+                                    { key: 'create', label: 'Create Task' },
+                                ]}
+                                activeTab={taskSubTab}
+                                onTabChange={key => setTaskSubTab(key as 'list' | 'create')}
+                            />
+                        </div>
+                        {taskSubTab === 'list' && (
+                            <div className="dashboard-content">
+                                <TaskManager
+                                    tasks={tmTasks}
+                                    teamMembers={[]}
+                                    onNewTask={() => setTaskSubTab('create')}
+                                    onEdit={id => {
+                                        const found = tmTasks.find(t => t.id === id);
+                                        if (found) {
+                                            setTmEditingTask(mapManagerTaskToView(found));
+                                        }
+                                    }}
+                                    onView={handleManagerTaskView}
+                                    onArchive={ids => handleManagerTaskArchive(ids)}
+                                    onRestore={ids => handleManagerTaskRestore(ids)}
+                                    onDelete={ids => handleManagerTaskDelete(ids)}
+                                    onMarkDone={ids => handleManagerTaskMarkDone(ids)}
+                                />
+                            </div>
+                        )}
+                        {taskSubTab === 'create' && (
+                            <div className="dashboard-content">
+                                <AIAssignmentView />
+                            </div>
+                        )}
+                    </>
                 )}
                 {activeTab === 'reports' && (
                 <div className="dashboard-content">
@@ -2961,7 +3146,7 @@ export default function Dashboard() {
                                 return (
                                     <tr key={log.activityLogId}>
                                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                            {new Date(log.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            {log.createdAt ? new Date(log.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                                         </td>
                                         <td>
                                             <span style={{
