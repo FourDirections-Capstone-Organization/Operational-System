@@ -210,7 +210,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                         name: d.name ?? d.departmentName,
                         code: d.code ?? '',
                         isActive: d.isActive ?? d.status === 'Active',
-                        employeeCount: d.employeeCount ?? 0,
+                        employeeCount: d.userCount ?? d.employeeCount ?? 0,
                         headEmployeeName: d.headEmployeeName ?? '',
                     }));
                     setDepartments(mapped.length > 0 ? mapped : DEPARTMENTS_MOCK);
