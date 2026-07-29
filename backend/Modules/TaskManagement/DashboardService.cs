@@ -33,8 +33,8 @@ public class DashboardService : IDashboardService
                 .ThenInclude(a => a.AssignedUser)
             .AsQueryable();
 
-        // Note: No role-based department scope — both Coordinators and Managers see all data
-        // (The assignable-users API also shows all employees regardless of role)
+        if (requestUserRole == UserRole.Coordinator && requestUserDepartmentId.HasValue)
+            query = query.Where(t => t.AssignedDepartmentId == requestUserDepartmentId.Value);
 
         if (filters != null)
         {
@@ -151,7 +151,8 @@ public class DashboardService : IDashboardService
             .Include(t => t.Assignments)
             .AsQueryable();
 
-        // Note: No role-based department scope — same as GetDashboardMetricsAsync
+        if (requestUserRole == UserRole.Coordinator && requestUserDepartmentId.HasValue)
+            query = query.Where(t => t.AssignedDepartmentId == requestUserDepartmentId.Value);
 
         if (filters != null)
         {
