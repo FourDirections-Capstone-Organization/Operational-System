@@ -80,9 +80,9 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
     return (
         <div className="ai-panel">
             <div className="ai-header">
-                <Brain size={16} className="ai-header-icon" />
+                <Brain size={14} className="ai-header-icon" />
                 <span className="ai-title">AI Insights</span>
-                <span className="ai-subtitle">Neo4j Graph + ML.NET</span>
+                <span className="ai-subtitle">Neo4j + ML</span>
             </div>
 
             <div className="ai-body">
