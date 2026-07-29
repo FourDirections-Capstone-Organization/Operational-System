@@ -15,4 +15,8 @@ public interface ISuitabilityService
 
     Task<ApiResponseDTO<List<SuitabilityExplanationDTO>>> GetSuitabilityExplanationAsync(
         Guid taskId, Guid employeeId, UserRole callerRole, Guid callerDepartmentId);
+
+    Task<ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>> GetSuitabilityPreviewAsync(
+        Guid departmentId, int classification, UserRole callerRole,
+        int pageNumber = 1, int pageSize = 5);
 }

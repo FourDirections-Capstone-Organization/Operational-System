@@ -71,4 +71,27 @@ public class SuitabilityController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("suitability/preview")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetSuitabilityPreview(
+        [FromQuery] Guid departmentId,
+        [FromQuery] int classification = 0,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 5)
+    {
+        var roleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (string.IsNullOrEmpty(roleClaim))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(roleClaim, out var role))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        var result = await _suitabilityService.GetSuitabilityPreviewAsync(
+            departmentId, classification, role, pageNumber, pageSize);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }
