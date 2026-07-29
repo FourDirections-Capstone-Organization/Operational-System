@@ -22,6 +22,15 @@ export interface TMTask {
     isSLALocked?: boolean;
 }
 
+export interface ServerPagination {
+    currentPage: number;
+    totalPages: number;
+    totalRecords: number;
+    pageSize: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange?: (size: number) => void;
+}
+
 interface TMProps {
     tasks: TMTask[];
     teamMembers: { accountId: string; employeeName: string }[];
@@ -40,6 +49,7 @@ interface TMProps {
     onFilterClassificationChange?: (val: string) => void;
     filterAssignee?: string;
     onFilterAssigneeChange?: (val: string) => void;
+    serverPagination?: ServerPagination;
 }
 
 type TabType = 'active' | 'completed' | 'bin';
@@ -97,6 +107,7 @@ export default function TaskManager({
     onFilterClassificationChange,
     filterAssignee: externalFilterAssignee,
     onFilterAssigneeChange,
+    serverPagination,
 }: TMProps) {
     const [tab, setTab] = useState<TabType>('active');
     const [internalSearch, setInternalSearch] = useState('');
@@ -152,8 +163,8 @@ export default function TaskManager({
         return list;
     }, [tabTasks, search, filterPrio, filterClassification, filterAssignee]);
 
-    const totalPages = Math.ceil(filtered.length / 8);
-    const paginated = filtered.slice((page - 1) * 8, page * 8);
+    const totalPages = serverPagination?.totalPages ?? Math.ceil(filtered.length / 8);
+    const paginated = serverPagination ? filtered : filtered.slice((page - 1) * 8, page * 8);
     const totalInProgress = tasks.filter(t => t.status === 'In progress' && !t.isArchived && !t.isDeleted).length;
     const totalDone = tasks.filter(t => t.status === 'Done' && !t.isArchived && !t.isDeleted).length;
     const totalOverdue = tasks.filter(t => t.status !== 'Done' && !t.isArchived && !t.isDeleted && t.dueDate).filter(t => { try { return new Date(t.dueDate!) < new Date(); } catch { return false; } }).length;
@@ -215,10 +226,13 @@ export default function TaskManager({
                 loading={false}
                 emptyMessage="No tasks found."
                 emptyIcon={<Package size={20} />}
-                totalRecords={filtered.length}
-                currentPage={page}
+                totalRecords={serverPagination?.totalRecords ?? filtered.length}
+                currentPage={serverPagination?.currentPage ?? page}
                 totalPages={totalPages}
-                onPageChange={handlePageChange}
+                onPageChange={serverPagination?.onPageChange ?? handlePageChange}
+                pageSize={serverPagination?.pageSize}
+                pageSizeOptions={serverPagination?.onPageSizeChange ? [8, 15, 30, 50] : undefined}
+                onPageSizeChange={serverPagination?.onPageSizeChange}
             >
                 {paginated.map(t => {
                     const refDisplay = t.referenceNumber || t.id.slice(0, 8).toUpperCase();
