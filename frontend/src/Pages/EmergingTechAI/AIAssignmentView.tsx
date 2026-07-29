@@ -900,7 +900,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                     </div>
                     <p className="ai-card-desc">
                         {scope === 'SingleEmployee'
-                            ? 'Only available employees with their current active task counts are shown.'
+                            ? 'Employees ranked by AI suitability score. Higher scores (less negative) indicate better fit. Scores can be negative if employee workload exceeds the configured maximum — an admin can tune MaxWorkload in Expert System Config.'
                             : scope === 'Team'
                                 ? 'Select from active teams available for assignment.'
                                 : 'Select from the defined departments.'}
@@ -932,6 +932,18 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                     <TrendingUp size={13} />
                                     <span style={{ fontWeight: 600 }}>SLA Risk: {aiSlaRisk.riskLevel}</span>
                                     <span style={{ color: '#666' }}>— {(aiSlaRisk.confidenceScore * 100).toFixed(0)}% confidence</span>
+                                </div>
+                            )}
+
+                            {/* ── AI Score Legend ── */}
+                            {aiSlaRisk && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', marginTop: 6, fontSize: 10, color: '#6B7280', background: '#F9FAFB', borderRadius: 6, border: '1px solid #E5E7EB', flexWrap: 'wrap' }}>
+                                    <span style={{ fontWeight: 600 }}>Score Guide:</span>
+                                    <span style={{ color: '#059669' }}>● ≥ 0.5 Excellent</span>
+                                    <span style={{ color: '#0284C7' }}>● ≥ 0.0 Good</span>
+                                    <span style={{ color: '#D97706' }}>● ≥ -1.0 Fair</span>
+                                    <span style={{ color: '#DC2626' }}>● &lt; -1.0 Overloaded</span>
+                                    <span style={{ color: '#6B7280', fontStyle: 'italic' }}>— Lower = higher workload relative to max</span>
                                 </div>
                             )}
 
@@ -970,7 +982,11 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                     <div className="ai-emp-workload">
                                                         {ai ? (
                                                             <>
-                                                                <span className="ai-emp-count">{ai.score.toFixed(4)}</span>
+                                                                <span className="ai-emp-count" style={{
+                                                                    color: ai.score >= 0.5 ? '#059669' : ai.score >= 0 ? '#0284C7' : ai.score >= -1 ? '#D97706' : '#DC2626'
+                                                                }}>
+                                                                    {ai.score.toFixed(4)}
+                                                                </span>
                                                                 <span className="ai-emp-count-label">score</span>
                                                             </>
                                                         ) : (
@@ -1004,8 +1020,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                                     setAiExplainedEmp(emp.employeeId);
                                                                     if (!aiExplanations[emp.employeeId]) {
                                                                         const workloadFactor = Math.max(0, 1.0 - ai.workload / 10);
-                                                                        const exp = `Score ${ai.score.toFixed(4)} = workload factor ${workloadFactor.toFixed(2)} × 0.35 + experience match × 0.25 + recommendation score × 0.40`;
-                                                                        setAiExplanations(prev => ({ ...prev, [emp.employeeId]: exp }));
+                                                                        const explanationText = ai.workload > 10
+                                                                            ? `Score ${ai.score.toFixed(4)} — workload ${ai.workload} exceeds max (10), causing negative score. Admin can increase MaxWorkload in Expert System Config for better accuracy.`
+                                                                            : `Score ${ai.score.toFixed(4)} = workload factor ${workloadFactor.toFixed(2)} × 0.35 + experience × 0.25 + rec score × 0.40`;
+                                                                        setAiExplanations(prev => ({ ...prev, [emp.employeeId]: explanationText }));
                                                                     }
                                                                 }
                                                             }}
