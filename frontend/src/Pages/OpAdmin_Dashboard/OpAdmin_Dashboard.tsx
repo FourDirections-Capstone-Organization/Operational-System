@@ -4978,7 +4978,7 @@ export default function OpsAdminDashboard() {
             }
             if (currentFilters.assignmentScope) params.append('assignmentScope', currentFilters.assignmentScope);
 
-            const res = await axios.get(`/api/ai-dashboard/metrics?${params}`, { timeout: 6000 });
+            const res = await axios.get(`/api/Dashboard/metrics?${params}`, { timeout: 6000 });
             if (!mountedRef.current) return;
             const body = res.data;
             if (!body.isSuccess) {
