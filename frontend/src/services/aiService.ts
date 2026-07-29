@@ -8,6 +8,16 @@ export interface ApiResponse<T> {
     data: T;
 }
 
+export interface PagedResponseDTO<T> {
+    items: T[];
+    totalCount: number;
+    pageNumber: number;
+    pageSize: number;
+    totalPages: number;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
+}
+
 export interface SuitabilityResponseDTO {
     employeeId: string;
     employeeNumber: string;
@@ -55,9 +65,14 @@ export interface SlaRiskExplanationDTO {
 // ─── AI Service ───
 
 export const aiService = {
-    /** Get top 5 suitable employees for a task (from Neo4j graph) */
-    getSuitability: (taskId: string) =>
-        api.get<ApiResponse<SuitabilityResponseDTO[]>>(`/api/tasks/${taskId}/suitability`),
+    /** Get paginated suitable employees for a task (from Neo4j graph) */
+    getSuitability: (taskId: string, pageNumber?: number, pageSize?: number) => {
+        const params: Record<string, number> = {};
+        if (pageNumber !== undefined) params.pageNumber = pageNumber;
+        if (pageSize !== undefined) params.pageSize = pageSize;
+        return api.get<ApiResponse<PagedResponseDTO<SuitabilityResponseDTO>>>(
+            `/api/tasks/${taskId}/suitability`, Object.keys(params).length > 0 ? params : undefined);
+    },
 
     /** Get detailed suitability explanation for a specific employee */
     getSuitabilityExplanation: (taskId: string, employeeId: string) =>
