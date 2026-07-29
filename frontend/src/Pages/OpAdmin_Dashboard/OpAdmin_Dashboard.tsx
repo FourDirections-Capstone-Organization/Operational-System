@@ -4926,6 +4926,12 @@ export default function OpsAdminDashboard() {
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
     const [binTasks, setBinTasks] = useState<Task[]>([]);
 
+    // Server-side pagination for task list
+    const [taskPage, setTaskPage] = useState(1);
+    const [taskTotalPages, setTaskTotalPages] = useState(1);
+    const [taskTotalRecords, setTaskTotalRecords] = useState(0);
+    const [taskPageSize, setTaskPageSize] = useState(8);
+
     // Reopen Requests state
     const [reopenRequests, setReopenRequests] = useState<ReopenRequest[]>([]);
     const [reopenLoading, setReopenLoading] = useState(false);
@@ -5060,9 +5066,14 @@ export default function OpsAdminDashboard() {
         setLoadingTasks(true);
         setDashboardLoading(true);
         try {
-            const res = await api.get('/api/Task?pageNumber=1&pageSize=200');
+            const res = await api.get(`/api/Task?pageNumber=${taskPage}&pageSize=${taskPageSize}`);
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
+
+            if (jsonRes?.data?.totalCount !== undefined) {
+                setTaskTotalRecords(jsonRes.data.totalCount);
+                setTaskTotalPages(jsonRes.data.totalPages ?? 1);
+            }
 
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
@@ -5479,6 +5490,9 @@ export default function OpsAdminDashboard() {
         return () => clearInterval(interval);
     }, []);
 
+    // Re-fetch tasks when page or page size changes
+    useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize]);
+
     // -- Auto-refresh dashboard data every 30 seconds --
     useEffect(() => {
         const interval = setInterval(() => doFetchDashboard(), 30000);
@@ -5563,6 +5577,14 @@ export default function OpsAdminDashboard() {
                                     onRestore={ids => { ids.forEach(id => handleRestoreTask(id)); }}
                                     onDelete={ids => { ids.forEach(id => handleDeleteTask(id)); }}
                                     onMarkDone={ids => { ids.forEach(id => handleStatusTransition(id, 'Completed')); }}
+                                    serverPagination={{
+                                        currentPage: taskPage,
+                                        totalPages: taskTotalPages,
+                                        totalRecords: taskTotalRecords,
+                                        pageSize: taskPageSize,
+                                        onPageChange: (page) => { setTaskPage(page); },
+                                        onPageSizeChange: (size) => { setTaskPageSize(size); setTaskPage(1); },
+                                    }}
                                 />
                             </div>
                         )}
