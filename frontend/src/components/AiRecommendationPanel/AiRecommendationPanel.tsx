@@ -141,25 +141,25 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
                     <>
                         {suitability.map((emp, idx) => (
                             <div key={emp.employeeId}>
-                                <div className="ai-card">
-                                    <div className="ai-card-top">
-                                        <div className="ai-card-row">
-                                            <span className="ai-card-name">{emp.fullName}</span>
-                                            <span className="ai-card-number">{emp.employeeNumber}</span>
-                                            <span className="ai-card-role">{getRoleLabel(emp.role)}</span>
+                                <div className="ai-rec-card">
+                                    <div className="ai-rec-card-top">
+                                        <div className="ai-rec-card-row">
+                                            <span className="ai-rec-card-name">{emp.fullName}</span>
+                                            <span className="ai-rec-card-number">{emp.employeeNumber}</span>
+                                            <span className="ai-rec-card-role">{getRoleLabel(emp.role)}</span>
                                             {idx === 0 && pageNumber === 1 && <span className="ai-best-badge"><Zap size={10} /> Best Pick</span>}
                                         </div>
-                                        <div className="ai-card-meta">
-                                            <span className="ai-meta-item"><Briefcase size={10} /> {emp.workload} active</span>
+                                        <div className="ai-rec-card-meta">
+                                            <span className="ai-rec-meta-item"><Briefcase size={10} /> {emp.workload} active</span>
                                             <button className="ai-explain-btn" onClick={() => handleToggleExplain(emp.employeeId)}>
                                                 {expandedEmp === emp.employeeId ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
                                                 {expandedEmp === emp.employeeId ? 'Hide details' : 'Why this score?'}
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="ai-card-score">
-                                        <div className="ai-score-value">{emp.suitabilityScore.toFixed(4)}</div>
-                                        <div className="ai-score-label">score</div>
+                                    <div className="ai-rec-card-score">
+                                        <div className="ai-rec-score-value">{emp.suitabilityScore.toFixed(4)}</div>
+                                        <div className="ai-rec-score-label">score</div>
                                     </div>
                                 </div>
 

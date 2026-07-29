@@ -427,6 +427,16 @@ public class TaskService : ITaskService
             .Take(pageSize)
             .ToListAsync();
 
+        var taskIdsPerUser = await _db.TaskAssignments
+            .Where(a => a.Task != null &&
+                a.Task.Status != Backend.Models.Enums.TaskStatus.Completed &&
+                a.Task.Status != Backend.Models.Enums.TaskStatus.Cancelled)
+            .GroupBy(a => a.AssignedUserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var workloadMap = taskIdsPerUser.ToDictionary(x => x.UserId, x => x.Count);
+
         var result = users.Select(u => new TaskAssigneeDTO
         {
             UserId = u.Id,
@@ -436,7 +446,9 @@ public class TaskService : ITaskService
             Role = u.Role.ToString(),
             AvailabilityStatus = u.AvailabilityStatus.ToString(),
             IsAvailable = u.AvailabilityStatus == AvailabilityStatus.Active,
-            Department = u.Department?.Name ?? ""
+            Department = u.Department?.Name ?? "",
+            DepartmentId = u.DepartmentId,
+            Workload = workloadMap.TryGetValue(u.Id, out var count) ? count : 0
         }).ToList();
 
         var paginatedResult = new PaginatedResponseDTO<TaskAssigneeDTO>

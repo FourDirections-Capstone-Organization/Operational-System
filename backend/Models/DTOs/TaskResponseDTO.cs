@@ -43,4 +43,6 @@ public class TaskAssigneeDTO
     public string? AvailabilityStatus { get; set; }
     public bool IsAvailable { get; set; }
     public string? Department { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public int Workload { get; set; }
 }

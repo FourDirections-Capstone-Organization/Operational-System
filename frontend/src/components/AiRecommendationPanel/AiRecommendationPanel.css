@@ -156,7 +156,7 @@
 }
 
 /* ── Employee Card ── */
-.ai-card {
+.ai-rec-card {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -169,35 +169,35 @@
     cursor: default;
 }
 
-.ai-card:hover {
+.ai-rec-card:hover {
     border-color: var(--teal, #00A99D);
     box-shadow: 0 1px 4px var(--teal-ring, rgba(0, 169, 157, 0.18));
 }
 
-.ai-card-top {
+.ai-rec-card-top {
     flex: 1;
     min-width: 0;
 }
 
-.ai-card-row {
+.ai-rec-card-row {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
 }
 
-.ai-card-name {
+.ai-rec-card-name {
     font-size: 13px;
     font-weight: 600;
     color: var(--tp, #0F172A);
 }
 
-.ai-card-number {
+.ai-rec-card-number {
     font-size: 10px;
     color: var(--tt, #6B7280);
 }
 
-.ai-card-role {
+.ai-rec-card-role {
     font-size: 10px;
     padding: 1px 8px;
     border-radius: 4px;
@@ -206,32 +206,32 @@
     font-weight: 500;
 }
 
-.ai-card-score {
+.ai-rec-card-score {
     text-align: right;
     flex-shrink: 0;
 }
 
-.ai-score-value {
+.ai-rec-score-value {
     font-size: 15px;
     font-weight: 700;
     color: var(--teal-dark, #007A72);
 }
 
-.ai-score-label {
+.ai-rec-score-label {
     font-size: 9px;
     color: var(--tt, #6B7280);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
 
-.ai-card-meta {
+.ai-rec-card-meta {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-top: 4px;
 }
 
-.ai-meta-item {
+.ai-rec-meta-item {
     font-size: 10px;
     color: var(--tt, #6B7280);
     display: flex;
