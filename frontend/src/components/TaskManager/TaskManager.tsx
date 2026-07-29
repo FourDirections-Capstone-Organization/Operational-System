@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock, Eye, Pencil } from 'lucide-react';
+import { Plus, Package, ClipboardList, Loader2, CheckCircle2, AlertCircle, Archive, Trash2, BarChart3, Lock, Eye, Pencil, Brain } from 'lucide-react';
 import DataTable, { ActionsDropdown } from '../ui/DataTable';
 import StatusBadge from '../ui/StatusBadge';
 import StatusCard from '../StatusCard/StatusCard';
@@ -232,6 +232,11 @@ export default function TaskManager({
                             <td style={{ fontWeight: 600, color: tab === 'bin' ? '#94a3b8' : '#0f172a', textDecoration: tab === 'bin' ? 'line-through' : 'none' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                     <span>{t.name}</span>
+                                    {tab !== 'bin' && (
+                                        <span title="AI Insights available — click to view" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--teal, #00A99D)', cursor: 'help' }}>
+                                            <Brain size={13} />
+                                        </span>
+                                    )}
                                     {t.classification && tab !== 'bin' && (
                                         <span
                                             style={{
