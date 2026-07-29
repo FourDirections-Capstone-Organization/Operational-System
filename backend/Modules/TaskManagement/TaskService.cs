@@ -428,10 +428,9 @@ public class TaskService : ITaskService
             .ToListAsync();
 
         var taskIdsPerUser = await _db.TaskAssignments
-            .Include(a => a.Task)
-            .Where(a => a.Task != null &&
-                a.Task.Status != Backend.Models.Enums.TaskStatus.Completed &&
-                a.Task.Status != Backend.Models.Enums.TaskStatus.Cancelled)
+            .Where(a => _db.Tasks.Any(t => t.Id == a.TaskId &&
+                t.Status != Backend.Models.Enums.TaskStatus.Completed &&
+                t.Status != Backend.Models.Enums.TaskStatus.Cancelled))
             .GroupBy(a => a.AssignedUserId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
