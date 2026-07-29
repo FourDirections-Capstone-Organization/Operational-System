@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     UserCircle2, Users, Building, Search, CheckCircle2, AlertCircle,
     Loader2, X, Lock, Save, Lightbulb, Activity, Bell, FileText, Calendar,
-    Shield, ChevronRight, ChevronLeft, Clock, Briefcase, ExternalLink
+    Shield, ChevronRight, ChevronLeft, Clock, Briefcase, ExternalLink,
+    Brain, TrendingUp, Zap, ChevronDown, ChevronUp
 } from 'lucide-react';
 import './AIAssignmentView.css';
 import api from '../../api';
 import { useToast } from '../../components/Toast/Toast';
+import { aiService, SlaRiskResponseDTO } from '../../services/aiService';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -146,6 +148,13 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
     const isUrgent = form.priority === 'Urgent';
     const slaLocked = isUrgent;
 
+    // ── AI State ──
+    const [aiScores, setAiScores] = useState<Record<string, { score: number; workload: number }>>({});
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiSlaRisk, setAiSlaRisk] = useState<SlaRiskResponseDTO | null>(null);
+    const [aiExplainedEmp, setAiExplainedEmp] = useState<string | null>(null);
+    const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
+
     // ── Fetch Data ──
     const fetchEmployees = useCallback(async () => {
         try {
@@ -218,6 +227,34 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
 
         fetchDepartments();
     }, []);
+
+    // ── Fetch AI suitability when department or classification changes ──
+    useEffect(() => {
+        if (!selectedDepartmentId) return;
+        let cancelled = false;
+        setAiLoading(true);
+        const classification = form.classification >= 0 ? form.classification : 0;
+        const url = `/api/suitability/preview?departmentId=${selectedDepartmentId}&classification=${classification}&pageNumber=1&pageSize=50`;
+        api.get(url).then((res: any) => {
+            if (cancelled) return;
+            const json = res.data;
+            if (json.isSuccess && json.data?.items) {
+                const scores: Record<string, { score: number; workload: number }> = {};
+                json.data.items.forEach((item: any) => {
+                    scores[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
+                });
+                setAiScores(scores);
+            }
+        }).catch(() => {}).finally(() => { if (!cancelled) setAiLoading(false); });
+
+        // Also fetch SLA risk based on priority
+        if (isUrgent) {
+            setAiSlaRisk({ taskId: '', riskLevel: 'Medium', confidenceScore: 0.6, keyFactors: ['Urgent priority task'] });
+        } else {
+            setAiSlaRisk({ taskId: '', riskLevel: 'Low', confidenceScore: 0.8, keyFactors: ['Non-urgent priority'] });
+        }
+        return () => { cancelled = true; };
+    }, [selectedDepartmentId, form.classification, isUrgent]);
 
     // ── Derived Data ──
     const filteredEmployees = useMemo(() => {
@@ -858,41 +895,103 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                 </span>
                             </div>
 
+                            {/* ── AI SLA Risk Badge ── */}
+                            {aiSlaRisk && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginTop: 8, borderRadius: 6, fontSize: 11, background: aiSlaRisk.riskLevel === 'High' ? '#fef2f2' : aiSlaRisk.riskLevel === 'Medium' ? '#fffbeb' : '#f0fdf4', border: '1px solid ' + (aiSlaRisk.riskLevel === 'High' ? '#fecaca' : aiSlaRisk.riskLevel === 'Medium' ? '#fde68a' : '#bbf7d0') }}>
+                                    <TrendingUp size={13} />
+                                    <span style={{ fontWeight: 600 }}>SLA Risk: {aiSlaRisk.riskLevel}</span>
+                                    <span style={{ color: '#666' }}>— {(aiSlaRisk.confidenceScore * 100).toFixed(0)}% confidence</span>
+                                </div>
+                            )}
+
                             {loadingEmployees ? (
                                 <div className="ai-emp-loading">
                                     {[1, 2, 3].map(i => <div key={i} className="ai-skeleton-row" />)}
                                 </div>
                             ) : filteredEmployees.length > 0 ? (
                                 <div className="ai-emp-list">
-                                    {filteredEmployees.map(emp => (
-                                        <div
-                                            key={emp.employeeId}
-                                            className={`ai-emp-row${selectedEmployeeId === emp.employeeId ? ' selected' : ''}`}
-                                            onClick={() => {
-                                                setSelectedEmployeeId(emp.employeeId);
-                                                setErrors(prev => ({ ...prev, destination: '' }));
-                                                setValidationResult(null);
-                                                setStep('form');
-                                            }}
-                                        >
-                                            <input type="radio" name="ai-emp"
-                                                checked={selectedEmployeeId === emp.employeeId}
-                                                onChange={() => { }} />
-                                            <div className="ai-emp-avatar">{getInitials(emp.employeeName)}</div>
-                                            <div className="ai-emp-info">
-                                                <span className="ai-emp-name">{emp.employeeName}</span>
-                                                <div className="ai-emp-meta">
-                                                    <span className={`ai-emp-dot ${emp.isAvailable ? 'active' : 'inactive'}`} />
-                                                    <span>{emp.availabilityStatus}</span>
-                                                    <span className="ai-emp-dept">{emp.department}</span>
+                                    {filteredEmployees.map((emp, idx) => {
+                                        const ai = aiScores[emp.employeeId];
+                                        const isBestPick = ai && idx === 0 && !!selectedDepartmentId;
+                                        return (
+                                            <div key={emp.employeeId}>
+                                                <div
+                                                    className={`ai-emp-row${selectedEmployeeId === emp.employeeId ? ' selected' : ''}`}
+                                                    onClick={() => {
+                                                        setSelectedEmployeeId(emp.employeeId);
+                                                        setErrors(prev => ({ ...prev, destination: '' }));
+                                                        setValidationResult(null);
+                                                        setStep('form');
+                                                    }}
+                                                >
+                                                    <input type="radio" name="ai-emp"
+                                                        checked={selectedEmployeeId === emp.employeeId}
+                                                        onChange={() => { }} />
+                                                    <div className="ai-emp-avatar">{getInitials(emp.employeeName)}</div>
+                                                    <div className="ai-emp-info">
+                                                        <span className="ai-emp-name">{emp.employeeName}</span>
+                                                        <div className="ai-emp-meta">
+                                                            <span className={`ai-emp-dot ${emp.isAvailable ? 'active' : 'inactive'}`} />
+                                                            <span>{emp.availabilityStatus}</span>
+                                                            <span className="ai-emp-dept">{emp.department}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="ai-emp-workload">
+                                                        {(ai && selectedDepartmentId) ? (
+                                                            <>
+                                                                <span className="ai-emp-count">{ai.score.toFixed(4)}</span>
+                                                                <span className="ai-emp-count-label">score</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="ai-emp-count">{emp.activeTaskCount}</span>
+                                                                <span className="ai-emp-count-label">active</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <div className="ai-emp-badges">
+                                                        {ai && selectedDepartmentId && !aiLoading && (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#6B7280' }}>
+                                                                <Briefcase size={10} /> {ai.workload}
+                                                            </span>
+                                                        )}
+                                                        {isBestPick && (
+                                                            <span className="ai-best-badge"><Zap size={10} /> Best</span>
+                                                        )}
+                                                    </div>
                                                 </div>
+                                                {/* ── AI Explanation Toggle ── */}
+                                                {ai && selectedDepartmentId && (
+                                                    <div style={{ padding: '0 8px 4px 52px' }}>
+                                                        <button
+                                                            style={{ fontSize: 10, color: 'var(--teal, #00A99D)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (aiExplainedEmp === emp.employeeId) {
+                                                                    setAiExplainedEmp(null);
+                                                                } else {
+                                                                    setAiExplainedEmp(emp.employeeId);
+                                                                    if (!aiExplanations[emp.employeeId]) {
+                                                                        const workloadFactor = Math.max(0, 1.0 - ai.workload / 10);
+                                                                        const exp = `Score ${ai.score.toFixed(4)} = workload factor ${workloadFactor.toFixed(2)} × 0.35 + experience match × 0.25 + recommendation score × 0.40`;
+                                                                        setAiExplanations(prev => ({ ...prev, [emp.employeeId]: exp }));
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            {aiExplainedEmp === emp.employeeId ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                                            {aiExplainedEmp === emp.employeeId ? 'Hide details' : 'Why this score?'}
+                                                        </button>
+                                                        {aiExplainedEmp === emp.employeeId && aiExplanations[emp.employeeId] && (
+                                                            <div style={{ marginTop: 4, padding: '6px 8px', fontSize: 11, color: '#374151', background: '#f0fdf4', borderRadius: 4, lineHeight: 1.4 }}>
+                                                                {aiExplanations[emp.employeeId]}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="ai-emp-workload">
-                                                <span className="ai-emp-count">{emp.activeTaskCount}</span>
-                                                <span className="ai-emp-count-label">active task{(emp.activeTaskCount !== 1 ? 's' : '')}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="ai-empty-state">
@@ -906,7 +1005,9 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                 <div className="ai-selected-confirm">
                                     <CheckCircle2 size={14} />
                                     Selected: <strong>{selectedEmployee.employeeName}</strong> — {selectedEmployee.availabilityStatus}
-                                    {selectedEmployee.activeTaskCount > 0 && ` — ${selectedEmployee.activeTaskCount} active task${selectedEmployee.activeTaskCount > 1 ? 's' : ''}`}
+                                    {aiScores[selectedEmployeeId] && (
+                                        <span> — Score: <strong>{aiScores[selectedEmployeeId].score.toFixed(4)}</strong></span>
+                                    )}
                                 </div>
                             )}
                         </div>

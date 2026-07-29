@@ -2,11 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
     XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
-    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2, AlertCircle, Brain,
+    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2, AlertCircle,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
-import AiRecommendationPanel from '../AiRecommendationPanel/AiRecommendationPanel';
 import StatusBadge from '../ui/StatusBadge';
 import ConfirmationModal from '../ConfirmationModal/ConfirmationModal';
 import { useToast } from '../Toast/Toast';
@@ -246,7 +245,7 @@ const TaskView: React.FC<TaskViewProps> = ({
     // Controls: mobile full-screen tab (details | comments | recommendations)
     // AND (on desktop) which panel shows on the right — 'details' has no
     // meaning on the right panel, so it falls back to 'comments' there.
-    const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'recommendations' | 'ai'>('details');
+    const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'recommendations'>('details');
 
     const currentUser = localStorage.getItem('employeeName') ?? 'Admin';
     const userRole = localStorage.getItem('userRole') ?? '';
@@ -259,8 +258,8 @@ const TaskView: React.FC<TaskViewProps> = ({
     const effectiveStatus = od ? 'Overdue' : localStatus;
 
     // What the right-hand panel should render on desktop.
-    const rightPanelTab: 'comments' | 'recommendations' | 'ai' =
-        activeTab === 'recommendations' ? 'recommendations' : activeTab === 'ai' ? 'ai' : 'comments';
+    const rightPanelTab: 'comments' | 'recommendations' =
+        activeTab === 'recommendations' ? 'recommendations' : 'comments';
 
     useEffect(() => {
         const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -478,10 +477,6 @@ const TaskView: React.FC<TaskViewProps> = ({
                     <button className={`tv-tab${activeTab === 'recommendations' ? ' active' : ''}`}
                         onClick={() => setActiveTab('recommendations')}>
                         Recommendations
-                    </button>
-                    <button className={`tv-tab${activeTab === 'ai' ? ' active' : ''}`}
-                        onClick={() => setActiveTab('ai')}>
-                        <Brain size={13} /> AI
                     </button>
                 </div>
 
@@ -713,21 +708,10 @@ const TaskView: React.FC<TaskViewProps> = ({
                             >
                                 <Lightbulb size={13} /> Recommendations
                             </button>
-                            <button
-                                type="button"
-                                className={rightPanelTab === 'ai' ? 'active' : ''}
-                                onClick={() => setActiveTab('ai')}
-                            >
-                                <Brain size={13} /> AI
-                            </button>
                         </div>
-                        <div className="tv-comments-panel">
-                            {rightPanelTab === 'ai'
-                                ? <AiRecommendationPanel taskId={task.taskId} />
-                                : rightPanelTab === 'recommendations'
-                                    ? <TaskRecommendations taskId={task.taskId} />
-                                    : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} taskReferenceNumber={task.taskId} />}
-                        </div>
+                        {rightPanelTab === 'recommendations'
+                            ? <TaskRecommendations taskId={task.taskId} />
+                            : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} taskReferenceNumber={task.taskId} />}
                     </div>
                 </div>
             </div>
