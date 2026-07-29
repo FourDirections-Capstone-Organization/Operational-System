@@ -152,6 +152,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
     // ── AI State ──
     const [aiScores, setAiScores] = useState<Record<string, { score: number; workload: number }>>({});
     const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState('');
     const [aiSlaRisk, setAiSlaRisk] = useState<SlaRiskResponseDTO | null>(null);
     const [aiExplainedEmp, setAiExplainedEmp] = useState<string | null>(null);
     const [aiExplanations, setAiExplanations] = useState<Record<string, string>>({});
@@ -231,9 +232,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
 
     // ── Fetch AI suitability when enabled ──
     useEffect(() => {
-        if (!aiEnabled) { setAiScores({}); setAiSlaRisk(null); return; }
+        if (!aiEnabled) { setAiScores({}); setAiSlaRisk(null); setAiError(''); return; }
         let cancelled = false;
         setAiLoading(true);
+        setAiError('');
 
         const classification = form.classification >= 0 ? form.classification : 0;
 
@@ -249,8 +251,12 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                         scores[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
                     });
                     setAiScores(scores);
+                    setAiError('');
+                } else {
+                    setAiError('AI recommendation temporarily unavailable.');
                 }
-            }).catch(() => {}).finally(() => { if (!cancelled) setAiLoading(false); });
+            }).catch(() => { if (!cancelled) setAiError('AI recommendation temporarily unavailable.'); })
+              .finally(() => { if (!cancelled) setAiLoading(false); });
         } else {
             // No department selected — fetch for ALL departments and merge
             const deptIds = [...new Set(employees.filter(e => e.isAvailable).map(e => e.departmentId).filter(Boolean))];
@@ -258,6 +264,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
 
             const results: Record<string, { score: number; workload: number }> = {};
             let completed = 0;
+            let anyFailed = false;
 
             deptIds.forEach((deptId: string) => {
                 const url = `/api/suitability/preview?departmentId=${deptId}&classification=${classification}&pageNumber=1&pageSize=50`;
@@ -268,11 +275,14 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                         json.data.items.forEach((item: any) => {
                             results[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
                         });
+                    } else {
+                        anyFailed = true;
                     }
-                }).catch(() => {}).finally(() => {
+                }).catch(() => { anyFailed = true; }).finally(() => {
                     completed++;
                     if (!cancelled && completed >= deptIds.length) {
-                        setAiScores({ ...results });
+                        setAiScores(results);
+                        setAiError(anyFailed ? 'Some AI recommendations unavailable. Results may be incomplete.' : '');
                         setAiLoading(false);
                     }
                 });
@@ -948,7 +958,13 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                             </div>
 
                             {/* ── AI SLA Risk Badge ── */}
-                            {aiEnabled && aiSlaRisk && (
+                            {aiEnabled && aiError && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', marginTop: 8, borderRadius: 6, fontSize: 11, background: '#fef2f2', border: '1px solid #fecaca', color: '#DC2626' }}>
+                                    <AlertCircle size={12} />
+                                    {aiError}
+                                </div>
+                            )}
+                            {aiEnabled && !aiError && aiSlaRisk && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginTop: 8, borderRadius: 6, fontSize: 11, background: aiSlaRisk.riskLevel === 'High' ? '#fef2f2' : aiSlaRisk.riskLevel === 'Medium' ? '#fffbeb' : '#f0fdf4', border: '1px solid ' + (aiSlaRisk.riskLevel === 'High' ? '#fecaca' : aiSlaRisk.riskLevel === 'Medium' ? '#fde68a' : '#bbf7d0') }}>
                                     <TrendingUp size={13} />
                                     <span style={{ fontWeight: 600 }}>SLA Risk: {aiSlaRisk.riskLevel}</span>
