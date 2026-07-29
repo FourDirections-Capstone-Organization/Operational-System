@@ -427,15 +427,18 @@ public class TaskService : ITaskService
             .Take(pageSize)
             .ToListAsync();
 
-        var taskIdsPerUser = await _db.TaskAssignments
-            .Where(a => _db.Tasks.Any(t => t.Id == a.TaskId &&
-                t.Status != Backend.Models.Enums.TaskStatus.Completed &&
-                t.Status != Backend.Models.Enums.TaskStatus.Cancelled))
-            .GroupBy(a => a.AssignedUserId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
+        // Compute workload: count active (non-completed, non-cancelled) task assignments per user
+        var activeTaskIds = await _db.Tasks
+            .Where(t => t.Status != Backend.Models.Enums.TaskStatus.Completed &&
+                        t.Status != Backend.Models.Enums.TaskStatus.Cancelled)
+            .Select(t => t.Id)
             .ToListAsync();
 
-        var workloadMap = taskIdsPerUser.ToDictionary(x => x.UserId, x => x.Count);
+        var allAssignments = await _db.TaskAssignments.ToListAsync();
+        var workloadMap = allAssignments
+            .Where(a => activeTaskIds.Contains(a.TaskId))
+            .GroupBy(a => a.AssignedUserId)
+            .ToDictionary(g => g.Key, g => g.Count());
 
         var result = users.Select(u => new TaskAssigneeDTO
         {
