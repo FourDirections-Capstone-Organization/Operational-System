@@ -228,33 +228,64 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
         fetchDepartments();
     }, []);
 
-    // ── Fetch AI suitability when department or classification changes ──
+    // ── Fetch AI suitability when scope or classification changes ──
     useEffect(() => {
-        if (!selectedDepartmentId) return;
         let cancelled = false;
         setAiLoading(true);
-        const classification = form.classification >= 0 ? form.classification : 0;
-        const url = `/api/suitability/preview?departmentId=${selectedDepartmentId}&classification=${classification}&pageNumber=1&pageSize=50`;
-        api.get(url).then((res: any) => {
-            if (cancelled) return;
-            const json = res.data;
-            if (json.isSuccess && json.data?.items) {
-                const scores: Record<string, { score: number; workload: number }> = {};
-                json.data.items.forEach((item: any) => {
-                    scores[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
-                });
-                setAiScores(scores);
-            }
-        }).catch(() => {}).finally(() => { if (!cancelled) setAiLoading(false); });
 
-        // Also fetch SLA risk based on priority
+        const classification = form.classification >= 0 ? form.classification : 0;
+
+        if (selectedDepartmentId) {
+            // Fetch for selected department
+            const url = `/api/suitability/preview?departmentId=${selectedDepartmentId}&classification=${classification}&pageNumber=1&pageSize=50`;
+            api.get(url).then((res: any) => {
+                if (cancelled) return;
+                const json = res.data;
+                if (json.isSuccess && json.data?.items) {
+                    const scores: Record<string, { score: number; workload: number }> = {};
+                    json.data.items.forEach((item: any) => {
+                        scores[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
+                    });
+                    setAiScores(scores);
+                }
+            }).catch(() => {}).finally(() => { if (!cancelled) setAiLoading(false); });
+        } else {
+            // No department selected — fetch for ALL departments and merge
+            const deptIds = [...new Set(employees.filter(e => e.isAvailable).map(e => e.departmentId).filter(Boolean))];
+            if (deptIds.length === 0) { setAiLoading(false); return; }
+
+            const results: Record<string, { score: number; workload: number }> = {};
+            let completed = 0;
+
+            deptIds.forEach((deptId: string) => {
+                const url = `/api/suitability/preview?departmentId=${deptId}&classification=${classification}&pageNumber=1&pageSize=50`;
+                api.get(url).then((res: any) => {
+                    if (cancelled) return;
+                    const json = res.data;
+                    if (json.isSuccess && json.data?.items) {
+                        json.data.items.forEach((item: any) => {
+                            results[item.employeeId] = { score: item.suitabilityScore, workload: item.workload };
+                        });
+                    }
+                }).catch(() => {}).finally(() => {
+                    completed++;
+                    if (!cancelled && completed >= deptIds.length) {
+                        setAiScores({ ...results });
+                        setAiLoading(false);
+                    }
+                });
+            });
+        }
+
+        // SLA risk based on priority
         if (isUrgent) {
             setAiSlaRisk({ taskId: '', riskLevel: 'Medium', confidenceScore: 0.6, keyFactors: ['Urgent priority task'] });
         } else {
             setAiSlaRisk({ taskId: '', riskLevel: 'Low', confidenceScore: 0.8, keyFactors: ['Non-urgent priority'] });
         }
+
         return () => { cancelled = true; };
-    }, [selectedDepartmentId, form.classification, isUrgent]);
+    }, [selectedDepartmentId, form.classification, isUrgent, employees]);
 
     // ── Derived Data ──
     const filteredEmployees = useMemo(() => {
@@ -912,7 +943,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                 <div className="ai-emp-list">
                                     {filteredEmployees.map((emp, idx) => {
                                         const ai = aiScores[emp.employeeId];
-                                        const isBestPick = ai && idx === 0 && !!selectedDepartmentId;
+                                        const isBestPick = ai && idx === 0 && !employeeSearch;
                                         return (
                                             <div key={emp.employeeId}>
                                                 <div
@@ -937,7 +968,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                         </div>
                                                     </div>
                                                     <div className="ai-emp-workload">
-                                                        {(ai && selectedDepartmentId) ? (
+                                                        {ai ? (
                                                             <>
                                                                 <span className="ai-emp-count">{ai.score.toFixed(4)}</span>
                                                                 <span className="ai-emp-count-label">score</span>
@@ -950,7 +981,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                         )}
                                                     </div>
                                                     <div className="ai-emp-badges">
-                                                        {ai && selectedDepartmentId && !aiLoading && (
+                                                        {ai && !aiLoading && (
                                                             <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#6B7280' }}>
                                                                 <Briefcase size={10} /> {ai.workload}
                                                             </span>
@@ -961,7 +992,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                     </div>
                                                 </div>
                                                 {/* ── AI Explanation Toggle ── */}
-                                                {ai && selectedDepartmentId && (
+                                                {ai && (
                                                     <div style={{ padding: '0 8px 4px 52px' }}>
                                                         <button
                                                             style={{ fontSize: 10, color: 'var(--teal, #00A99D)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
