@@ -22,7 +22,10 @@ public class SuitabilityController : ControllerBase
 
     [HttpGet("tasks/{taskId:guid}/suitability")]
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
-    public async Task<IActionResult> GetSuitableEmployees(Guid taskId)
+    public async Task<IActionResult> GetSuitableEmployees(
+        Guid taskId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 5)
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         var roleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -37,7 +40,8 @@ public class SuitabilityController : ControllerBase
         var departmentId = !string.IsNullOrEmpty(departmentClaim) && Guid.TryParse(departmentClaim, out var deptId)
             ? deptId : Guid.Empty;
 
-        var result = await _suitabilityService.GetSuitableEmployeesAsync(taskId, role, departmentId);
+        var result = await _suitabilityService.GetSuitableEmployeesPagedAsync(
+            taskId, role, departmentId, pageNumber, pageSize);
         if (!result.IsSuccess)
             return BadRequest(result);
 

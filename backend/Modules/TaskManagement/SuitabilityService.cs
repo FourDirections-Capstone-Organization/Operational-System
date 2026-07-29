@@ -122,6 +122,135 @@ public class SuitabilityService : ISuitabilityService
         }
     }
 
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>> GetSuitableEmployeesPagedAsync(
+        Guid taskId, UserRole callerRole, Guid callerDepartmentId,
+        int pageNumber = 1, int pageSize = 5)
+    {
+        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var task = await _db.Tasks
+            .Include(t => t.AssignedDepartment)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+
+        if (task == null)
+            return ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>.Failure("Task not found");
+
+        var departmentId = task.AssignedDepartmentId?.ToString();
+        if (string.IsNullOrEmpty(departmentId))
+            return ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>.Failure("Task has no assigned department");
+
+        var classification = task.Classification.ToString();
+
+        var eligibleRoleIds = callerRole switch
+        {
+            UserRole.Manager => new[] { "2", "3", "4" },
+            UserRole.Coordinator => new[] { "2", "3", "4" },
+            _ => Array.Empty<string>()
+        };
+
+        if (eligibleRoleIds.Length == 0)
+            return ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>.Failure("Not authorized to view suitability");
+
+        try
+        {
+            var session = _neo4j.AsyncSession();
+            try
+            {
+                var result = await session.ExecuteReadAsync(async tx =>
+                {
+                    var cfg = _configStore.GetConfig();
+                    var skip = (pageNumber - 1) * pageSize;
+                    var limit = pageSize;
+
+                    var countCursor = await tx.RunAsync(@"
+                        MATCH (d:Department {id: $departmentId})
+                        MATCH (e:Employee)-[:BELONGS_TO]->(d)
+                        WHERE e.availabilityStatus = '0'
+                          AND e.role IN $eligibleRoleIds
+                        RETURN count(e) AS totalCount
+                    ", new { departmentId, eligibleRoleIds });
+
+                    var totalCount = 0;
+                    await foreach (var record in countCursor)
+                    {
+                        totalCount = record["totalCount"].As<int>();
+                    }
+
+                    var cursor = await tx.RunAsync(@"
+                        MATCH (d:Department {id: $departmentId})
+                        MATCH (e:Employee)-[:BELONGS_TO]->(d)
+                        WHERE e.availabilityStatus = '0'
+                          AND e.role IN $eligibleRoleIds
+                        WITH e,
+                             1.0 - (e.workload * 1.0 / $maxWorkload) AS workloadFactor,
+                             CASE WHEN $classification = 'RoutineDailyTask'
+                                  THEN e.completedRoutineTasks * 1.0 / $maxXP
+                                  ELSE e.completedSpecialTasks * 1.0 / $maxXP
+                             END AS experienceFactor,
+                             (e.avgTimelinessScore + e.avgWorkQualityScore + e.avgCommunicationScore) / 3.0
+                             AS recScore
+                        RETURN e.id AS employeeId,
+                               e.employeeNumber AS employeeNumber,
+                               e.firstName + ' ' + e.lastName AS fullName,
+                               e.role AS role,
+                               e.workload AS workload,
+                               ($workloadWeight * workloadFactor + $experienceWeight * experienceFactor + $recScoreWeight * recScore)
+                               AS suitabilityScore
+                        ORDER BY suitabilityScore DESC
+                        SKIP $skip
+                        LIMIT $limit
+                    ", new
+                    {
+                        departmentId,
+                        eligibleRoleIds,
+                        classification,
+                        maxWorkload = cfg.MaxWorkload,
+                        maxXP = cfg.MaxXP,
+                        workloadWeight = cfg.WorkloadWeight,
+                        experienceWeight = cfg.ExperienceWeight,
+                        recScoreWeight = cfg.RecScoreWeight,
+                        skip,
+                        limit
+                    });
+
+                    var employees = new List<SuitabilityResponseDTO>();
+                    await foreach (var record in cursor)
+                    {
+                        employees.Add(new SuitabilityResponseDTO
+                        {
+                            EmployeeId = Guid.Parse(record["employeeId"].As<string>()),
+                            EmployeeNumber = record["employeeNumber"].As<string>(),
+                            FullName = record["fullName"].As<string>(),
+                            Role = record["role"].As<string>(),
+                            Workload = record["workload"].As<int>(),
+                            SuitabilityScore = Math.Round(record["suitabilityScore"].As<double>(), 4)
+                        });
+                    }
+
+                    return new PaginatedResponseDTO<SuitabilityResponseDTO>
+                    {
+                        Items = employees,
+                        TotalCount = totalCount,
+                        PageNumber = pageNumber,
+                        PageSize = pageSize
+                    };
+                });
+
+                return ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>.Success(result);
+            }
+            finally
+            {
+                await session.CloseAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Neo4j suitability query failed for task {TaskId}", taskId);
+            return ApiResponseDTO<PaginatedResponseDTO<SuitabilityResponseDTO>>.Failure("Suitability engine unavailable");
+        }
+    }
+
     public async Task<ApiResponseDTO<List<SuitabilityExplanationDTO>>> GetSuitabilityExplanationAsync(
         Guid taskId, Guid employeeId, UserRole callerRole, Guid callerDepartmentId)
     {
