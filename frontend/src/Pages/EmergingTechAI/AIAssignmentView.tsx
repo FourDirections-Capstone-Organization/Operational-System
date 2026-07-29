@@ -135,6 +135,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
     const [loadingDepartments, setLoadingDepartments] = useState(false);
     const [employeeSearch, setEmployeeSearch] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [aiEnabled, setAiEnabled] = useState(false);
 
     // ── Validation & Summary State ──
     const [validationResult, setValidationResult] = useState<{
@@ -228,8 +229,9 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
         fetchDepartments();
     }, []);
 
-    // ── Fetch AI suitability when scope or classification changes ──
+    // ── Fetch AI suitability when enabled ──
     useEffect(() => {
+        if (!aiEnabled) { setAiScores({}); setAiSlaRisk(null); return; }
         let cancelled = false;
         setAiLoading(true);
 
@@ -285,7 +287,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
         }
 
         return () => { cancelled = true; };
-    }, [selectedDepartmentId, form.classification, isUrgent, employees]);
+    }, [selectedDepartmentId, form.classification, isUrgent, employees, aiEnabled]);
 
     // ── Derived Data ──
     const filteredEmployees = useMemo(() => {
@@ -885,7 +887,24 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                 {scope && (
                     <div className="ai-neo4j-badge">
                         <Activity size={12} />
-                        Retrieving employee-task relationships from Neo4j graph database...
+                        {aiEnabled ? 'AI recommendations active. Scores from Neo4j graph + ML.' : 'Standard assignment — no AI recommendations.'}
+                        <button
+                            type="button"
+                            onClick={() => setAiEnabled(!aiEnabled)}
+                            style={{
+                                marginLeft: 'auto',
+                                padding: '2px 10px',
+                                borderRadius: 12,
+                                border: '1px solid var(--teal, #00A99D)',
+                                background: aiEnabled ? 'var(--teal, #00A99D)' : 'transparent',
+                                color: aiEnabled ? '#fff' : 'var(--teal, #00A99D)',
+                                fontSize: 10,
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {aiEnabled ? 'AI On' : 'AI Off'}
+                        </button>
                     </div>
                 )}
             </div>
@@ -900,7 +919,9 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                     </div>
                     <p className="ai-card-desc">
                         {scope === 'SingleEmployee'
-                            ? 'Employees ranked by AI suitability score. Higher scores (less negative) indicate better fit. Scores can be negative if employee workload exceeds the configured maximum — an admin can tune MaxWorkload in Expert System Config.'
+                            ? (aiEnabled
+                                ? 'Employees ranked by AI suitability score. Toggle AI Off to see basic active task counts instead.'
+                                : 'Select an employee to assign. Toggle AI On for AI-powered suitability recommendations.')
                             : scope === 'Team'
                                 ? 'Select from active teams available for assignment.'
                                 : 'Select from the defined departments.'}
@@ -927,7 +948,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                             </div>
 
                             {/* ── AI SLA Risk Badge ── */}
-                            {aiSlaRisk && (
+                            {aiEnabled && aiSlaRisk && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginTop: 8, borderRadius: 6, fontSize: 11, background: aiSlaRisk.riskLevel === 'High' ? '#fef2f2' : aiSlaRisk.riskLevel === 'Medium' ? '#fffbeb' : '#f0fdf4', border: '1px solid ' + (aiSlaRisk.riskLevel === 'High' ? '#fecaca' : aiSlaRisk.riskLevel === 'Medium' ? '#fde68a' : '#bbf7d0') }}>
                                     <TrendingUp size={13} />
                                     <span style={{ fontWeight: 600 }}>SLA Risk: {aiSlaRisk.riskLevel}</span>
@@ -936,7 +957,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                             )}
 
                             {/* ── AI Score Legend ── */}
-                            {aiSlaRisk && (
+                            {aiEnabled && aiSlaRisk && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', marginTop: 6, fontSize: 10, color: '#6B7280', background: '#F9FAFB', borderRadius: 6, border: '1px solid #E5E7EB', flexWrap: 'wrap' }}>
                                     <span style={{ fontWeight: 600 }}>Score Guide:</span>
                                     <span style={{ color: '#059669' }}>● ≥ 0.5 Excellent</span>
@@ -980,7 +1001,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                         </div>
                                                     </div>
                                                     <div className="ai-emp-workload">
-                                                        {ai ? (
+                                                        {ai && aiEnabled ? (
                                                             <>
                                                                 <span className="ai-emp-count" style={{
                                                                     color: ai.score >= 0.5 ? '#059669' : ai.score >= 0 ? '#0284C7' : ai.score >= -1 ? '#D97706' : '#DC2626'
@@ -997,18 +1018,18 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                         )}
                                                     </div>
                                                     <div className="ai-emp-badges">
-                                                        {ai && !aiLoading && (
+                                                        {ai && aiEnabled && !aiLoading && (
                                                             <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#6B7280' }}>
                                                                 <Briefcase size={10} /> {ai.workload}
                                                             </span>
                                                         )}
-                                                        {isBestPick && (
+                                                        {aiEnabled && isBestPick && (
                                                             <span className="ai-best-badge"><Zap size={10} /> Best</span>
                                                         )}
                                                     </div>
                                                 </div>
                                                 {/* ── AI Explanation Toggle ── */}
-                                                {ai && (
+                                                {ai && aiEnabled && (
                                                     <div style={{ padding: '0 8px 4px 52px' }}>
                                                         <button
                                                             style={{ fontSize: 10, color: 'var(--teal, #00A99D)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
@@ -1054,8 +1075,11 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                 <div className="ai-selected-confirm">
                                     <CheckCircle2 size={14} />
                                     Selected: <strong>{selectedEmployee.employeeName}</strong> — {selectedEmployee.availabilityStatus}
-                                    {aiScores[selectedEmployeeId] && (
+                                    {aiEnabled && aiScores[selectedEmployeeId] && (
                                         <span> — Score: <strong>{aiScores[selectedEmployeeId].score.toFixed(4)}</strong></span>
+                                    )}
+                                    {!aiEnabled && selectedEmployee.activeTaskCount > 0 && (
+                                        <span> — {selectedEmployee.activeTaskCount} active task{(selectedEmployee.activeTaskCount > 1 ? 's' : '')}</span>
                                     )}
                                 </div>
                             )}
