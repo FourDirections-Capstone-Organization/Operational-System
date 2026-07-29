@@ -10,7 +10,7 @@ CREATE OR REPLACE STREAM task_events (
     op VARCHAR,
     before STRUCT<Id VARCHAR, Title VARCHAR, Status INT, PriorityLevel INT, Classification INT, Deadline VARCHAR, AssignedDepartmentId VARCHAR, CreatedAt VARCHAR, UpdatedAt VARCHAR, RevisedDeadline VARCHAR>,
     after STRUCT<Id VARCHAR, Title VARCHAR, Status INT, PriorityLevel INT, Classification INT, Deadline VARCHAR, AssignedDepartmentId VARCHAR, CreatedAt VARCHAR, UpdatedAt VARCHAR, RevisedDeadline VARCHAR>,
-    source STRUCT<table VARCHAR, db VARCHAR>
+    source STRUCT<`table` VARCHAR, `db` VARCHAR>
 ) WITH (
     KAFKA_TOPIC='stars.public.Tasks',
     VALUE_FORMAT='JSON'
@@ -36,9 +36,9 @@ CREATE OR REPLACE STREAM task_status_changes AS
 CREATE OR REPLACE TABLE dept_completion_rate AS
     SELECT
         department_id,
-        COUNT(*) FILTER (WHERE new_status = 3) AS completed_count,
+        COUNT(CASE WHEN new_status = 3 THEN 1 END) AS completed_count,
         COUNT(*) AS total_count,
-        (COUNT(*) FILTER (WHERE new_status = 3) * 100.0 / COUNT(*)) AS completion_rate
+        (COUNT(CASE WHEN new_status = 3 THEN 1 END) * 100.0 / COUNT(*)) AS completion_rate
     FROM task_status_changes
     WINDOW TUMBLING (SIZE 1 HOUR)
     GROUP BY department_id;
@@ -50,8 +50,8 @@ CREATE OR REPLACE TABLE dept_overdue_alerts AS
         COUNT(*) AS overdue_count,
         COLLECT_LIST(title) AS task_titles
     FROM task_status_changes
-    WHERE new_status NOT IN (3, 4)  -- not Completed, not Cancelled
     WINDOW TUMBLING (SIZE 15 MINUTES)
+    WHERE new_status NOT IN (3, 4)  -- not Completed, not Cancelled
     GROUP BY department_id;
 
 -- Stream: raw CDC events from Debezium (Users table)
