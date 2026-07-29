@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Brain, Loader2, AlertCircle, TrendingUp, User, Briefcase, Clock, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Brain, Loader2, AlertCircle, TrendingUp, Briefcase, ChevronDown, ChevronUp, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 import { aiService, SuitabilityResponseDTO, SuitabilityExplanationDTO, SlaRiskResponseDTO } from '../../services/aiService';
 import './AiRecommendationPanel.css';
 
@@ -11,6 +11,8 @@ const ROLE_LABELS: Record<string, string> = {
     '0': 'Manager', '1': 'Coordinator', '2': 'Dispatcher', '3': 'Encoder', '4': 'Courier',
 };
 
+const PAGE_SIZE = 5;
+
 const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId }) => {
     const [suitability, setSuitability] = useState<SuitabilityResponseDTO[]>([]);
     const [slaRisk, setSlaRisk] = useState<SlaRiskResponseDTO | null>(null);
@@ -20,22 +22,31 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
     const [error, setError] = useState('');
     const [slaLoading, setSlaLoading] = useState(true);
 
-    const fetchData = useCallback(async () => {
+    // Pagination state
+    const [pageNumber, setPageNumber] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+
+    const fetchData = useCallback(async (page: number) => {
         setLoading(true);
         setError('');
         try {
-            const [suitRes] = await Promise.all([
-                aiService.getSuitability(taskId),
-            ]);
-            const json = suitRes.data;
-            if (json.isSuccess && Array.isArray(json.data)) {
-                setSuitability(json.data);
+            const res = await aiService.getSuitability(taskId, page, PAGE_SIZE);
+            const json = res.data;
+            if (json.isSuccess && json.data) {
+                setSuitability(json.data.items ?? []);
+                setTotalCount(json.data.totalCount ?? 0);
+                setTotalPages(json.data.totalPages ?? 0);
             } else {
                 setSuitability([]);
+                setTotalCount(0);
+                setTotalPages(0);
             }
         } catch {
             setError('AI recommendation temporarily unavailable.');
             setSuitability([]);
+            setTotalCount(0);
+            setTotalPages(0);
         } finally {
             setLoading(false);
         }
@@ -53,8 +64,14 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
         }
     }, [taskId]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchData(pageNumber); }, [fetchData, pageNumber]);
     useEffect(() => { fetchSlaRisk(); }, [fetchSlaRisk]);
+
+    const handlePageChange = (page: number) => {
+        if (page < 1 || (totalPages > 0 && page > totalPages)) return;
+        setPageNumber(page);
+        setExpandedEmp(null);
+    };
 
     const handleToggleExplain = async (empId: string) => {
         if (expandedEmp === empId) {
@@ -113,6 +130,7 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
                 {/* ── Suitability Rankings ── */}
                 <div className="ai-section-title">
                     <Zap size={14} /> Suitable Employees
+                    {totalCount > 0 && <span className="ai-section-count">{totalCount} total</span>}
                 </div>
 
                 {loading ? (
@@ -120,49 +138,83 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
                 ) : suitability.length === 0 && !error ? (
                     <div className="ai-empty">No suitability data available.</div>
                 ) : (
-                    suitability.map((emp, idx) => (
-                        <div key={emp.employeeId}>
-                            <div className="ai-card">
-                                <div className="ai-card-top">
-                                    <div className="ai-card-row">
-                                        <span className="ai-card-name">{emp.fullName}</span>
-                                        <span className="ai-card-number">{emp.employeeNumber}</span>
-                                        <span className="ai-card-role">{getRoleLabel(emp.role)}</span>
-                                        {idx === 0 && <span className="ai-best-badge"><Zap size={10} /> Best Pick</span>}
-                                    </div>
-                                    <div className="ai-card-meta">
-                                        <span className="ai-meta-item"><Briefcase size={10} /> {emp.workload} active</span>
-                                        <button className="ai-explain-btn" onClick={() => handleToggleExplain(emp.employeeId)}>
-                                                            {expandedEmp === emp.employeeId ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-                                                            {expandedEmp === emp.employeeId ? 'Hide details' : 'Why this score?'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="ai-card-score">
-                                                    <div className="ai-score-value">{emp.suitabilityScore.toFixed(4)}</div>
-                                                    <div className="ai-score-label">score</div>
-                                                </div>
-                                            </div>
-
-                                            {/* ── Explanation ── */}
-                                            {expandedEmp === emp.employeeId && explanations[emp.employeeId] && (
-                                                <div className="ai-explain-box">
-                                                    {explanations[emp.employeeId]?.length > 0 ? (
-                                                        explanations[emp.employeeId].map((exp, i) => (
-                                                            <div key={i}>{exp.explanation}</div>
-                                                        ))
-                                                    ) : (
-                                                        <div>
-                                                            Score = {emp.suitabilityScore.toFixed(4)} based on workload ({emp.workload} active
-                                                            tasks), experience match, and recommendation scores.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                    <>
+                        {suitability.map((emp, idx) => (
+                            <div key={emp.employeeId}>
+                                <div className="ai-card">
+                                    <div className="ai-card-top">
+                                        <div className="ai-card-row">
+                                            <span className="ai-card-name">{emp.fullName}</span>
+                                            <span className="ai-card-number">{emp.employeeNumber}</span>
+                                            <span className="ai-card-role">{getRoleLabel(emp.role)}</span>
+                                            {idx === 0 && pageNumber === 1 && <span className="ai-best-badge"><Zap size={10} /> Best Pick</span>}
                                         </div>
-                                    ))
+                                        <div className="ai-card-meta">
+                                            <span className="ai-meta-item"><Briefcase size={10} /> {emp.workload} active</span>
+                                            <button className="ai-explain-btn" onClick={() => handleToggleExplain(emp.employeeId)}>
+                                                {expandedEmp === emp.employeeId ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                                {expandedEmp === emp.employeeId ? 'Hide details' : 'Why this score?'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="ai-card-score">
+                                        <div className="ai-score-value">{emp.suitabilityScore.toFixed(4)}</div>
+                                        <div className="ai-score-label">score</div>
+                                    </div>
+                                </div>
+
+                                {expandedEmp === emp.employeeId && explanations[emp.employeeId] && (
+                                    <div className="ai-explain-box">
+                                        {explanations[emp.employeeId]?.length > 0 ? (
+                                            explanations[emp.employeeId].map((exp, i) => (
+                                                <div key={i}>{exp.explanation}</div>
+                                            ))
+                                        ) : (
+                                            <div>
+                                                Score = {emp.suitabilityScore.toFixed(4)} based on workload ({emp.workload} active
+                                                tasks), experience match, and recommendation scores.
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
+                        ))}
+
+                        {/* ── Pagination ── */}
+                        {totalPages > 1 && (
+                            <div className="ai-pagination">
+                                <button
+                                    className="ai-page-btn"
+                                    disabled={pageNumber <= 1}
+                                    onClick={() => handlePageChange(pageNumber - 1)}
+                                >
+                                    <ChevronLeft size={13} />
+                                </button>
+                                {getPageNumbers(pageNumber, totalPages).map((p, i) =>
+                                    p === -1 ? (
+                                        <span key={`ellipsis-${i}`} className="ai-page-ellipsis">…</span>
+                                    ) : (
+                                        <button
+                                            key={p}
+                                            className={`ai-page-btn ai-page-num${pageNumber === p ? ' active' : ''}`}
+                                            onClick={() => handlePageChange(p)}
+                                        >
+                                            {p}
+                                        </button>
+                                    )
+                                )}
+                                <button
+                                    className="ai-page-btn"
+                                    disabled={pageNumber >= totalPages}
+                                    onClick={() => handlePageChange(pageNumber + 1)}
+                                >
+                                    <ChevronRight size={13} />
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
 
             <div className="ai-unavailable">
                 <AlertCircle size={12} />
@@ -171,5 +223,18 @@ const AiRecommendationPanel: React.FC<AiRecommendationPanelProps> = ({ taskId })
         </div>
     );
 };
+
+function getPageNumbers(current: number, total: number): number[] {
+    if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: number[] = [];
+    pages.push(1);
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    if (start > 2) pages.push(-1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < total - 1) pages.push(-1);
+    pages.push(total);
+    return pages;
+}
 
 export default AiRecommendationPanel;

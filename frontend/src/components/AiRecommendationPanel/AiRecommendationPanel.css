@@ -146,6 +146,15 @@
     letter-spacing: 0.03em;
 }
 
+.ai-section-count {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--tt, #6B7280);
+    text-transform: none;
+    letter-spacing: normal;
+    margin-left: auto;
+}
+
 /* ── Employee Card ── */
 .ai-card {
     display: flex;
@@ -339,4 +348,66 @@
     border-top: 1px solid var(--border, #E2E8F0);
     flex-shrink: 0;
     background: var(--s1, #F7F9FF);
+}
+
+/* ── Pagination ── */
+.ai-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 0 4px;
+    flex-shrink: 0;
+}
+
+.ai-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid var(--border, #E2E8F0);
+    border-radius: var(--r-xs, 4px);
+    background: var(--s0, #fff);
+    color: var(--ts, #374151);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1;
+}
+
+.ai-page-btn:hover:not(:disabled) {
+    border-color: var(--teal, #00A99D);
+    color: var(--teal, #00A99D);
+}
+
+.ai-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ai-page-num.active {
+    background: var(--teal, #00A99D);
+    border-color: var(--teal, #00A99D);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ai-page-num.active:hover {
+    background: var(--teal-dark, #007A72);
+    border-color: var(--teal-dark, #007A72);
+    color: #fff;
+}
+
+.ai-page-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 28px;
+    color: var(--tt, #6B7280);
+    font-size: 12px;
+    letter-spacing: 1px;
 }
