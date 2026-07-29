@@ -428,6 +428,7 @@ public class TaskService : ITaskService
             .ToListAsync();
 
         var taskIdsPerUser = await _db.TaskAssignments
+            .Include(a => a.Task)
             .Where(a => a.Task != null &&
                 a.Task.Status != Backend.Models.Enums.TaskStatus.Completed &&
                 a.Task.Status != Backend.Models.Enums.TaskStatus.Cancelled)
