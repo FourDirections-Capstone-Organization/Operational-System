@@ -29,6 +29,7 @@ public class DashboardService : IDashboardService
         };
 
         var query = _db.Tasks
+            .Include(t => t.AssignedDepartment)
             .Include(t => t.Assignments)
                 .ThenInclude(a => a.AssignedUser)
             .AsQueryable();
