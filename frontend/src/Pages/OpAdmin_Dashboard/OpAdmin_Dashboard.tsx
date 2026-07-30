@@ -5518,10 +5518,49 @@ export default function OpsAdminDashboard() {
         fetchActivityLogs(1);
     }, []);
 
-    // -- Polling fallback: refresh tasks periodically (silent, no loading state) --
+    // -- Polling fallback: refresh tasks periodically (silent, no dashboard loading state) --
     useEffect(() => {
-        const interval = setInterval(() => {
-            fetchTasks().catch(() => {});
+        const interval = setInterval(async () => {
+            setLoadingTasks(true);
+            try {
+                const res = await api.get(`/api/Task?pageNumber=${taskPage}&pageSize=${taskPageSize}`);
+                const jsonRes = res.data;
+                const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
+                if (jsonRes?.data?.totalCount !== undefined) {
+                    setTaskTotalRecords(jsonRes.data.totalCount);
+                    setTaskTotalPages(jsonRes.data.totalPages ?? 1);
+                }
+                const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+                const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+                const normalized: Task[] = rawList.map(t => ({
+                    taskId: t.id ?? t.taskId,
+                    taskTitle: t.title ?? t.taskTitle ?? '',
+                    taskDescription: t.description ?? t.taskDescription ?? '',
+                    taskCategory: t.taskCategory ?? '',
+                    taskReferenceNumber: t.taskReferenceNumber ?? '',
+                    classification: t.classification ?? t.Classification ?? 0,
+                    priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
+                    dueAt: t.deadline ?? t.dueAt ?? null,
+                    taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
+                    taskRemarks: t.progressNotes ?? t.taskRemarks ?? '',
+                    assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
+                    createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
+                    assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
+                    createdAt: t.createdAt ?? '',
+                    updatedAt: t.updatedAt ?? undefined,
+                    deleted: deletedTaskIds.has(t.id ?? t.taskId),
+                    supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
+                    isConfidential: t.isConfidential ?? false,
+                    isSLALocked: t.isSLALocked ?? false,
+                    attachmentCount: t.attachmentCount ?? 0,
+                }));
+                setAllTasks(normalized);
+                setTasks(normalized.filter((t: Task) => !t.deleted));
+            } catch {
+                // silent — polling failure is non-critical
+            } finally {
+                setLoadingTasks(false);
+            }
         }, 30000);
         return () => clearInterval(interval);
     }, []);
