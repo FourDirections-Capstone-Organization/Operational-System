@@ -1,0 +1,69 @@
+/* ─── Analytics Status Badge ─────────────────────────────────────── */
+
+.asb-root {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.asb-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── Online ── */
+.asb-online {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.asb-online .asb-dot {
+    background: #16a34a;
+}
+
+/* ── Offline ── */
+.asb-offline {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.asb-offline .asb-dot {
+    background: #dc2626;
+}
+
+/* ── Loading ── */
+.asb-loading {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.asb-loading .asb-dot {
+    background: #d97706;
+    animation: asb-pulse 1.2s ease-in-out infinite;
+}
+
+/* ── Error ── */
+.asb-error {
+    background: #fce4ec;
+    color: #b71c1c;
+}
+
+.asb-error .asb-dot {
+    background: #e53935;
+    animation: asb-pulse 1s ease-in-out infinite;
+}
+
+@keyframes asb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
