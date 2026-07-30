@@ -2,137 +2,20 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     AlertTriangle, Clock, Users, Activity, Shield,
     RefreshCw, Loader2, Calendar, CheckCircle2, XCircle,
-    AlertCircle, UserCheck, Filter, RotateCcw,
+    AlertCircle, UserCheck, RotateCcw,
     Radio
 } from 'lucide-react';
 import './BiomarkerDashboard.css';
 import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { DataTableColumn, DataTableTab } from '../../components/ui/DataTable';
 import Select from '../../components/ui/Select';
+import { useBiomarker, AnalyticsStatusBadge } from '../../components/Analytics';
+import {
+    ViolationType, Severity, ViolationStatus,
+    BiomarkerViolation, ScanStatus
+} from '../../services/analyticsService';
 
-// ─── Types ───────────────────────────────────────────────────────────────
-
-type ViolationType = 'sla_breach' | 'workload_overload' | 'biomarker_flag';
-type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
-type ViolationStatus = 'New' | 'Acknowledged' | 'Resolved';
-type ScanStatus = 'Idle' | 'Running' | 'Completed' | 'Failed';
 type FilterTab = 'all' | 'sla_breach' | 'workload_overload' | 'biomarker_flag';
-
-interface BiomarkerViolation {
-    id: string;
-    type: ViolationType;
-    severity: Severity;
-    description: string;
-    employeeName: string;
-    employeeNumber: string;
-    department: string;
-    departmentId: string;
-    taskTitle: string;
-    taskReference: string;
-    detectedAt: string;
-    status: ViolationStatus;
-}
-
-interface ScanMeta {
-    batchId: string;
-    scannedAt: string;
-    duration: string;
-    totalViolations: number;
-}
-
-// ─── Mock Data ───────────────────────────────────────────────────────────
-
-const MOCK_SCAN: ScanMeta = {
-    batchId: 'SCAN-20260723-001',
-    scannedAt: '2026-07-23T00:00:00',
-    duration: '2m 14s',
-    totalViolations: 10,
-};
-
-const MOCK_NEXT_SCAN = '2026-07-24T00:00:00';
-
-const MOCK_VIOLATIONS: BiomarkerViolation[] = [
-    {
-        id: 'V-001', type: 'sla_breach', severity: 'Critical',
-        description: 'Task exceeded SLA deadline by 4h 32m',
-        employeeName: 'Juan dela Cruz', employeeNumber: 'C-0421',
-        department: 'Last Mile', departmentId: 'D-004',
-        taskTitle: 'Priority Delivery — Warehouse A to Cluster B',
-        taskReference: 'T-88231', detectedAt: '2026-07-23T00:00:12', status: 'New',
-    },
-    {
-        id: 'V-002', type: 'sla_breach', severity: 'High',
-        description: 'Task exceeded SLA deadline by 1h 15m',
-        employeeName: 'Maria Santos', employeeNumber: 'C-0317',
-        department: 'Dispatch', departmentId: 'D-002',
-        taskTitle: 'Same-Day Dispatch — Client Package #4402',
-        taskReference: 'T-88190', detectedAt: '2026-07-23T00:00:14', status: 'New',
-    },
-    {
-        id: 'V-003', type: 'sla_breach', severity: 'Medium',
-        description: 'Task exceeded SLA deadline by 45m',
-        employeeName: 'Pedro Reyes', employeeNumber: 'C-0552',
-        department: 'Logistics', departmentId: 'D-001',
-        taskTitle: 'Route #12 — Document Drop-off',
-        taskReference: 'T-88012', detectedAt: '2026-07-23T00:00:16', status: 'Acknowledged',
-    },
-    {
-        id: 'V-004', type: 'workload_overload', severity: 'Critical',
-        description: 'Courier has 12 active tasks — exceeds threshold of 8',
-        employeeName: 'Jose Rizal', employeeNumber: 'C-0388',
-        department: 'Last Mile', departmentId: 'D-004',
-        taskTitle: 'Multiple active assignments',
-        taskReference: '—', detectedAt: '2026-07-23T00:00:30', status: 'New',
-    },
-    {
-        id: 'V-005', type: 'workload_overload', severity: 'High',
-        description: 'Courier has 10 active tasks — exceeds threshold of 8',
-        employeeName: 'Ana Gonzales', employeeNumber: 'C-0612',
-        department: 'Dispatch', departmentId: 'D-002',
-        taskTitle: 'Multiple active assignments',
-        taskReference: '—', detectedAt: '2026-07-23T00:00:31', status: 'New',
-    },
-    {
-        id: 'V-006', type: 'workload_overload', severity: 'Low',
-        description: 'Courier has 9 active tasks — exceeds threshold of 8',
-        employeeName: 'Carlos Mendoza', employeeNumber: 'C-0724',
-        department: 'Logistics', departmentId: 'D-001',
-        taskTitle: 'Multiple active assignments',
-        taskReference: '—', detectedAt: '2026-07-23T00:00:32', status: 'Resolved',
-    },
-    {
-        id: 'V-007', type: 'biomarker_flag', severity: 'Critical',
-        description: 'RED FLAG: SLA + workload overload — immediate review required.',
-        employeeName: 'Jose Rizal', employeeNumber: 'C-0388',
-        department: 'Last Mile', departmentId: 'D-004',
-        taskTitle: 'Compound violation',
-        taskReference: 'FLAG-C-0388', detectedAt: '2026-07-23T00:01:00', status: 'New',
-    },
-    {
-        id: 'V-008', type: 'biomarker_flag', severity: 'High',
-        description: 'AMBER FLAG: Recurring SLA breach pattern — 3rd breach this week',
-        employeeName: 'Juan dela Cruz', employeeNumber: 'C-0421',
-        department: 'Last Mile', departmentId: 'D-004',
-        taskTitle: 'Pattern violation',
-        taskReference: 'FLAG-C-0421', detectedAt: '2026-07-23T00:01:05', status: 'New',
-    },
-    {
-        id: 'V-009', type: 'biomarker_flag', severity: 'Medium',
-        description: 'AMBER FLAG: Courier workload trending upward — 20% increase over 7 days',
-        employeeName: 'Ana Gonzales', employeeNumber: 'C-0612',
-        department: 'Dispatch', departmentId: 'D-002',
-        taskTitle: 'Trend violation',
-        taskReference: 'FLAG-C-0612', detectedAt: '2026-07-23T00:01:10', status: 'Acknowledged',
-    },
-    {
-        id: 'V-010', type: 'biomarker_flag', severity: 'Low',
-        description: 'GREEN FLAG: Workload returned to normal after previous overload warning',
-        employeeName: 'Carlos Mendoza', employeeNumber: 'C-0724',
-        department: 'Logistics', departmentId: 'D-001',
-        taskTitle: 'Resolution flag',
-        taskReference: 'FLAG-C-0724', detectedAt: '2026-07-23T00:01:15', status: 'Resolved',
-    },
-];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -187,11 +70,11 @@ const PAGE_SIZE = 5;
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export default function BiomarkerDashboard() {
-    const [scanStatus, setScanStatus] = useState<ScanStatus>('Completed');
-    const [scanning, setScanning] = useState(false);
-    const [scanMeta] = useState<ScanMeta>(MOCK_SCAN);
-    const [violations] = useState<BiomarkerViolation[]>(MOCK_VIOLATIONS);
-    const [lastRefresh, setLastRefresh] = useState(Date.now());
+    const {
+        violations, scanMeta, nextScan, scanStatus,
+        scanning, analyticsStatus, lastRefresh, triggerScan,
+    } = useBiomarker();
+    const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
     const [page, setPage] = useState(1);
 
     // ── Filter state ──
@@ -219,14 +102,6 @@ export default function BiomarkerDashboard() {
             .map(v => ({ value: v.departmentId, label: v.department }))
             .sort((a, b) => a.label.localeCompare(b.label));
     }, [violations]);
-
-    // ── Auto-refresh polling ──
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setLastRefresh(Date.now());
-        }, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     // ── Reset page when filters change ──
     useEffect(() => {
@@ -282,13 +157,8 @@ export default function BiomarkerDashboard() {
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {
-        setScanning(true);
-        setScanStatus('Running');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setScanStatus('Completed');
-        setScanning(false);
-        setLastRefresh(Date.now());
-    }, []);
+        await triggerScan();
+    }, [triggerScan]);
 
     const handleResetFilters = useCallback(() => {
         setSearchQuery('');
@@ -420,7 +290,7 @@ export default function BiomarkerDashboard() {
                         <Activity size={28} />
                     </div>
                     <div className="bd-scan-info">
-                        <h3>Biomarker Scan Engine <span className="bd-live-badge"><Radio size={10} /> LIVE</span></h3>
+                        <h3>Biomarker Scan Engine <span className="bd-live-badge"><Radio size={10} /> LIVE</span> <AnalyticsStatusBadge status={analyticsStatus} /></h3>
                         <div className="bd-scan-meta">
                             <span className={`bd-scan-status-badge ${scanStatus.toLowerCase()}`}>
                                 <span className="bd-status-dot" />
@@ -428,19 +298,19 @@ export default function BiomarkerDashboard() {
                             </span>
                             <span className="bd-scan-divider">|</span>
                             <span className="bd-scan-label">
-                                <Calendar size={12} /> {scanMeta.batchId}
+                                <Calendar size={12} /> {safeScanMeta.batchId}
                             </span>
                             <span className="bd-scan-divider">|</span>
                             <span className="bd-scan-label">
-                                <Clock size={12} /> Scanned: {formatTime(scanMeta.scannedAt)}
+                                <Clock size={12} /> Scanned: {formatTime(safeScanMeta.scannedAt)}
                             </span>
                             <span className="bd-scan-divider">|</span>
                             <span className="bd-scan-label">
-                                <Clock size={12} /> Duration: {scanMeta.duration}
+                                <Clock size={12} /> Duration: {safeScanMeta.duration}
                             </span>
                             <span className="bd-scan-divider">|</span>
                             <span className="bd-scan-label">
-                                Next: {formatTime(MOCK_NEXT_SCAN)}
+                                Next: {formatTime(nextScan)}
                             </span>
                         </div>
                     </div>
@@ -493,7 +363,7 @@ export default function BiomarkerDashboard() {
 
             {/* ── Violations DataTable ── */}
             <DataTable<BiomarkerViolation>
-                title={`Detected Violations (${scanMeta.batchId})`}
+                title={`Detected Violations (${safeScanMeta.batchId})`}
                 columns={columns}
                 data={paginatedViolations}
                 tabs={tabs}
@@ -515,7 +385,7 @@ export default function BiomarkerDashboard() {
             {/* ── Biomarker Flags Summary ── */}
             <div className="bd-section">
                 <div className="bd-section-header">
-                    <h4>Biomarker Flag Summary — {scanMeta.batchId}</h4>
+                    <h4>Biomarker Flag Summary — {safeScanMeta.batchId}</h4>
                 </div>
                 <div className="bd-flags-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                     <StatusCard
@@ -546,7 +416,7 @@ export default function BiomarkerDashboard() {
             <div className="bd-compliance-note">
                 <Shield size={14} />
                 <span>
-                    Automated scan runs daily at 12:00 AM. Dashboard reflects the latest completed scan ({scanMeta.batchId}).
+                    Automated scan runs daily at 12:00 AM. Dashboard reflects the latest completed scan ({safeScanMeta.batchId}).
                     Viewing biomarker alerts does not modify any task or audit log records.
                     Dashboard refreshes automatically every 30 seconds.
                 </span>
