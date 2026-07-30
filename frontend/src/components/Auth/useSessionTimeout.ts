@@ -2,7 +2,10 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+// Safety-net timeout (30 min). Backend handles the actual 15-min session
+// timeout via SessionTimeoutMiddleware. This frontend timer only fires
+// as a last resort if the backend check is somehow bypassed.
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 const HEARTBEAT_INTERVAL = 5 * 60 * 1000;
 const RESET_THROTTLE = 1000;
 
