@@ -42,7 +42,7 @@ axios.interceptors.response.use(
         // Handle SESSION_TIMEOUT from backend
         if (error.response?.data?.code === 'SESSION_TIMEOUT') {
             localStorage.clear();
-            window.location.href = '/';
+            appNavigate('/');
             return Promise.reject(error);
         }
 
@@ -52,7 +52,7 @@ axios.interceptors.response.use(
             if (msg.toLowerCase().includes('deactivated') || msg.toLowerCase().includes('locked')) {
                 const empNum = localStorage.getItem('employeeId') || '';
                 localStorage.clear();
-                window.location.href = `/account_locked?employeeNumber=${encodeURIComponent(empNum)}`;
+                appNavigate(`/account_locked?employeeNumber=${encodeURIComponent(empNum)}`);
                 return Promise.reject(error);
             }
         }
@@ -64,7 +64,7 @@ axios.interceptors.response.use(
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) {
             localStorage.clear();
-            window.location.href = '/';
+            appNavigate('/');
             return Promise.reject(error);
         }
 
@@ -99,7 +99,7 @@ axios.interceptors.response.use(
         } catch (refreshError) {
             processQueue(refreshError, null);
             localStorage.clear();
-            window.location.href = '/';
+            appNavigate('/');
             return Promise.reject(refreshError);
         } finally {
             isRefreshing = false;
@@ -121,6 +121,7 @@ import SetPasswordPage from './Pages/set_password_page/set_password_page'
 import { ToastProvider } from './components/Toast/Toast'
 import AuthSyncWatcher from './components/Auth/AuthSyncWatcher'
 import SessionTimeoutWatcher from './components/Auth/SessionTimeoutWatcher'
+import { appNavigate, useAppNavigate } from './components/Auth/useAppNavigate'
 import OnboardingPage from './Pages/onboarding_page/onboarding_page'
 
 function PasswordChangedGuard() {
