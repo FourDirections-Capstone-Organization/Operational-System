@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
+using Backend.Modules.Analytics;
 using Backend.Modules.RoleBasedAccessControl;
 
 namespace Backend.Controllers;
@@ -12,10 +13,12 @@ namespace Backend.Controllers;
 public class AnalyticsBiomarkerController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly BiomarkerScanService _scanService;
 
-    public AnalyticsBiomarkerController(AppDbContext db)
+    public AnalyticsBiomarkerController(AppDbContext db, BiomarkerScanService scanService)
     {
         _db = db;
+        _scanService = scanService;
     }
 
     [HttpGet("latest")]
@@ -44,5 +47,12 @@ public class AnalyticsBiomarkerController : ControllerBase
             .ToListAsync();
 
         return Ok(alerts);
+    }
+
+    [HttpPost("trigger-scan")]
+    public async Task<IActionResult> TriggerScan()
+    {
+        await _scanService.RunBiomarkerScanAsync(DateTime.UtcNow.Date);
+        return Ok(new { message = "Biomarker scan triggered successfully" });
     }
 }
