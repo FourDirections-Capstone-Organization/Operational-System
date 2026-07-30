@@ -44,12 +44,6 @@ export function useSessionTimeout() {
         const token = localStorage.getItem('refreshToken');
         if (!token) return;
 
-        // Also ping a lightweight endpoint to keep LastActivityAt fresh
-        // This runs in parallel with the token refresh.
-        axios.get('/api/Auth/me', {
-            headers: { 'X-Heartbeat': 'true' } as any,
-        }).catch(() => {/* non-critical */});
-
         try {
             const { data: raw } = await axios.post(
                 '/api/Auth/refresh-token',
@@ -61,11 +55,6 @@ export function useSessionTimeout() {
             if (d?.refreshToken) localStorage.setItem('refreshToken', d.refreshToken);
         } catch (err) {
             console.warn('[SessionTimeout] Heartbeat token refresh failed:', (err as any)?.message ?? err);
-            // Token refresh failed — try a direct keep-alive ping to update LastActivityAt
-            // so the backend doesn't timeout the session on the next real request.
-            axios.get('/api/Auth/me', {
-                headers: { 'X-Heartbeat': 'true' } as any,
-            }).catch(() => {/* best-effort */});
         }
     }, []);
 
