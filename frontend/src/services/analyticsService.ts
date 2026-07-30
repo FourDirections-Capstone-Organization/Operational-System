@@ -1,4 +1,5 @@
 import api from '../api';
+import axios from 'axios';
 
 // ─── Backend DTO Types (mirrors backend C# DTOs) ───
 
@@ -194,14 +195,12 @@ export const MOCK_VIOLATIONS: BiomarkerViolation[] = [
 const HEALTH_CHECK_TIMEOUT = 5000;
 
 async function healthCheckInternal(): Promise<boolean> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
     try {
-        const response = await api.get<BiomarkerAlertDTO[]>('/api/analytics/biomarker/latest');
-        clearTimeout(timeoutId);
+        const response = await axios.get<BiomarkerAlertDTO[]>('/api/analytics/biomarker/latest', {
+            timeout: HEALTH_CHECK_TIMEOUT,
+        });
         return response.status >= 200 && response.status < 500;
     } catch {
-        clearTimeout(timeoutId);
         return false;
     }
 }
