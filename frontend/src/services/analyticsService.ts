@@ -9,6 +9,8 @@ export interface BiomarkerAlertDTO {
     scanDate: string;
     departmentId: string | null;
     departmentName: string;
+    employeeName?: string;
+    employeeNumber?: string;
     metricName: string;
     currentValue: number;
     thresholdValue: number;
@@ -63,6 +65,16 @@ export interface TrendDataDTO {
     lateCount: number;
     totalCompleted: number;
     onTimeRate: number;
+}
+
+export interface PaginatedResponseDTO<T> {
+    items: T[];
+    totalCount: number;
+    pageNumber: number;
+    pageSize: number;
+    totalPages: number;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
 }
 
 // ─── Frontend Domain Types ───
@@ -205,34 +217,50 @@ async function healthCheckInternal(): Promise<boolean> {
     }
 }
 
+async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number): Promise<PaginatedResponseDTO<BiomarkerAlertDTO> | null> {
+    try {
+        const res = await api.get<PaginatedResponseDTO<BiomarkerAlertDTO>>('/api/analytics/biomarker/latest', { pageNumber, pageSize });
+        return res.data;
+    } catch (err) {
+        console.warn('[AnalyticsService] fetchLatestAlertsPaged failed:', err);
+        return null;
+    }
+}
+
+async function fetchHistoryPagedInternal(from: string | undefined, to: string | undefined, pageNumber: number, pageSize: number): Promise<PaginatedResponseDTO<BiomarkerAlertDTO> | null> {
+    try {
+        const params: Record<string, any> = { pageNumber, pageSize };
+        if (from) params.from = from;
+        if (to) params.to = to;
+        const res = await api.get<PaginatedResponseDTO<BiomarkerAlertDTO>>('/api/analytics/biomarker/history', params);
+        return res.data;
+    } catch (err) {
+        console.warn('[AnalyticsService] fetchHistoryPaged failed:', err);
+        return null;
+    }
+}
+
 export const analyticsService = {
     /** Check if the Analytics backend module is reachable */
     checkHealth: healthCheckInternal,
 
-    /** Fetch the latest biomarker alerts (top 50) */
+    /** Fetch the latest biomarker alerts (first page, 50 items) */
     fetchLatestAlerts: async (): Promise<BiomarkerAlertDTO[] | null> => {
-        try {
-            const res = await api.get<BiomarkerAlertDTO[]>('/api/analytics/biomarker/latest');
-            return res.data;
-        } catch (err) {
-            console.warn('[AnalyticsService] fetchLatestAlerts failed:', err);
-            return null;
-        }
+        const paged = await fetchLatestAlertsPagedInternal(1, 50);
+        return paged?.items ?? null;
     },
 
-    /** Fetch biomarker alert history with optional date range */
+    /** Fetch the latest biomarker alerts with pagination */
+    fetchLatestAlertsPaged: fetchLatestAlertsPagedInternal,
+
+    /** Fetch biomarker alert history with optional date range (first page, 50 items) */
     fetchHistory: async (from?: string, to?: string): Promise<BiomarkerAlertDTO[] | null> => {
-        try {
-            const params: Record<string, string> = {};
-            if (from) params.from = from;
-            if (to) params.to = to;
-            const res = await api.get<BiomarkerAlertDTO[]>('/api/analytics/biomarker/history', params);
-            return res.data;
-        } catch (err) {
-            console.warn('[AnalyticsService] fetchHistory failed:', err);
-            return null;
-        }
+        const paged = await fetchHistoryPagedInternal(from, to, 1, 50);
+        return paged?.items ?? null;
     },
+
+    /** Fetch biomarker alert history with optional date range and pagination */
+    fetchHistoryPaged: fetchHistoryPagedInternal,
 
     /** Trigger a manual biomarker scan */
     triggerScan: async (): Promise<boolean> => {
