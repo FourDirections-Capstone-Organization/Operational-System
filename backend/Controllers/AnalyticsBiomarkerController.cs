@@ -56,7 +56,7 @@ public class AnalyticsBiomarkerController : ControllerBase
     }
 
     [HttpGet("history")]
-    public async Task<IActionResult> GetBiomarkerHistory([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    public async Task<IActionResult> GetBiomarkerHistory([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] PaginationQueryDTO pagination)
     {
         try
         {
@@ -67,11 +67,21 @@ public class AnalyticsBiomarkerController : ControllerBase
             if (to.HasValue)
                 query = query.Where(a => a.ScanDateTime <= to.Value);
 
+            var totalCount = await query.CountAsync();
+
             var alerts = await query
                 .OrderByDescending(a => a.ScanDateTime)
+                .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
                 .ToListAsync();
 
-            return Ok(alerts);
+            return Ok(new PaginatedResponseDTO<BiomarkerAlert>
+            {
+                Items = alerts,
+                TotalCount = totalCount,
+                PageNumber = pagination.PageNumber,
+                PageSize = pagination.PageSize
+            });
         }
         catch (Exception ex)
         {
