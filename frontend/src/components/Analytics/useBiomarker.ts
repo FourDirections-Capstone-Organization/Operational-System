@@ -3,6 +3,7 @@ import {
     analyticsService,
     BiomarkerAlertDTO,
     BiomarkerViolation,
+    BiomarkerFilters,
     ScanMeta,
     ScanStatus,
     AnalyticsHealthStatus,
@@ -119,7 +120,7 @@ function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViol
 
 // ─── Hook ────────────────────────────────────────────────────────────
 
-export function useBiomarker(filterType?: string): UseBiomarkerReturn {
+export function useBiomarker(filters?: BiomarkerFilters): UseBiomarkerReturn {
     const [violations, setViolations] = useState<BiomarkerViolation[]>([]);
     const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
     const [nextScan, setNextScan] = useState('');
@@ -145,7 +146,7 @@ export function useBiomarker(filterType?: string): UseBiomarkerReturn {
 
         if (healthy) {
             setAnalyticsStatus('online');
-            const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10, filterType);
+            const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10, filters);
             if (generation !== fetchGenRef.current) return; // stale — a newer fetch started
             if (paged && mountedRef.current) {
                 const transformed = transformAlertsToViolations(paged.paged.items);
@@ -184,16 +185,16 @@ export function useBiomarker(filterType?: string): UseBiomarkerReturn {
         if (mountedRef.current) {
             setLastRefresh(Date.now());
         }
-    }, [currentPage, filterType]);
+    }, [currentPage, filters]);
 
-    // ── Reset to page 1 when filter type changes ──
-    const prevFilterRef = useRef(filterType);
+    // ── Reset to page 1 when filters change ──
+    const prevFilterRef = useRef(filters);
     useEffect(() => {
-        if (prevFilterRef.current !== filterType) {
-            prevFilterRef.current = filterType;
+        if (JSON.stringify(prevFilterRef.current) !== JSON.stringify(filters)) {
+            prevFilterRef.current = filters;
             setCurrentPage(1);
         }
-    }, [filterType]);
+    }, [filters]);
 
     // ── Initial Load ──
     useEffect(() => {

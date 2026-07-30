@@ -26,39 +26,67 @@ public class AnalyticsBiomarkerController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestBiomarkerResults([FromQuery] PaginationQueryDTO pagination, [FromQuery] string? type = null)
+    public async Task<IActionResult> GetLatestBiomarkerResults(
+        [FromQuery] PaginationQueryDTO pagination,
+        [FromQuery] string? type = null,
+        [FromQuery] string? employeeNumber = null,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
+        [FromQuery] string? search = null)
     {
         try
         {
-            _logger.LogInformation("Fetching latest biomarker alerts: page={Page}, size={Size}, type={Type}",
-                pagination.PageNumber, pagination.PageSize, type ?? "(none)");
+            _logger.LogInformation("Fetching latest biomarker alerts: page={Page}, size={Size}, type={Type}, emp={Emp}, dept={Dept}, from={From}, to={To}, search={Search}",
+                pagination.PageNumber, pagination.PageSize, type ?? "(none)",
+                employeeNumber ?? "(none)", departmentId?.ToString() ?? "(none)",
+                dateFrom?.ToString("yyyy-MM-dd") ?? "(none)", dateTo?.ToString("yyyy-MM-dd") ?? "(none)",
+                search ?? "(none)");
 
-            // Build filter based on type parameter
-            var allQuery = _db.BiomarkerAlerts.AsQueryable();
+            // Build filter query
+            var filteredQuery = _db.BiomarkerAlerts.AsQueryable();
 
             if (!string.IsNullOrEmpty(type))
             {
-                allQuery = type switch
+                filteredQuery = type switch
                 {
-                    "sla_breach" => allQuery.Where(a =>
+                    "sla_breach" => filteredQuery.Where(a =>
                         a.MetricName == "OnTimeRate" ||
                         a.MetricName == "StuckTasks" ||
                         a.MetricName == "OverallSlaCompliance"),
-                    "workload_overload" => allQuery.Where(a => a.MetricName == "HighWorkload"),
-                    "biomarker_flag" => allQuery.Where(a =>
+                    "workload_overload" => filteredQuery.Where(a => a.MetricName == "HighWorkload"),
+                    "biomarker_flag" => filteredQuery.Where(a =>
                         a.MetricName != "OnTimeRate" &&
                         a.MetricName != "StuckTasks" &&
                         a.MetricName != "OverallSlaCompliance" &&
                         a.MetricName != "HighWorkload"),
-                    _ => allQuery
+                    _ => filteredQuery
                 };
             }
 
+            if (!string.IsNullOrEmpty(employeeNumber))
+                filteredQuery = filteredQuery.Where(a => a.EmployeeNumber == employeeNumber);
+
+            if (departmentId.HasValue)
+                filteredQuery = filteredQuery.Where(a => a.DepartmentId == departmentId.Value);
+
+            if (dateFrom.HasValue)
+                filteredQuery = filteredQuery.Where(a => a.ScanDateTime >= dateFrom.Value);
+
+            if (dateTo.HasValue)
+                filteredQuery = filteredQuery.Where(a => a.ScanDateTime <= dateTo.Value);
+
+            if (!string.IsNullOrEmpty(search))
+                filteredQuery = filteredQuery.Where(a =>
+                    EF.Functions.ILike(a.Description, $"%{search}%") ||
+                    EF.Functions.ILike(a.EmployeeName ?? "", $"%{search}%") ||
+                    EF.Functions.ILike(a.EmployeeNumber ?? "", $"%{search}%"));
+
             // Total count for the filtered query (for pagination)
-            var filteredCount = await allQuery.CountAsync();
+            var filteredCount = await filteredQuery.CountAsync();
 
             // Fetch the page
-            var paged = await allQuery
+            var paged = await filteredQuery
                 .OrderByDescending(a => a.ScanDateTime)
                 .Skip((pagination.PageNumber - 1) * pagination.PageSize)
                 .Take(pagination.PageSize)

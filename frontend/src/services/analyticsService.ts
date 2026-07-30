@@ -77,6 +77,15 @@ export interface BiomarkerSummaryDTO {
     totalLowFlags: number;
 }
 
+export interface BiomarkerFilters {
+    type?: string;
+    employeeNumber?: string;
+    departmentId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+}
+
 export interface LatestBiomarkerResponse {
     paged: PaginatedResponseDTO<BiomarkerAlertDTO>;
     summary: BiomarkerSummaryDTO;
@@ -232,10 +241,17 @@ async function healthCheckInternal(): Promise<boolean> {
     }
 }
 
-async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number, type?: string): Promise<LatestBiomarkerResponse | null> {
+async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number, filters?: BiomarkerFilters): Promise<LatestBiomarkerResponse | null> {
     try {
         const params: Record<string, any> = { pageNumber, pageSize };
-        if (type) params.type = type;
+        if (filters) {
+            if (filters.type) params.type = filters.type;
+            if (filters.employeeNumber) params.employeeNumber = filters.employeeNumber;
+            if (filters.departmentId) params.departmentId = filters.departmentId;
+            if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+            if (filters.dateTo) params.dateTo = filters.dateTo;
+            if (filters.search) params.search = filters.search;
+        }
         console.log('[AnalyticsService] Request params:', JSON.stringify(params));
         const res = await api.get<LatestBiomarkerResponse>('/api/analytics/biomarker/latest', params);
         console.log('[AnalyticsService] Response totalCount:', res.data?.paged?.totalCount, '| items:', res.data?.paged?.items?.length);

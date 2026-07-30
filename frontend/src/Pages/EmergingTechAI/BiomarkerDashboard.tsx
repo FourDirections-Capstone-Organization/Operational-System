@@ -59,20 +59,30 @@ function ViolationBadge({ type }: { type: ViolationType }) {
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export default function BiomarkerDashboard() {
-    // ── Filter state (declared before hook so we can pass activeFilter) ──
+    // ── Filter state ──
     const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-
-    const {
-        violations, scanMeta, nextScan, scanStatus,
-        scanning, analyticsStatus, lastRefresh, triggerScan,
-        totalCount, totalPages, currentPage, setPage, summary,
-    } = useBiomarker(activeFilter !== 'all' ? activeFilter : undefined);
-    const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
     const [searchQuery, setSearchQuery] = useState('');
     const [filterEmployee, setFilterEmployee] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
+
+    // ── Build server-side filters object ──
+    const filters = useMemo(() => ({
+        type: activeFilter !== 'all' ? activeFilter : undefined,
+        employeeNumber: filterEmployee || undefined,
+        departmentId: filterDepartment || undefined,
+        dateFrom: filterDateFrom || undefined,
+        dateTo: filterDateTo || undefined,
+        search: searchQuery || undefined,
+    }), [activeFilter, filterEmployee, filterDepartment, filterDateFrom, filterDateTo, searchQuery]);
+
+    const {
+        violations, scanMeta, nextScan, scanStatus,
+        scanning, analyticsStatus, lastRefresh, triggerScan,
+        totalCount, totalPages, currentPage, setPage, summary,
+    } = useBiomarker(filters);
+    const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
 
     // ── Derived filter options ──
     const employeeOptions = useMemo(() => {
@@ -100,35 +110,7 @@ export default function BiomarkerDashboard() {
     const newCount = useMemo(() => violations.filter(v => v.status === 'New').length, [violations]);
 
     // ── Filtered violations ──
-    const filteredViolations = useMemo(() => {
-        let filtered = violations;
-
-        if (filterEmployee) {
-            filtered = filtered.filter(v => v.employeeNumber === filterEmployee);
-        }
-        if (filterDepartment) {
-            filtered = filtered.filter(v => v.departmentId === filterDepartment);
-        }
-        if (filterDateFrom) {
-            const from = new Date(filterDateFrom).getTime();
-            filtered = filtered.filter(v => new Date(v.detectedAt).getTime() >= from);
-        }
-        if (filterDateTo) {
-            const to = new Date(filterDateTo).getTime() + 86400000;
-            filtered = filtered.filter(v => new Date(v.detectedAt).getTime() <= to);
-        }
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(v =>
-                v.description.toLowerCase().includes(q) ||
-                v.employeeName.toLowerCase().includes(q) ||
-                v.employeeNumber.toLowerCase().includes(q) ||
-                v.taskReference.toLowerCase().includes(q) ||
-                v.department.toLowerCase().includes(q)
-            );
-        }
-        return filtered;
-    }, [violations, searchQuery, filterEmployee, filterDepartment, filterDateFrom, filterDateTo]);
+    const filteredViolations = violations;
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {
