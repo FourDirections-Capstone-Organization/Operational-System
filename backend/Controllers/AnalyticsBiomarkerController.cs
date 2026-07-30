@@ -14,45 +14,71 @@ public class AnalyticsBiomarkerController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly BiomarkerScanService _scanService;
+    private readonly ILogger<AnalyticsBiomarkerController> _logger;
 
-    public AnalyticsBiomarkerController(AppDbContext db, BiomarkerScanService scanService)
+    public AnalyticsBiomarkerController(AppDbContext db, BiomarkerScanService scanService, ILogger<AnalyticsBiomarkerController> logger)
     {
         _db = db;
         _scanService = scanService;
+        _logger = logger;
     }
 
     [HttpGet("latest")]
     public async Task<IActionResult> GetLatestBiomarkerResults()
     {
-        var alerts = await _db.BiomarkerAlerts
-            .OrderByDescending(a => a.ScanDateTime)
-            .Take(50)
-            .ToListAsync();
+        try
+        {
+            var alerts = await _db.BiomarkerAlerts
+                .OrderByDescending(a => a.ScanDateTime)
+                .Take(50)
+                .ToListAsync();
 
-        return Ok(alerts);
+            return Ok(alerts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch latest biomarker alerts");
+            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message, stackTrace = ex.StackTrace });
+        }
     }
 
     [HttpGet("history")]
     public async Task<IActionResult> GetBiomarkerHistory([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
-        var query = _db.BiomarkerAlerts.AsQueryable();
+        try
+        {
+            var query = _db.BiomarkerAlerts.AsQueryable();
 
-        if (from.HasValue)
-            query = query.Where(a => a.ScanDateTime >= from.Value);
-        if (to.HasValue)
-            query = query.Where(a => a.ScanDateTime <= to.Value);
+            if (from.HasValue)
+                query = query.Where(a => a.ScanDateTime >= from.Value);
+            if (to.HasValue)
+                query = query.Where(a => a.ScanDateTime <= to.Value);
 
-        var alerts = await query
-            .OrderByDescending(a => a.ScanDateTime)
-            .ToListAsync();
+            var alerts = await query
+                .OrderByDescending(a => a.ScanDateTime)
+                .ToListAsync();
 
-        return Ok(alerts);
+            return Ok(alerts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch biomarker alert history");
+            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message });
+        }
     }
 
     [HttpPost("trigger-scan")]
     public async Task<IActionResult> TriggerScan()
     {
-        await _scanService.RunBiomarkerScanAsync(DateTime.UtcNow.Date);
-        return Ok(new { message = "Biomarker scan triggered successfully" });
+        try
+        {
+            await _scanService.RunBiomarkerScanAsync(DateTime.UtcNow.Date);
+            return Ok(new { message = "Biomarker scan triggered successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to trigger biomarker scan");
+            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message });
+        }
     }
 }
