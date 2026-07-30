@@ -252,9 +252,7 @@ async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: numb
             if (filters.dateTo) params.dateTo = filters.dateTo;
             if (filters.search) params.search = filters.search;
         }
-        console.log('[AnalyticsService] Request params:', JSON.stringify(params));
         const res = await api.get<LatestBiomarkerResponse>('/api/analytics/biomarker/latest', params);
-        console.log('[AnalyticsService] Response totalCount:', res.data?.paged?.totalCount, '| items:', res.data?.paged?.items?.length);
         return res.data;
     } catch (err) {
         console.warn('[AnalyticsService] fetchLatestAlertsPaged failed:', err);

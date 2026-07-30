@@ -37,12 +37,6 @@ public class AnalyticsBiomarkerController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Fetching latest biomarker alerts: page={Page}, size={Size}, type={Type}, emp={Emp}, dept={Dept}, from={From}, to={To}, search={Search}",
-                pagination.PageNumber, pagination.PageSize, type ?? "(none)",
-                employeeNumber ?? "(none)", departmentId?.ToString() ?? "(none)",
-                dateFrom?.ToString("yyyy-MM-dd") ?? "(none)", dateTo?.ToString("yyyy-MM-dd") ?? "(none)",
-                search ?? "(none)");
-
             // Build filter query
             var filteredQuery = _db.BiomarkerAlerts.AsQueryable();
 

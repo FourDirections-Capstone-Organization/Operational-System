@@ -9,6 +9,7 @@ import './BiomarkerDashboard.css';
 import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { DataTableColumn, DataTableTab } from '../../components/ui/DataTable';
 import Select from '../../components/ui/Select';
+import api from '../../api';
 import { useBiomarker, AnalyticsStatusBadge } from '../../components/Analytics';
 import {
     ViolationType, Severity, ViolationStatus,
@@ -84,22 +85,35 @@ export default function BiomarkerDashboard() {
     } = useBiomarker(filters);
     const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
 
-    // ── Derived filter options ──
-    const employeeOptions = useMemo(() => {
-        const seen = new Set<string>();
-        return violations
-            .filter(v => { if (seen.has(v.employeeNumber)) return false; seen.add(v.employeeNumber); return true; })
-            .map(v => ({ value: v.employeeNumber, label: `${v.employeeName} (${v.employeeNumber})` }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-    }, [violations]);
+    // ── Full employee/department lists (unfiltered, for dropdown options) ──
+    const [employeeOptions, setEmployeeOptions] = useState<{ value: string; label: string }[]>([]);
+    const [departmentOptions, setDepartmentOptions] = useState<{ value: string; label: string }[]>([]);
 
-    const departmentOptions = useMemo(() => {
-        const seen = new Set<string>();
-        return violations
-            .filter(v => { if (seen.has(v.departmentId)) return false; seen.add(v.departmentId); return true; })
-            .map(v => ({ value: v.departmentId, label: v.department }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-    }, [violations]);
+    useEffect(() => {
+        // Fetch all departments
+        api.get('/api/Department').then((res: any) => {
+            const depts = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+            setDepartmentOptions(
+                depts
+                    .filter((d: any) => d.isActive !== false)
+                    .map((d: any) => ({ value: d.id ?? d.Id, label: d.name ?? d.Name }))
+                    .sort((a: any, b: any) => a.label.localeCompare(b.label))
+            );
+        }).catch(() => {});
+        // Fetch users, filter to non-manager couriers with employee numbers
+        api.get('/api/User', { pageNumber: 1, pageSize: 200 }).then((res: any) => {
+            const raw: any[] = res.data?.data?.items ?? (Array.isArray(res.data) ? res.data : []);
+            setEmployeeOptions(
+                raw
+                    .filter((u: any) => u.employeeNumber && u.employeeNumber !== '-' && u.isActive !== false && !u.isDeactivated)
+                    .map((u: any) => ({
+                        value: u.employeeNumber,
+                        label: `${u.employeeName ?? `${u.firstName ?? ''} ${u.lastName ?? ''}`} (${u.employeeNumber})`
+                    }))
+                    .sort((a: any, b: any) => a.label.localeCompare(b.label))
+            );
+        }).catch(() => {});
+    }, []);
 
     // ── Reset page when filters change ──
     useEffect(() => {
