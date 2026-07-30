@@ -65,17 +65,15 @@ const ALERT_TYPE_OPTIONS = [
     { value: 'biomarker_flag', label: 'Biomarker Flag' },
 ];
 
-const PAGE_SIZE = 5;
-
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export default function BiomarkerDashboard() {
     const {
         violations, scanMeta, nextScan, scanStatus,
         scanning, analyticsStatus, lastRefresh, triggerScan,
+        totalCount, totalPages, currentPage, setPage,
     } = useBiomarker();
     const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
-    const [page, setPage] = useState(1);
 
     // ── Filter state ──
     const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -106,7 +104,7 @@ export default function BiomarkerDashboard() {
     // ── Reset page when filters change ──
     useEffect(() => {
         setPage(1);
-    }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
+    }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo, setPage]);
 
     // ── Counts ──
     const slaCount = useMemo(() => violations.filter(v => v.type === 'sla_breach').length, [violations]);
@@ -150,10 +148,6 @@ export default function BiomarkerDashboard() {
         }
         return filtered;
     }, [violations, activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
-
-    // ── Pagination ──
-    const totalPages = Math.max(1, Math.ceil(filteredViolations.length / PAGE_SIZE));
-    const paginatedViolations = filteredViolations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {
@@ -365,7 +359,7 @@ export default function BiomarkerDashboard() {
             <DataTable<BiomarkerViolation>
                 title={`Detected Violations (${safeScanMeta.batchId})`}
                 columns={columns}
-                data={paginatedViolations}
+                data={filteredViolations}
                 tabs={tabs}
                 activeTab={activeFilter}
                 onTabChange={key => setActiveFilter(key as FilterTab)}
@@ -375,11 +369,11 @@ export default function BiomarkerDashboard() {
                 filterElements={filterElements}
                 emptyMessage="No violations match your filter."
                 emptyIcon={<CheckCircle2 size={24} />}
-                currentPage={page}
+                currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={setPage}
-                totalRecords={filteredViolations.length}
-                pageSize={PAGE_SIZE}
+                totalRecords={totalCount}
+                pageSize={10}
             />
 
             {/* ── Biomarker Flags Summary ── */}
