@@ -4997,6 +4997,39 @@ export default function OpsAdminDashboard() {
         }
     }, []);
 
+    // Silent version for background polling — does NOT toggle dashboardLoading
+    // (which would collapse the content, force the browser scroll to the top).
+    const doFetchDashboardSilent = useCallback(async () => {
+        if (!mountedRef.current) return;
+        const currentFilters = filtersRef.current;
+
+        try {
+            const params = new URLSearchParams();
+            const ds = currentFilters.dateStart || undefined;
+            if (ds) params.append('dateRangeStart', ds);
+            const de = currentFilters.dateEnd || undefined;
+            if (de) params.append('dateRangeEnd', de);
+            if (currentFilters.employeeId) params.append('employeeId', currentFilters.employeeId);
+            if (currentFilters.departmentId) params.append('departmentId', currentFilters.departmentId);
+            if (currentFilters.taskStatus) {
+                const statusMap: Record<string, string> = { 'Assigned': 'NotStarted', 'In Progress': 'InProgress', 'Pending Admin Review': 'DonePendingReview', 'Completed': 'Completed', 'On Hold': 'OnHold', 'Cancelled': 'Cancelled' };
+                params.append('status', statusMap[currentFilters.taskStatus] || currentFilters.taskStatus);
+            }
+            if (currentFilters.assignmentScope) params.append('assignmentScope', currentFilters.assignmentScope);
+
+            const res = await axios.get(`/api/Dashboard/metrics?${params}`, { timeout: 6000 });
+            if (!mountedRef.current) return;
+            const body = res.data;
+            if (body.isSuccess) {
+                setDashboardData(body.data);
+                setDashboardError(null);
+            }
+        } catch (err: any) {
+            if (!mountedRef.current) return;
+            console.warn('[Dashboard] silent refresh failed:', err?.message || err);
+        }
+    }, []);
+
     const setFallbackDashboardData = useCallback(() => {
         const fallback: DashboardResponse = {
             totalActiveTasks: 0,
@@ -5485,18 +5518,24 @@ export default function OpsAdminDashboard() {
         fetchActivityLogs(1);
     }, []);
 
-    // -- Polling fallback: refresh tasks and dashboard periodically --
+    // -- Polling fallback: refresh tasks periodically (silent, no loading state) --
     useEffect(() => {
-        const interval = setInterval(() => fetchTasks(), 30000);
+        const interval = setInterval(() => {
+            fetchTasks().catch(() => {});
+        }, 30000);
         return () => clearInterval(interval);
     }, []);
 
     // Re-fetch tasks when page or page size changes
     useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize]);
 
-    // -- Auto-refresh dashboard data every 30 seconds --
+    // -- Auto-refresh dashboard data every 30 seconds (silent, no loading state) --
     useEffect(() => {
-        const interval = setInterval(() => doFetchDashboard(), 30000);
+        const interval = setInterval(() => {
+            // Silent refresh: skip the loading spinner so the page doesn't collapse
+            // and force-scroll to the top. Only update data.
+            doFetchDashboardSilent();
+        }, 30000);
         return () => clearInterval(interval);
     }, []);
 
