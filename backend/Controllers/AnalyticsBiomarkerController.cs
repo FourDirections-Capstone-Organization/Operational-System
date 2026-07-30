@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Backend.Data;
+using Backend.Models;
+using Backend.Models.DTOs;
 using Backend.Modules.Analytics;
 using Backend.Modules.RoleBasedAccessControl;
 
@@ -24,16 +26,27 @@ public class AnalyticsBiomarkerController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestBiomarkerResults()
+    public async Task<IActionResult> GetLatestBiomarkerResults([FromQuery] PaginationQueryDTO pagination)
     {
         try
         {
-            var alerts = await _db.BiomarkerAlerts
-                .OrderByDescending(a => a.ScanDateTime)
-                .Take(50)
+            var query = _db.BiomarkerAlerts
+                .OrderByDescending(a => a.ScanDateTime);
+
+            var totalCount = await query.CountAsync();
+
+            var alerts = await query
+                .Skip((pagination.PageNumber - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
                 .ToListAsync();
 
-            return Ok(alerts);
+            return Ok(new PaginatedResponseDTO<BiomarkerAlert>
+            {
+                Items = alerts,
+                TotalCount = totalCount,
+                PageNumber = pagination.PageNumber,
+                PageSize = pagination.PageSize
+            });
         }
         catch (Exception ex)
         {
