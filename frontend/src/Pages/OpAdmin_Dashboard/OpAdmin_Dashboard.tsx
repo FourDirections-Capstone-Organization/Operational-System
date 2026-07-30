@@ -68,6 +68,12 @@ import axios from 'axios';
 import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 
+const NOTIF_TYPE_MAP: Record<number, string> = {
+    0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning',
+    4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold',
+    8: 'TaskCompleted', 9: 'TemplateTaskUnassigned'
+};
+
 interface ConfirmModalState {
     isOpen: boolean;
     variant: 'neutral' | 'danger' | 'warning' | 'info' | 'success';
@@ -4857,7 +4863,7 @@ export default function OpsAdminDashboard() {
 
     const fetchHeaderNotifications = useCallback(async () => {
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const res = await api.get('/api/Notification', { pageNumber: 1, pageSize: 10 });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -4869,11 +4875,6 @@ export default function OpsAdminDashboard() {
     useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
 
     // ── Full Notifications Tab ──
-    const NOTIF_TYPE_MAP: Record<number, string> = {
-        0: 'TaskAssigned', 1: 'TaskUpdated', 2: 'TaskOverdue', 3: 'DeadlineWarning',
-        4: 'PushBack', 5: 'TaskCancelled', 6: 'TaskResumed', 7: 'TaskOnHold',
-        8: 'TaskCompleted', 9: 'TemplateTaskUnassigned'
-    };
     const NOTIF_PAGE_SIZE = 20;
     const [allNotifications, setAllNotifications] = useState<any[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
@@ -4883,7 +4884,7 @@ export default function OpsAdminDashboard() {
     const fetchAllNotifications = useCallback(async (page: number) => {
         setNotifLoading(true);
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const res = await api.get('/api/Notification', { pageNumber: page, pageSize: NOTIF_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -4905,7 +4906,7 @@ export default function OpsAdminDashboard() {
         } finally {
             setNotifLoading(false);
         }
-    }, [NOTIF_TYPE_MAP]);
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'notifications') {
@@ -5046,7 +5047,7 @@ export default function OpsAdminDashboard() {
 
     const fetchActivityLogs = async (page: number) => {
         try {
-            const res = await api.get('/api/audit-logs/my', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const res = await api.get('/api/audit-logs/my', { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
