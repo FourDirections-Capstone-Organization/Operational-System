@@ -13,7 +13,7 @@ import api from '../../api';
 import { useBiomarker, AnalyticsStatusBadge } from '../../components/Analytics';
 import {
     ViolationType, Severity, ViolationStatus,
-    BiomarkerViolation, ScanStatus
+    BiomarkerViolation
 } from '../../services/analyticsService';
 
 type FilterTab = 'all' | 'sla_breach' | 'workload_overload' | 'biomarker_flag';
