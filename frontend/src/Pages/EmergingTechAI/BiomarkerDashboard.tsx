@@ -56,15 +56,6 @@ function ViolationBadge({ type }: { type: ViolationType }) {
     );
 }
 
-// ─── Constants ──────────────────────────────────────────────────────────
-
-const ALERT_TYPE_OPTIONS = [
-    { value: '', label: 'All Alert Types' },
-    { value: 'sla_breach', label: 'SLA Breach' },
-    { value: 'workload_overload', label: 'Workload Overload' },
-    { value: 'biomarker_flag', label: 'Biomarker Flag' },
-];
-
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export default function BiomarkerDashboard() {
@@ -80,7 +71,6 @@ export default function BiomarkerDashboard() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterEmployee, setFilterEmployee] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
-    const [filterAlertType, setFilterAlertType] = useState('');
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
 
@@ -104,7 +94,7 @@ export default function BiomarkerDashboard() {
     // ── Reset page when filters change ──
     useEffect(() => {
         setPage(1);
-    }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo, setPage]);
+    }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterDateFrom, filterDateTo, setPage]);
 
     // ── Counts ──
     const newCount = useMemo(() => violations.filter(v => v.status === 'New').length, [violations]);
@@ -113,9 +103,6 @@ export default function BiomarkerDashboard() {
     const filteredViolations = useMemo(() => {
         let filtered = violations;
 
-        if (filterAlertType) {
-            filtered = filtered.filter(v => v.type === filterAlertType);
-        }
         if (filterEmployee) {
             filtered = filtered.filter(v => v.employeeNumber === filterEmployee);
         }
@@ -141,7 +128,7 @@ export default function BiomarkerDashboard() {
             );
         }
         return filtered;
-    }, [violations, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
+    }, [violations, searchQuery, filterEmployee, filterDepartment, filterDateFrom, filterDateTo]);
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {
@@ -152,13 +139,12 @@ export default function BiomarkerDashboard() {
         setSearchQuery('');
         setFilterEmployee('');
         setFilterDepartment('');
-        setFilterAlertType('');
         setFilterDateFrom('');
         setFilterDateTo('');
         setActiveFilter('all');
     }, []);
 
-    const hasActiveFilters = !!(searchQuery || filterEmployee || filterDepartment || filterAlertType || filterDateFrom || filterDateTo || activeFilter !== 'all');
+    const hasActiveFilters = !!(searchQuery || filterEmployee || filterDepartment || filterDateFrom || filterDateTo || activeFilter !== 'all');
 
     // ── Columns ──
     const columns: DataTableColumn<BiomarkerViolation>[] = useMemo(() => [
@@ -238,12 +224,6 @@ export default function BiomarkerDashboard() {
                 options={departmentOptions}
                 placeholder="All Departments"
             />
-            <Select
-                value={filterAlertType}
-                onChange={v => { setFilterAlertType(v); setPage(1); }}
-                options={ALERT_TYPE_OPTIONS}
-                placeholder="All Alert Types"
-            />
             <div className="bd-date-range">
                 <input
                     type="date"
@@ -267,7 +247,7 @@ export default function BiomarkerDashboard() {
                 </button>
             )}
         </div>
-    ), [filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo, employeeOptions, departmentOptions, hasActiveFilters, handleResetFilters]);
+    ), [filterEmployee, filterDepartment, filterDateFrom, filterDateTo, employeeOptions, departmentOptions, hasActiveFilters, handleResetFilters]);
 
     return (
         <div className="biomarker-dashboard">
