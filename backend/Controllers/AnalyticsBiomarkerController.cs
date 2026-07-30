@@ -30,22 +30,46 @@ public class AnalyticsBiomarkerController : ControllerBase
     {
         try
         {
-            var query = _db.BiomarkerAlerts
-                .OrderByDescending(a => a.ScanDateTime);
+            var allQuery = _db.BiomarkerAlerts.AsQueryable();
 
-            var totalCount = await query.CountAsync();
+            var totalCount = await allQuery.CountAsync();
 
-            var alerts = await query
+            var paged = await allQuery
+                .OrderByDescending(a => a.ScanDateTime)
                 .Skip((pagination.PageNumber - 1) * pagination.PageSize)
                 .Take(pagination.PageSize)
                 .ToListAsync();
 
-            return Ok(new PaginatedResponseDTO<BiomarkerAlert>
+            // Compute total summary counts from the full dataset
+            var totalSlaBreaches = await allQuery
+                .CountAsync(a => a.MetricName == "OnTimeRate" || a.MetricName == "StuckTasks" || a.MetricName == "OverallSlaCompliance");
+            var totalWorkloadOverloads = await allQuery
+                .CountAsync(a => a.MetricName == "HighWorkload");
+            var totalBiomarkerFlags = totalCount - totalSlaBreaches - totalWorkloadOverloads;
+
+            var totalCritical = await allQuery.CountAsync(a => a.Severity == "Critical");
+            var totalWarning = await allQuery.CountAsync(a => a.Severity == "Warning");
+            var totalInfo = await allQuery.CountAsync(a => a.Severity == "Info");
+
+            return Ok(new
             {
-                Items = alerts,
-                TotalCount = totalCount,
-                PageNumber = pagination.PageNumber,
-                PageSize = pagination.PageSize
+                Paged = new PaginatedResponseDTO<BiomarkerAlert>
+                {
+                    Items = paged,
+                    TotalCount = totalCount,
+                    PageNumber = pagination.PageNumber,
+                    PageSize = pagination.PageSize
+                },
+                Summary = new BiomarkerSummaryDTO
+                {
+                    TotalViolations = totalCount,
+                    TotalSlaBreaches = totalSlaBreaches,
+                    TotalWorkloadOverloads = totalWorkloadOverloads,
+                    TotalBiomarkerFlags = totalBiomarkerFlags,
+                    TotalCriticalFlags = totalCritical,
+                    TotalHighMediumFlags = totalWarning,
+                    TotalLowFlags = totalInfo
+                }
             });
         }
         catch (Exception ex)

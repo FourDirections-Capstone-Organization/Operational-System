@@ -13,6 +13,15 @@ import {
 
 // ─── Public API ─────────────────────────────────────────────────────
 
+export interface BiomarkerSummary {
+    slaBreaches: number;
+    workloadOverloads: number;
+    biomarkerFlags: number;
+    redFlags: number;
+    amberFlags: number;
+    greenFlags: number;
+}
+
 export interface UseBiomarkerReturn {
     violations: BiomarkerViolation[];
     scanMeta: ScanMeta | null;
@@ -25,6 +34,7 @@ export interface UseBiomarkerReturn {
     totalPages: number;
     currentPage: number;
     setPage: (page: number) => void;
+    summary: BiomarkerSummary;
     triggerScan: () => Promise<void>;
 }
 
@@ -119,6 +129,7 @@ export function useBiomarker(): UseBiomarkerReturn {
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [currentPage, setCurrentPage] = useState(1);
+    const [summary, setSummary] = useState<BiomarkerSummary>({ slaBreaches: 0, workloadOverloads: 0, biomarkerFlags: 0, redFlags: 0, amberFlags: 0, greenFlags: 0 });
     const mountedRef = useRef(true);
     const isScanningRef = useRef(false);
 
@@ -134,16 +145,24 @@ export function useBiomarker(): UseBiomarkerReturn {
             setAnalyticsStatus('online');
             const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10);
             if (paged && mountedRef.current) {
-                const transformed = transformAlertsToViolations(paged.items);
+                const transformed = transformAlertsToViolations(paged.paged.items);
                 setViolations(transformed);
-                setTotalCount(paged.totalCount);
-                setTotalPages(paged.totalPages);
+                setTotalCount(paged.paged.totalCount);
+                setTotalPages(paged.paged.totalPages);
+                setSummary({
+                    slaBreaches: paged.summary.totalSlaBreaches,
+                    workloadOverloads: paged.summary.totalWorkloadOverloads,
+                    biomarkerFlags: paged.summary.totalBiomarkerFlags,
+                    redFlags: paged.summary.totalCriticalFlags,
+                    amberFlags: paged.summary.totalHighMediumFlags,
+                    greenFlags: paged.summary.totalLowFlags,
+                });
                 if (transformed.length > 0) {
                     setScanMeta({
                         batchId: `SCAN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001`,
-                        scannedAt: paged.items[0].scanDateTime || new Date().toISOString(),
+                        scannedAt: paged.paged.items[0].scanDateTime || new Date().toISOString(),
                         duration: '~1s',
-                        totalViolations: paged.totalCount,
+                        totalViolations: paged.paged.totalCount,
                     });
                 }
                 const next = new Date();
@@ -227,6 +246,7 @@ export function useBiomarker(): UseBiomarkerReturn {
         totalPages,
         currentPage,
         setPage,
+        summary,
         triggerScan,
     };
 }

@@ -67,6 +67,21 @@ export interface TrendDataDTO {
     onTimeRate: number;
 }
 
+export interface BiomarkerSummaryDTO {
+    totalViolations: number;
+    totalSlaBreaches: number;
+    totalWorkloadOverloads: number;
+    totalBiomarkerFlags: number;
+    totalCriticalFlags: number;
+    totalHighMediumFlags: number;
+    totalLowFlags: number;
+}
+
+export interface LatestBiomarkerResponse {
+    paged: PaginatedResponseDTO<BiomarkerAlertDTO>;
+    summary: BiomarkerSummaryDTO;
+}
+
 export interface PaginatedResponseDTO<T> {
     items: T[];
     totalCount: number;
@@ -217,9 +232,9 @@ async function healthCheckInternal(): Promise<boolean> {
     }
 }
 
-async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number): Promise<PaginatedResponseDTO<BiomarkerAlertDTO> | null> {
+async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number): Promise<LatestBiomarkerResponse | null> {
     try {
-        const res = await api.get<PaginatedResponseDTO<BiomarkerAlertDTO>>('/api/analytics/biomarker/latest', { pageNumber, pageSize });
+        const res = await api.get<LatestBiomarkerResponse>('/api/analytics/biomarker/latest', { pageNumber, pageSize });
         return res.data;
     } catch (err) {
         console.warn('[AnalyticsService] fetchLatestAlertsPaged failed:', err);
@@ -247,7 +262,7 @@ export const analyticsService = {
     /** Fetch the latest biomarker alerts (first page, 50 items) */
     fetchLatestAlerts: async (): Promise<BiomarkerAlertDTO[] | null> => {
         const paged = await fetchLatestAlertsPagedInternal(1, 50);
-        return paged?.items ?? null;
+        return paged?.paged.items ?? null;
     },
 
     /** Fetch the latest biomarker alerts with pagination */

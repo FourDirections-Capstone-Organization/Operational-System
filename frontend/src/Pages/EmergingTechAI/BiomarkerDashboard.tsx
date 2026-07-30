@@ -71,7 +71,7 @@ export default function BiomarkerDashboard() {
     const {
         violations, scanMeta, nextScan, scanStatus,
         scanning, analyticsStatus, lastRefresh, triggerScan,
-        totalCount, totalPages, currentPage, setPage,
+        totalCount, totalPages, currentPage, setPage, summary,
     } = useBiomarker();
     const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
 
@@ -107,9 +107,6 @@ export default function BiomarkerDashboard() {
     }, [activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo, setPage]);
 
     // ── Counts ──
-    const slaCount = useMemo(() => violations.filter(v => v.type === 'sla_breach').length, [violations]);
-    const workloadCount = useMemo(() => violations.filter(v => v.type === 'workload_overload').length, [violations]);
-    const flagCount = useMemo(() => violations.filter(v => v.type === 'biomarker_flag').length, [violations]);
     const newCount = useMemo(() => violations.filter(v => v.status === 'New').length, [violations]);
 
     // ── Filtered violations ──
@@ -223,11 +220,11 @@ export default function BiomarkerDashboard() {
 
     // ── Tabs ──
     const tabs: DataTableTab[] = useMemo(() => [
-        { key: 'all', label: 'All Violations', badge: violations.length },
-        { key: 'sla_breach', label: 'SLA Breaches', badge: slaCount },
-        { key: 'workload_overload', label: 'Workload Overloads', badge: workloadCount },
-        { key: 'biomarker_flag', label: 'Biomarker Flags', badge: flagCount },
-    ], [violations.length, slaCount, workloadCount, flagCount]);
+        { key: 'all', label: 'All Violations', badge: summary.slaBreaches + summary.workloadOverloads + summary.biomarkerFlags },
+        { key: 'sla_breach', label: 'SLA Breaches', badge: summary.slaBreaches },
+        { key: 'workload_overload', label: 'Workload Overloads', badge: summary.workloadOverloads },
+        { key: 'biomarker_flag', label: 'Biomarker Flags', badge: summary.biomarkerFlags },
+    ], [summary.slaBreaches, summary.workloadOverloads, summary.biomarkerFlags]);
 
     // ── Filter elements ──
     const filterElements = useMemo(() => (
@@ -327,28 +324,28 @@ export default function BiomarkerDashboard() {
             <div className="bd-cards-row">
                 <StatusCard
                     label="Total Violations"
-                    value={violations.length}
+                    value={summary.slaBreaches + summary.workloadOverloads + summary.biomarkerFlags}
                     icon={<AlertTriangle size={22} />}
                     variant="danger"
                     subtext={`${newCount} new • Latest scan`}
                 />
                 <StatusCard
                     label="SLA Breaches"
-                    value={slaCount}
+                    value={summary.slaBreaches}
                     icon={<Clock size={22} />}
                     variant="warning"
                     subtext="Tasks past SLA deadline"
                 />
                 <StatusCard
                     label="Workload Overloads"
-                    value={workloadCount}
+                    value={summary.workloadOverloads}
                     icon={<Users size={22} />}
                     variant="warning"
                     subtext="Couriers exceeding threshold"
                 />
                 <StatusCard
                     label="Biomarker Flags"
-                    value={flagCount}
+                    value={summary.biomarkerFlags}
                     icon={<Activity size={22} />}
                     variant="info"
                     subtext="Flags generated from violations"
@@ -385,21 +382,21 @@ export default function BiomarkerDashboard() {
                     <StatusCard
                         variant="danger"
                         label="Red Flags"
-                        value={violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Critical').length}
+                        value={summary.redFlags}
                         icon={<XCircle size={22} />}
                         subtext="Immediate action required — compound violations"
                     />
                     <StatusCard
                         variant="warning"
                         label="Amber Flags"
-                        value={violations.filter(v => v.type === 'biomarker_flag' && (v.severity === 'High' || v.severity === 'Medium')).length}
+                        value={summary.amberFlags}
                         icon={<AlertTriangle size={22} />}
                         subtext="Requires monitoring — recurring or trending patterns"
                     />
                     <StatusCard
                         variant="success"
                         label="Green Flags"
-                        value={violations.filter(v => v.type === 'biomarker_flag' && v.severity === 'Low').length}
+                        value={summary.greenFlags}
                         icon={<CheckCircle2 size={22} />}
                         subtext="Positive resolution — conditions normalized"
                     />
