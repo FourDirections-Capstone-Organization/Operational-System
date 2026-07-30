@@ -30,6 +30,9 @@ public class AnalyticsBiomarkerController : ControllerBase
     {
         try
         {
+            _logger.LogInformation("Fetching latest biomarker alerts: page={Page}, size={Size}, type={Type}",
+                pagination.PageNumber, pagination.PageSize, type ?? "(none)");
+
             // Build filter based on type parameter
             var allQuery = _db.BiomarkerAlerts.AsQueryable();
 
