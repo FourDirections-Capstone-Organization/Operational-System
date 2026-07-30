@@ -91,8 +91,9 @@ export default function BiomarkerDashboard() {
 
     useEffect(() => {
         // Fetch all departments
-        api.get('/api/Department').then((res: any) => {
-            const depts = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+        api.get('/api/Department', { pageSize: 100 }).then((res: any) => {
+            const payload = res.data;
+            const depts = payload?.data?.items ?? (Array.isArray(payload) ? payload : []);
             setDepartmentOptions(
                 depts
                     .filter((d: any) => d.isActive !== false)
