@@ -125,7 +125,8 @@ builder.Services.AddScoped<ChartDataService>();
 // Hosted Services
 builder.Services.AddHostedService<OverdueCheckService>();
 builder.Services.AddHostedService<RecurringTaskGenerator>();
-builder.Services.AddHostedService<BiomarkerScanService>();
+builder.Services.AddSingleton<BiomarkerScanService>();
+builder.Services.AddHostedService<BiomarkerScanService>(sp => sp.GetRequiredService<BiomarkerScanService>());
 builder.Services.AddHostedService<SlaRiskTrainingService>();
 builder.Services.AddSingleton<IRetrainTrigger>(sp =>
     (SlaRiskTrainingService)sp.GetServices<IHostedService>()
