@@ -7,6 +7,8 @@ public class BiomarkerAlert
     public DateTime ScanDate { get; set; }
     public Guid? DepartmentId { get; set; }
     public string DepartmentName { get; set; } = string.Empty;
+    public string? EmployeeName { get; set; }
+    public string? EmployeeNumber { get; set; }
     public string MetricName { get; set; } = string.Empty;
     public double CurrentValue { get; set; }
     public double ThresholdValue { get; set; }
