@@ -1656,7 +1656,9 @@ const DashboardTab: React.FC<{
     onViewTask?: (task: any) => void;
 }> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask, tasks, onViewTask }) => {
     const [searchQuery, setSearchQuery] = useState('');
-    const hasAnyFilter = filters.dateStart || filters.dateEnd || filters.employeeId || filters.departmentId || filters.taskStatus || filters.assignmentScope;
+    // Local filters for Workload Summary only — does NOT trigger full dashboard re-fetch
+    const [wlFilters, setWlFilters] = useState({ employeeId: '', departmentId: '', assignmentScope: '', taskStatus: '', dateStart: '', dateEnd: '' });
+    const hasAnyFilter = wlFilters.employeeId || wlFilters.departmentId || wlFilters.assignmentScope || wlFilters.taskStatus || wlFilters.dateStart || wlFilters.dateEnd;
     const td = dashboardData;
 
     const totalActive = td?.totalActiveTasks ?? 0;
@@ -1670,9 +1672,9 @@ const DashboardTab: React.FC<{
     const workloads = td?.employeeWorkload ?? [];
     const teamWorkloads = td?.teamWorkload ?? [];
     const deptWorkloads = td?.departmentWorkload ?? [];
-    const filteredWorkloads = searchQuery
-        ? workloads.filter(w => w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()))
-        : workloads;
+    const filteredWorkloads = workloads
+        .filter(w => !wlFilters.employeeId || w.employeeId === wlFilters.employeeId)
+        .filter(w => !searchQuery || w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()));
     const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
     const lastUpdated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -1932,53 +1934,51 @@ const DashboardTab: React.FC<{
                         title="Workload Summary per Employee"
                         filterElements={
                             <div className="dt-filter-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <select value={filters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                    onChange={e => onFilterChange({ ...filters, assignmentScope: e.target.value })}>
-                                    <option value="">All Scopes</option>
-                                    <option value="0">Single Employee</option>
-                                    <option value="1">Team</option>
-                                    <option value="2">Department</option>
-                                </select>
-                                <select value={filters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                    onChange={e => onFilterChange({ ...filters, employeeId: e.target.value })}>
-                                    <option value="">All Employees</option>
-                                    {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
-                                </select>
-                                <select value={filters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                    onChange={e => onFilterChange({ ...filters, departmentId: e.target.value })}>
-                                    <option value="">All Departments</option>
-                                    {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
-                                </select>
-                                <select value={filters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                    onChange={e => onFilterChange({ ...filters, taskStatus: e.target.value })}>
-                                    <option value="">All Statuses</option>
-                                    <option value="Assigned">Assigned</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Pending Admin Review">Pending Admin Review</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Overdue">Overdue</option>
-                                </select>
-                                {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
-                                    const isActive = filters.dateStart && filters.dateEnd && (() => {
-                                        const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                        return filters.dateStart === start.toISOString().split('T')[0];
-                                    })();
-                                    return (
-                                        <button key={p.label}
-                                            className={`filter-pill${isActive ? ' active' : ''}`}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                                onFilterChange({ ...filters, dateStart: start.toISOString().split('T')[0], dateEnd: end.toISOString().split('T')[0] });
-                                            }}
-                                            style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                            {p.label}
-                                        </button>
-                                    );
-                                })}
-                                {hasAnyFilter && (
-                                    <button className="btn btn-sm" onClick={onClearFilters} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
-                                )}
+                                 <select value={wlFilters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                     onChange={e => setWlFilters(p => ({ ...p, assignmentScope: e.target.value }))}>
+                                     <option value="">All Scopes</option>
+                                     <option value="0">Single Employee</option>
+                                     <option value="1">Team</option>
+                                     <option value="2">Department</option>
+                                 </select>
+                                 <select value={wlFilters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                     onChange={e => setWlFilters(p => ({ ...p, employeeId: e.target.value }))}>
+                                     <option value="">All Employees</option>
+                                     {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
+                                 </select>
+                                 <select value={wlFilters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                     onChange={e => setWlFilters(p => ({ ...p, departmentId: e.target.value }))}>
+                                     <option value="">All Departments</option>
+                                     {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
+                                 </select>
+                                 <select value={wlFilters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                     onChange={e => setWlFilters(p => ({ ...p, taskStatus: e.target.value }))}>
+                                     <option value="">All Statuses</option>
+                                     <option value="Assigned">Assigned</option>
+                                     <option value="In Progress">In Progress</option>
+                                     <option value="Pending Admin Review">Pending Admin Review</option>
+                                     <option value="Completed">Completed</option>
+                                     <option value="Overdue">Overdue</option>
+                                 </select>
+                                 {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
+                                     const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                     const from = start.toISOString().split('T')[0];
+                                     const isActive = wlFilters.dateStart === from;
+                                     return (
+                                         <button key={p.label}
+                                             className={`filter-pill${isActive ? ' active' : ''}`}
+                                             onClick={e => {
+                                                 e.stopPropagation();
+                                                 setWlFilters(prev => ({ ...prev, dateStart: from, dateEnd: end.toISOString().split('T')[0] }));
+                                             }}
+                                             style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                             {p.label}
+                                         </button>
+                                     );
+                                 })}
+                                 {hasAnyFilter && (
+                                     <button className="btn btn-sm" onClick={() => setWlFilters({ employeeId: '', departmentId: '', assignmentScope: '', taskStatus: '', dateStart: '', dateEnd: '' })} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
+                                 )}
                             </div>
                         }
                         headers={['EMPLOYEE', 'TOTAL', 'ACTIVE', 'COMPLETED', 'OVERDUE', 'COMPLETION']}
