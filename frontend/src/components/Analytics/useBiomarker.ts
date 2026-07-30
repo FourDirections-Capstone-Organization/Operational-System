@@ -132,11 +132,13 @@ export function useBiomarker(filterType?: string): UseBiomarkerReturn {
     const [summary, setSummary] = useState<BiomarkerSummary>({ slaBreaches: 0, workloadOverloads: 0, biomarkerFlags: 0, redFlags: 0, amberFlags: 0, greenFlags: 0 });
     const mountedRef = useRef(true);
     const isScanningRef = useRef(false);
+    const fetchGenRef = useRef(0);
 
     // ── Data Fetch ──
     const refreshData = useCallback(async () => {
         if (isScanningRef.current) return;
 
+        const generation = ++fetchGenRef.current;
         const healthy = await analyticsService.checkHealth();
 
         if (!mountedRef.current) return;
@@ -144,6 +146,7 @@ export function useBiomarker(filterType?: string): UseBiomarkerReturn {
         if (healthy) {
             setAnalyticsStatus('online');
             const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10, filterType);
+            if (generation !== fetchGenRef.current) return; // stale — a newer fetch started
             if (paged && mountedRef.current) {
                 const transformed = transformAlertsToViolations(paged.paged.items);
                 setViolations(transformed);
@@ -182,6 +185,15 @@ export function useBiomarker(filterType?: string): UseBiomarkerReturn {
             setLastRefresh(Date.now());
         }
     }, [currentPage, filterType]);
+
+    // ── Reset to page 1 when filter type changes ──
+    const prevFilterRef = useRef(filterType);
+    useEffect(() => {
+        if (prevFilterRef.current !== filterType) {
+            prevFilterRef.current = filterType;
+            setCurrentPage(1);
+        }
+    }, [filterType]);
 
     // ── Initial Load ──
     useEffect(() => {
