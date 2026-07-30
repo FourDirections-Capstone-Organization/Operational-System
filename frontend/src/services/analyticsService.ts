@@ -232,9 +232,11 @@ async function healthCheckInternal(): Promise<boolean> {
     }
 }
 
-async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number): Promise<LatestBiomarkerResponse | null> {
+async function fetchLatestAlertsPagedInternal(pageNumber: number, pageSize: number, type?: string): Promise<LatestBiomarkerResponse | null> {
     try {
-        const res = await api.get<LatestBiomarkerResponse>('/api/analytics/biomarker/latest', { pageNumber, pageSize });
+        const params: Record<string, any> = { pageNumber, pageSize };
+        if (type) params.type = type;
+        const res = await api.get<LatestBiomarkerResponse>('/api/analytics/biomarker/latest', params);
         return res.data;
     } catch (err) {
         console.warn('[AnalyticsService] fetchLatestAlertsPaged failed:', err);
@@ -265,7 +267,7 @@ export const analyticsService = {
         return paged?.paged.items ?? null;
     },
 
-    /** Fetch the latest biomarker alerts with pagination */
+    /** Fetch the latest biomarker alerts with pagination and optional type filter */
     fetchLatestAlertsPaged: fetchLatestAlertsPagedInternal,
 
     /** Fetch biomarker alert history with optional date range (first page, 50 items) */

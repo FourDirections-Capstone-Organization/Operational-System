@@ -68,15 +68,15 @@ const ALERT_TYPE_OPTIONS = [
 // ─── Main Component ─────────────────────────────────────────────────────
 
 export default function BiomarkerDashboard() {
+    // ── Filter state (declared before hook so we can pass activeFilter) ──
+    const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+
     const {
         violations, scanMeta, nextScan, scanStatus,
         scanning, analyticsStatus, lastRefresh, triggerScan,
         totalCount, totalPages, currentPage, setPage, summary,
-    } = useBiomarker();
+    } = useBiomarker(activeFilter !== 'all' ? activeFilter : undefined);
     const safeScanMeta = scanMeta ?? { batchId: 'N/A', scannedAt: '', duration: '—', totalViolations: 0 };
-
-    // ── Filter state ──
-    const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterEmployee, setFilterEmployee] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
@@ -113,9 +113,6 @@ export default function BiomarkerDashboard() {
     const filteredViolations = useMemo(() => {
         let filtered = violations;
 
-        if (activeFilter !== 'all') {
-            filtered = filtered.filter(v => v.type === activeFilter);
-        }
         if (filterAlertType) {
             filtered = filtered.filter(v => v.type === filterAlertType);
         }
@@ -144,7 +141,7 @@ export default function BiomarkerDashboard() {
             );
         }
         return filtered;
-    }, [violations, activeFilter, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
+    }, [violations, searchQuery, filterEmployee, filterDepartment, filterAlertType, filterDateFrom, filterDateTo]);
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {

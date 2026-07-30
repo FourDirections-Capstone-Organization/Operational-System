@@ -119,7 +119,7 @@ function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViol
 
 // ─── Hook ────────────────────────────────────────────────────────────
 
-export function useBiomarker(): UseBiomarkerReturn {
+export function useBiomarker(filterType?: string): UseBiomarkerReturn {
     const [violations, setViolations] = useState<BiomarkerViolation[]>([]);
     const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
     const [nextScan, setNextScan] = useState('');
@@ -143,7 +143,7 @@ export function useBiomarker(): UseBiomarkerReturn {
 
         if (healthy) {
             setAnalyticsStatus('online');
-            const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10);
+            const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10, filterType);
             if (paged && mountedRef.current) {
                 const transformed = transformAlertsToViolations(paged.paged.items);
                 setViolations(transformed);
@@ -181,7 +181,7 @@ export function useBiomarker(): UseBiomarkerReturn {
         if (mountedRef.current) {
             setLastRefresh(Date.now());
         }
-    }, [currentPage]);
+    }, [currentPage, filterType]);
 
     // ── Initial Load ──
     useEffect(() => {

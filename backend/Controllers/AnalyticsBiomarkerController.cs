@@ -26,43 +26,65 @@ public class AnalyticsBiomarkerController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatestBiomarkerResults([FromQuery] PaginationQueryDTO pagination)
+    public async Task<IActionResult> GetLatestBiomarkerResults([FromQuery] PaginationQueryDTO pagination, [FromQuery] string? type = null)
     {
         try
         {
+            // Build filter based on type parameter
             var allQuery = _db.BiomarkerAlerts.AsQueryable();
 
-            var totalCount = await allQuery.CountAsync();
+            if (!string.IsNullOrEmpty(type))
+            {
+                allQuery = type switch
+                {
+                    "sla_breach" => allQuery.Where(a =>
+                        a.MetricName == "OnTimeRate" ||
+                        a.MetricName == "StuckTasks" ||
+                        a.MetricName == "OverallSlaCompliance"),
+                    "workload_overload" => allQuery.Where(a => a.MetricName == "HighWorkload"),
+                    "biomarker_flag" => allQuery.Where(a =>
+                        a.MetricName != "OnTimeRate" &&
+                        a.MetricName != "StuckTasks" &&
+                        a.MetricName != "OverallSlaCompliance" &&
+                        a.MetricName != "HighWorkload"),
+                    _ => allQuery
+                };
+            }
 
+            // Total count for the filtered query (for pagination)
+            var filteredCount = await allQuery.CountAsync();
+
+            // Fetch the page
             var paged = await allQuery
                 .OrderByDescending(a => a.ScanDateTime)
                 .Skip((pagination.PageNumber - 1) * pagination.PageSize)
                 .Take(pagination.PageSize)
                 .ToListAsync();
 
-            // Compute total summary counts from the full dataset
-            var totalSlaBreaches = await allQuery
+            // Compute summary counts from the UNFILTERED dataset (always overall totals)
+            var unfilteredQuery = _db.BiomarkerAlerts.AsQueryable();
+            var totalAll = await unfilteredQuery.CountAsync();
+            var totalSlaBreaches = await unfilteredQuery
                 .CountAsync(a => a.MetricName == "OnTimeRate" || a.MetricName == "StuckTasks" || a.MetricName == "OverallSlaCompliance");
-            var totalWorkloadOverloads = await allQuery
+            var totalWorkloadOverloads = await unfilteredQuery
                 .CountAsync(a => a.MetricName == "HighWorkload");
-            var totalBiomarkerFlags = totalCount - totalSlaBreaches - totalWorkloadOverloads;
-
-            var totalCritical = await allQuery.CountAsync(a => a.Severity == "Critical");
-            var totalWarning = await allQuery.CountAsync(a => a.Severity == "Warning");
-            var totalInfo = await allQuery.CountAsync(a => a.Severity == "Info");
+            var totalBiomarkerFlags = totalAll - totalSlaBreaches - totalWorkloadOverloads;
+            var totalCritical = await unfilteredQuery.CountAsync(a => a.Severity == "Critical");
+            var totalWarning = await unfilteredQuery.CountAsync(a => a.Severity == "Warning");
+            var totalInfo = await unfilteredQuery.CountAsync(a => a.Severity == "Info");
 
             return Ok(new
             {
                 Paged = new PaginatedResponseDTO<BiomarkerAlert>
                 {
                     Items = paged,
-                    TotalCount = totalCount,
+                    TotalCount = filteredCount,
                     PageNumber = pagination.PageNumber,
                     PageSize = pagination.PageSize
                 },
                 Summary = new BiomarkerSummaryDTO
                 {
-                    TotalViolations = totalCount,
+                    TotalViolations = totalAll,
                     TotalSlaBreaches = totalSlaBreaches,
                     TotalWorkloadOverloads = totalWorkloadOverloads,
                     TotalBiomarkerFlags = totalBiomarkerFlags,
