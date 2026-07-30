@@ -121,7 +121,7 @@ import SetPasswordPage from './Pages/set_password_page/set_password_page'
 import { ToastProvider } from './components/Toast/Toast'
 import AuthSyncWatcher from './components/Auth/AuthSyncWatcher'
 import SessionTimeoutWatcher from './components/Auth/SessionTimeoutWatcher'
-import { appNavigate, useAppNavigate } from './components/Auth/useAppNavigate'
+import { appNavigate } from './components/Auth/useAppNavigate'
 import OnboardingPage from './Pages/onboarding_page/onboarding_page'
 
 function PasswordChangedGuard() {
