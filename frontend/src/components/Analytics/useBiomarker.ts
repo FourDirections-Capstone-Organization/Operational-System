@@ -9,9 +9,6 @@ import {
     ViolationType,
     Severity,
     ViolationStatus,
-    MOCK_VIOLATIONS,
-    MOCK_SCAN,
-    MOCK_NEXT_SCAN,
 } from '../../services/analyticsService';
 
 // ─── Public API ─────────────────────────────────────────────────────
@@ -24,6 +21,10 @@ export interface UseBiomarkerReturn {
     scanning: boolean;
     analyticsStatus: AnalyticsHealthStatus;
     lastRefresh: number;
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    setPage: (page: number) => void;
     triggerScan: () => Promise<void>;
 }
 
@@ -63,7 +64,11 @@ function mapStatus(alert: BiomarkerAlertDTO): ViolationStatus {
 
 // ─── Employee Info Extraction ───────────────────────────────────────
 
-function extractEmployeeInfo(description: string): { employeeName: string; employeeNumber: string } {
+function extractEmployeeInfo(description: string, employeeName?: string, employeeNumber?: string): { employeeName: string; employeeNumber: string } {
+    if (employeeName && employeeNumber) {
+        return { employeeName, employeeNumber };
+    }
+
     const empMatch = description.match(/Employee\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+\(?([A-Z]-\d{3,4})\)?/);
     if (empMatch) {
         return { employeeName: empMatch[1].trim(), employeeNumber: empMatch[2].trim() };
@@ -74,14 +79,14 @@ function extractEmployeeInfo(description: string): { employeeName: string; emplo
         return { employeeName: `Employee ${numOnly[0]}`, employeeNumber: numOnly[0] };
     }
 
-    return { employeeName: 'Unknown', employeeNumber: '—' };
+    return { employeeName: '', employeeNumber: '' };
 }
 
 // ─── Data Transformation ────────────────────────────────────────────
 
 function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViolation[] {
     return alerts.map((a, idx) => {
-        const emp = extractEmployeeInfo(a.description);
+        const emp = extractEmployeeInfo(a.description, a.employeeName, a.employeeNumber);
 
         return {
             id: a.id || `ALERT-${idx + 1}`,
@@ -90,7 +95,7 @@ function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViol
             description: a.description,
             employeeName: emp.employeeName,
             employeeNumber: emp.employeeNumber,
-            department: a.departmentName || 'Unknown',
+            department: a.departmentName || '',
             departmentId: a.departmentId || '',
             taskTitle: a.metricName,
             taskReference: a.metricName === 'HighWorkload'
@@ -105,12 +110,15 @@ function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViol
 // ─── Hook ────────────────────────────────────────────────────────────
 
 export function useBiomarker(): UseBiomarkerReturn {
-    const [violations, setViolations] = useState<BiomarkerViolation[]>(MOCK_VIOLATIONS);
-    const [scanMeta, setScanMeta] = useState<ScanMeta | null>(MOCK_SCAN);
-    const [nextScan, setNextScan] = useState(MOCK_NEXT_SCAN);
+    const [violations, setViolations] = useState<BiomarkerViolation[]>([]);
+    const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
+    const [nextScan, setNextScan] = useState('');
     const [scanStatus, setScanStatus] = useState<ScanStatus>('Completed');
     const [analyticsStatus, setAnalyticsStatus] = useState<AnalyticsHealthStatus>('loading');
     const [lastRefresh, setLastRefresh] = useState(Date.now());
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
     const mountedRef = useRef(true);
     const isScanningRef = useRef(false);
 
@@ -124,16 +132,20 @@ export function useBiomarker(): UseBiomarkerReturn {
 
         if (healthy) {
             setAnalyticsStatus('online');
-            const alerts = await analyticsService.fetchLatestAlerts();
-            if (alerts && alerts.length > 0 && mountedRef.current) {
-                const transformed = transformAlertsToViolations(alerts);
+            const paged = await analyticsService.fetchLatestAlertsPaged(currentPage, 10);
+            if (paged && mountedRef.current) {
+                const transformed = transformAlertsToViolations(paged.items);
                 setViolations(transformed);
-                setScanMeta({
-                    batchId: `SCAN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001`,
-                    scannedAt: alerts[0].scanDateTime || new Date().toISOString(),
-                    duration: '~1s',
-                    totalViolations: transformed.length,
-                });
+                setTotalCount(paged.totalCount);
+                setTotalPages(paged.totalPages);
+                if (transformed.length > 0) {
+                    setScanMeta({
+                        batchId: `SCAN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-001`,
+                        scannedAt: paged.items[0].scanDateTime || new Date().toISOString(),
+                        duration: '~1s',
+                        totalViolations: paged.totalCount,
+                    });
+                }
                 const next = new Date();
                 next.setDate(next.getDate() + 1);
                 next.setHours(0, 0, 0, 0);
@@ -141,12 +153,16 @@ export function useBiomarker(): UseBiomarkerReturn {
             }
         } else {
             setAnalyticsStatus('offline');
+            setViolations([]);
+            setScanMeta(null);
+            setTotalCount(0);
+            setTotalPages(0);
         }
 
         if (mountedRef.current) {
             setLastRefresh(Date.now());
         }
-    }, []);
+    }, [currentPage]);
 
     // ── Initial Load ──
     useEffect(() => {
@@ -163,11 +179,17 @@ export function useBiomarker(): UseBiomarkerReturn {
         return () => clearInterval(interval);
     }, [refreshData]);
 
+    // ── Page Change ──
+    const setPage = useCallback((page: number) => {
+        setCurrentPage(page);
+    }, []);
+
     // ── Trigger Scan ──
     const triggerScan = useCallback(async () => {
         if (isScanningRef.current) return;
         isScanningRef.current = true;
         setScanStatus('Running');
+        setCurrentPage(1);
 
         const ok = await analyticsService.triggerScan();
 
@@ -201,6 +223,10 @@ export function useBiomarker(): UseBiomarkerReturn {
         scanning: scanStatus === 'Running',
         analyticsStatus,
         lastRefresh,
+        totalCount,
+        totalPages,
+        currentPage,
+        setPage,
         triggerScan,
     };
 }
