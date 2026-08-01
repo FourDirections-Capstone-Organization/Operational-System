@@ -277,11 +277,17 @@ public class Neo4jDataWriter : IAsyncDisposable
             counts.total++;
 
             var category = GetString(rec, "Category") ?? "";
+            // Category is stored as an integer enum in PostgreSQL:
+            // 0=Timeliness, 1=WorkQuality, 2=Communication, 3=Other.
+            // Accept both the numeric codes (from Debezium JSON) and the string names.
             switch (category)
             {
-                case "Timeliness": counts.timeliness++; break;
-                case "WorkQuality": counts.quality++; break;
-                case "Communication": counts.communication++; break;
+                case "Timeliness":
+                case "0": counts.timeliness++; break;
+                case "WorkQuality":
+                case "1": counts.quality++; break;
+                case "Communication":
+                case "2": counts.communication++; break;
             }
 
             recCounts[assigneeId] = counts;

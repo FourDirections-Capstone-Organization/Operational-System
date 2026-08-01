@@ -48,7 +48,7 @@ public class KafkaCdcConsumer
         {
             var adminConfig = new AdminClientConfig { BootstrapServers = _options.BootstrapServers };
             using var adminClient = new AdminClientBuilder(adminConfig).Build();
-            var metadata = adminClient.GetMetadata(topicsToRead, TimeSpan.FromSeconds(10));
+            var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(10));
 
             var partitions = metadata.Topics
                 .SelectMany(t => t.Partitions.Select(p => new TopicPartition(t.Topic, p.PartitionId)))
