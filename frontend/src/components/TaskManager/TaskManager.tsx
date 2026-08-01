@@ -107,6 +107,7 @@ const DueLabel = ({ date, isSLALocked }: { date?: string; isSLALocked?: boolean 
 
 export default function TaskManager({
     tasks, teamMembers, onNewTask, onEdit, onView, onArchive, onRestore, onDelete, onMarkDone,
+    summary,
     searchQuery: externalSearch,
     onSearchChange,
     filterPrio: externalFilterPrio,
