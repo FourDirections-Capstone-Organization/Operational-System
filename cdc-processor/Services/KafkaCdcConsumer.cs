@@ -39,7 +39,38 @@ public class KafkaCdcConsumer
         };
 
         using var consumer = new ConsumerBuilder<string, string>(config).Build();
-        consumer.Subscribe(topicsToRead);
+
+        // Full replay strategy: assign partitions explicitly and seek to the
+        // beginning each cycle. Derived insights (workload, experience, scores)
+        // require the COMPLETE state (all task statuses + all assignments), which
+        // cannot be computed from incremental delta events alone.
+        try
+        {
+            var adminConfig = new AdminClientConfig { BootstrapServers = _options.BootstrapServers };
+            using var adminClient = new AdminClientBuilder(adminConfig).Build();
+            var metadata = adminClient.GetMetadata(topicsToRead, TimeSpan.FromSeconds(10));
+
+            var partitions = metadata.Topics
+                .SelectMany(t => t.Partitions.Select(p => new TopicPartition(t.Topic, p.PartitionId)))
+                .ToList();
+
+            if (partitions.Count == 0)
+            {
+                _logger.LogInformation("No CDC topic partitions available yet.");
+                return new List<CdcPayload>();
+            }
+
+            consumer.Assign(partitions);
+            foreach (var tp in partitions)
+            {
+                consumer.Seek(new TopicPartitionOffset(tp, Offset.Beginning));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Could not assign Kafka partitions, falling back to subscribe: {Error}", ex.Message);
+            consumer.Subscribe(topicsToRead);
+        }
 
         var events = new List<CdcPayload>();
         var totalWait = TimeSpan.FromSeconds(30);

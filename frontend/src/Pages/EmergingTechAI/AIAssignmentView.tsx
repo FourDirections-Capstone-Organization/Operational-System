@@ -103,9 +103,10 @@ const formatDateForInput = (d: Date): string => {
 
 interface AIAssignmentViewProps {
     onBack?: () => void;
+    onTaskCreated?: () => void;
 }
 
-const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
+const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreated }) => {
     const { success, error } = useToast();
 
     // ── Form State ──
@@ -549,6 +550,8 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
             await api.post('/api/Task', payload);
             setStep('submitted');
             success('Task assigned successfully — Neo4j graph updated, notifications sent, audit log recorded.');
+            // Notify the parent dashboard so the Task List tab refreshes immediately
+            if (onTaskCreated) onTaskCreated();
         } catch (err: any) {
             const status = err.response?.status;
             const serverMsg = err.response?.data?.message || err.response?.data?.Message || err.response?.data?.title || '';
@@ -1036,7 +1039,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack }) => {
                                                     <div className="ai-emp-badges">
                                                         {ai && aiEnabled && !aiLoading && (
                                                             <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#6B7280' }}>
-                                                                <Briefcase size={10} /> {ai.workload}
+                                                                <Briefcase size={10} /> {emp.activeTaskCount}
                                                             </span>
                                                         )}
                                                         {aiEnabled && isBestPick && (

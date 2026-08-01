@@ -5681,7 +5681,12 @@ export default function OpsAdminDashboard() {
                         )}
                         {taskSubTab === 'create' && (
                             <div className="dashboard-content">
-                                <AIAssignmentView />
+                                <AIAssignmentView
+                                    onTaskCreated={() => {
+                                        fetchTasks().catch(() => {});
+                                        doFetchDashboard().catch(() => {});
+                                    }}
+                                />
                             </div>
                         )}
                     </>

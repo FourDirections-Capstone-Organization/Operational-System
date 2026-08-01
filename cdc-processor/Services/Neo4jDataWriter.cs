@@ -198,7 +198,9 @@ public class Neo4jDataWriter : IAsyncDisposable
             });
         }
 
-        var taskStatusInProgress = new HashSet<string> { "0", "1", "2" };
+        // Active = any status except Completed(3) and Cancelled(5), matching the backend
+        // GetAssignableUsersAsync definition (includes OnHold(4)).
+        var taskStatusInProgress = new HashSet<string> { "0", "1", "2", "4" };
         var taskStatusCompleted = new HashSet<string> { "3" };
 
         var employeeTaskCounts = new Dictionary<string, (int active, int routineCompleted, int specialCompleted)>();

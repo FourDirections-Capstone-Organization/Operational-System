@@ -160,7 +160,7 @@ services:
       Neo4j__Uri: bolt://neo4j:7687
       Neo4j__User: neo4j
       Neo4j__Password: starslab!
-      CdcProcessor__SyncIntervalMinutes: 10
+      CdcProcessor__SyncIntervalMinutes: 3
     depends_on:
       kafka:
         condition: service_healthy
