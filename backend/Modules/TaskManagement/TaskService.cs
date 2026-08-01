@@ -148,7 +148,7 @@ public class TaskService : ITaskService
         }
     }
 
-    public async Task<ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>> GetAllAsync(
+    public async Task<ApiResponseDTO<TaskListResponseDTO>> GetAllAsync(
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId,
@@ -217,6 +217,21 @@ public class TaskService : ITaskService
 
         var totalCount = await query.CountAsync();
 
+        // Summary counts across ALL pages (not just the current page).
+        // Active = not completed and not cancelled; Overdue = active with effective deadline in the past.
+        var nowUtc = DateTime.UtcNow;
+        var activeCount = await query.CountAsync(t =>
+            t.Status != Models.Enums.TaskStatus.Completed &&
+            t.Status != Models.Enums.TaskStatus.Cancelled);
+        var inProgressCount = await query.CountAsync(t =>
+            t.Status == Models.Enums.TaskStatus.InProgress);
+        var completedCount = await query.CountAsync(t =>
+            t.Status == Models.Enums.TaskStatus.Completed);
+        var overdueCount = await query.CountAsync(t =>
+            t.Status != Models.Enums.TaskStatus.Completed &&
+            t.Status != Models.Enums.TaskStatus.Cancelled &&
+            (t.RevisedDeadline ?? t.Deadline) < nowUtc);
+
         var tasks = await query
             .OrderByDescending(t => t.CreatedAt)
             .Skip((pageNumber - 1) * pageSize)
@@ -229,15 +244,19 @@ public class TaskService : ITaskService
             response.Add(await MapToResponseDTOAsync(task));
         }
 
-        var paginatedResult = new PaginatedResponseDTO<TaskResponseDTO>
+        var paginatedResult = new TaskListResponseDTO
         {
             Items = response,
             TotalCount = totalCount,
             PageNumber = pageNumber,
-            PageSize = pageSize
+            PageSize = pageSize,
+            ActiveCount = activeCount,
+            InProgressCount = inProgressCount,
+            CompletedCount = completedCount,
+            OverdueCount = overdueCount
         };
 
-        return ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>.Success(paginatedResult);
+        return ApiResponseDTO<TaskListResponseDTO>.Success(paginatedResult);
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> GetByIdAsync(Guid id, Guid requestUserId, UserRole requestUserRole)

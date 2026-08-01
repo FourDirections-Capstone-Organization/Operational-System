@@ -4932,6 +4932,7 @@ export default function OpsAdminDashboard() {
     const [taskTotalPages, setTaskTotalPages] = useState(1);
     const [taskTotalRecords, setTaskTotalRecords] = useState(0);
     const [taskPageSize, setTaskPageSize] = useState(8);
+    const [taskSummary, setTaskSummary] = useState<{ active: number; inProgress: number; completed: number; overdue: number }>({ active: 0, inProgress: 0, completed: 0, overdue: 0 });
 
     // Reopen Requests state
     const [reopenRequests, setReopenRequests] = useState<ReopenRequest[]>([]);
@@ -5107,6 +5108,16 @@ export default function OpsAdminDashboard() {
             if (jsonRes?.data?.totalCount !== undefined) {
                 setTaskTotalRecords(jsonRes.data.totalCount);
                 setTaskTotalPages(jsonRes.data.totalPages ?? 1);
+            }
+
+            // Summary counts come from the server (computed across ALL pages, respecting visibility)
+            if (jsonRes?.data) {
+                setTaskSummary({
+                    active: jsonRes.data.activeCount ?? 0,
+                    inProgress: jsonRes.data.inProgressCount ?? 0,
+                    completed: jsonRes.data.completedCount ?? 0,
+                    overdue: jsonRes.data.overdueCount ?? 0,
+                });
             }
 
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
@@ -5648,6 +5659,7 @@ export default function OpsAdminDashboard() {
                             <div className="dashboard-content">
                                 <TaskManager
                                     tasks={tmTasks}
+                                    summary={taskSummary}
                                     teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
                                     onNewTask={() => { setTaskSubTab('create'); setShowNew(false); }}
                                     onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}

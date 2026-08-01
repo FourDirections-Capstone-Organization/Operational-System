@@ -31,8 +31,16 @@ export interface ServerPagination {
     onPageSizeChange?: (size: number) => void;
 }
 
+export interface TaskSummary {
+    active: number;
+    inProgress: number;
+    completed: number;
+    overdue: number;
+}
+
 interface TMProps {
     tasks: TMTask[];
+    summary?: TaskSummary;
     teamMembers: { accountId: string; employeeName: string }[];
     onNewTask: () => void;
     onEdit: (id: string) => void;
@@ -165,22 +173,24 @@ export default function TaskManager({
 
     const totalPages = serverPagination?.totalPages ?? Math.ceil(filtered.length / 8);
     const paginated = serverPagination ? filtered : filtered.slice((page - 1) * 8, page * 8);
-    const totalInProgress = tasks.filter(t => t.status === 'In progress' && !t.isArchived && !t.isDeleted).length;
-    const totalDone = tasks.filter(t => t.status === 'Done' && !t.isArchived && !t.isDeleted).length;
-    const totalOverdue = tasks.filter(t => t.status !== 'Done' && !t.isArchived && !t.isDeleted && t.dueDate).filter(t => { try { return new Date(t.dueDate!) < new Date(); } catch { return false; } }).length;
+    const totalInProgress = summary?.inProgress ?? tasks.filter(t => t.status === 'In progress' && !t.isArchived && !t.isDeleted).length;
+    const totalDone = summary?.completed ?? tasks.filter(t => t.status === 'Done' && !t.isArchived && !t.isDeleted).length;
+    const totalOverdue = summary?.overdue ?? tasks.filter(t => t.status !== 'Done' && !t.isArchived && !t.isDeleted && t.dueDate).filter(t => { try { return new Date(t.dueDate!) < new Date(); } catch { return false; } }).length;
+    const activeTotal = summary?.active ?? tabTasks.length;
+    const completionRate = summary ? (activeTotal + totalDone > 0 ? Math.round(totalDone / (activeTotal + totalDone) * 100) : 0) : (tasks.length ? Math.round(totalDone / tasks.length * 100) : 0);
 
     const handleTabChange = (key: string) => { setTab(key as TabType); setPage(1); };
     const handlePageChange = (p: number) => { setPage(p); };
 
     const activeStats = tab === 'active' ? [
-        { label: 'Active', value: tabTasks.length, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: `${tabTasks.length} task${tabTasks.length !== 1 ? 's' : ''}` },
+        { label: 'Active', value: activeTotal, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: `${activeTotal} task${activeTotal !== 1 ? 's' : ''}` },
         { label: 'In Progress', value: totalInProgress, icon: <Loader2 size={18} />, variant: 'warning' as const, subtext: 'Currently active' },
-        { label: 'Completed', value: totalDone, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: tasks.length ? `${Math.round(totalDone / tasks.length * 100)}% completion rate` : '' },
+        { label: 'Completed', value: totalDone, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: `${completionRate}% completion rate` },
         { label: 'Overdue', value: totalOverdue, icon: <AlertCircle size={18} />, variant: totalOverdue > 0 ? 'danger' as const : 'primary' as const, subtext: totalOverdue > 0 ? 'Needs attention' : 'No overdue tasks' },
     ] : tab === 'completed' ? [
-        { label: 'Completed', value: tabTasks.length, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: 'Finished tasks' },
+        { label: 'Completed', value: totalDone, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: 'Finished tasks' },
         { label: 'On Time', value: tabTasks.filter(t => t.progress >= 100).length, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: 'Completed on schedule' },
-        { label: 'Rate', value: tasks.length ? `${Math.round(totalDone / tasks.length * 100)}%` : '—', icon: <BarChart3 size={18} />, variant: 'success' as const, subtext: 'Completion rate' },
+        { label: 'Rate', value: `${completionRate}%`, icon: <BarChart3 size={18} />, variant: 'success' as const, subtext: 'Completion rate' },
     ] : [
         { label: 'Archived', value: tabTasks.filter(t => t.isArchived).length, icon: <Archive size={18} />, variant: 'warning' as const, subtext: 'Archived tasks' },
         { label: 'Deleted', value: tabTasks.filter(t => t.isDeleted).length, icon: <Trash2 size={18} />, variant: 'danger' as const, subtext: 'Deleted tasks' },
@@ -196,8 +206,8 @@ export default function TaskManager({
             </div>
             <DataTable
                 tabs={[
-                    { key: 'active', label: 'Active', icon: <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />, badge: tasks.filter(t => t.status !== 'Done' && !t.isArchived && !t.isDeleted).length },
-                    { key: 'completed', label: 'Completed', icon: <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />, badge: tasks.filter(t => t.status === 'Done' && !t.isArchived && !t.isDeleted).length },
+                    { key: 'active', label: 'Active', icon: <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />, badge: summary?.active ?? tasks.filter(t => t.status !== 'Done' && !t.isArchived && !t.isDeleted).length },
+                    { key: 'completed', label: 'Completed', icon: <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />, badge: summary?.completed ?? tasks.filter(t => t.status === 'Done' && !t.isArchived && !t.isDeleted).length },
                     { key: 'bin', label: 'Bin', icon: <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }} />, badge: tasks.filter(t => t.isArchived || t.isDeleted).length },
                 ]}
                 activeTab={tab}

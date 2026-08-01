@@ -8,7 +8,7 @@ namespace Backend.Modules.TaskManagement;
 public interface ITaskService
 {
     Task<ApiResponseDTO<TaskResponseDTO>> CreateAsync(CreateTaskDTO dto, Guid creatorId, string? ipAddress = null);
-    Task<ApiResponseDTO<PaginatedResponseDTO<TaskResponseDTO>>> GetAllAsync(
+    Task<ApiResponseDTO<TaskListResponseDTO>> GetAllAsync(
         Guid requestUserId,
         UserRole requestUserRole,
         Guid? requestUserDepartmentId,
