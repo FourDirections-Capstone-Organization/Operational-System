@@ -8,7 +8,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Host port 5433 (not 5432) to avoid conflict with a local PostgreSQL
+      # service that may already occupy port 5432 on the host machine.
+      # Inside the Docker network, other services still reach this DB at db:5432.
+      - "5433:5432"
     command:
       - "postgres"
       - "-c"

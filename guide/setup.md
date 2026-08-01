@@ -77,7 +77,7 @@ docker compose restart cdc-processor
 | **Frontend (Web App)** | **`http://localhost`** | The main STARS application UI (React SPA served via Nginx) |
 | **Backend API (Swagger)** | **`http://localhost:5100/swagger`** | The REST API with Swagger UI for testing endpoints |
 | **Backend API (Direct)** | **`http://localhost:5100`** | The ASP.NET backend API (port 5100 maps to container port 8080) |
-| **PostgreSQL (pgAdmin)** | **`http://localhost:5050`** | pgAdmin database management UI. Login with `stars@admin.com` / `starslab!`. Then add server: host=`db`, port=`5432`, user=`postgres`, password=`postgres` |
+| **PostgreSQL (pgAdmin)** | **`http://localhost:5050`** | pgAdmin database management UI. Login with `stars@admin.com` / `starslab!`. Then add server: host=`db`, port=`5432`, user=`postgres`, password=`postgres` (inside the Docker network). From the host machine, connect to `localhost:5433` |
 | **Neo4j Browser** | **`http://localhost:7474`** | Neo4j graph database web interface. Login with `neo4j` / `starslab!`. Run `MATCH (n) RETURN labels(n), count(*)` to see data |
 | **Kafka UI** | **`http://localhost:8081`** | Kafka web interface to browse topics and messages. Click on `stars.public.Users` or `stars.public.Departments` to see CDC events |
 | **Debezium API** | **`http://localhost:8083`** | Kafka Connect REST API. Use `/connectors` to list registered connectors, `/connectors/stars-postgres-connector/status` to check status |

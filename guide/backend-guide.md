@@ -421,7 +421,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"  # host 5433 -> container 5432 (avoids conflict with a local PostgreSQL on host port 5432)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
