@@ -56,7 +56,7 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
     const [submitting, setSubmitting] = useState(false);
 
     const userRole = localStorage.getItem('userRole') ?? '';
-    const isCoordinator = userRole === 'Coordinator';
+    const isCoordinator = userRole === 'Coordinator' || userRole === 'Manager';
 
     const fetchRecommendations = useCallback(async () => {
         setLoading(true);

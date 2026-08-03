@@ -602,7 +602,7 @@ interface TaskModalProps {
     onClose: () => void;
     onDelete?: () => void;
     showSuccess?: (msg: string) => void;
-    onFileChange?: (file: File | null) => void;
+    onFileChange?: (files: File[]) => void;
 }
 
 const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, tasks, onSave, onClose, onDelete, showSuccess, onFileChange }) => {
@@ -632,7 +632,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     });
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-    const [supportingEvidence, setSupportingEvidence] = useState<File | null>(null);
+    const [supportingEvidenceFiles, setSupportingEvidenceFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
@@ -838,8 +838,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             assignedDepartmentId,
             isConfidential: form.isConfidential,
         };
-        if (supportingEvidence) {
-            onFileChange?.(supportingEvidence);
+        if (supportingEvidenceFiles.length > 0) {
+            onFileChange?.(supportingEvidenceFiles);
         }
         try {
             await onSave(payload);
@@ -1035,8 +1035,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
 
                     {/* -- Supporting Document -- */}
                     <div className="field">
-                        <label>Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
-                        {initial.supportingEvidenceUrl && !supportingEvidence && (
+                        <label>Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional) — select one or more files</span></label>
+                        {initial.supportingEvidenceUrl && supportingEvidenceFiles.length === 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(67,24,255,0.04)', border: '1px solid rgba(67,24,255,0.15)', borderRadius: 8, marginBottom: 8 }}>
                                 <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {(initial.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
@@ -1054,49 +1054,72 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                multiple
+                                accept=".pdf,.docx,.xlsx,.jpg,.png"
                                 onChange={e => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
+                                    const files = Array.from(e.target.files ?? []);
+                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                    if (files.length === 0) return;
+                                    const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'png'];
+                                    for (const file of files) {
                                         const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-                                        const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
                                         if (!allowed.includes(ext)) {
-                                            setFormError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.');
+                                            setFormError(`Invalid file format "${file.name}". Allowed: PDF, DOCX, XLSX, JPG, PNG.`);
                                             return;
                                         }
                                         if (file.size > 20 * 1024 * 1024) {
-                                            setFormError('File size must not exceed 20MB.');
+                                            setFormError(`File "${file.name}" exceeds the maximum size of 20MB.`);
                                             return;
                                         }
-                                        setFormError('');
-                                        setSupportingEvidence(file);
-                                        onFileChange?.(file);
-                                    } else {
-                                        onFileChange?.(null);
                                     }
+                                    setFormError('');
+                                    setSupportingEvidenceFiles(files);
+                                    onFileChange?.(files);
                                 }}
                                 style={{ flex: 1, fontSize: 13 }}
                             />
-                            {supportingEvidence && (
+                            {supportingEvidenceFiles.length > 0 && (
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setSupportingEvidence(null);
+                                        setSupportingEvidenceFiles([]);
+                                        onFileChange?.([]);
                                         if (fileInputRef.current) fileInputRef.current.value = '';
                                     }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4, fontSize: 11, fontWeight: 600 }}
                                 >
-                                    <X size={14} />
+                                    Clear all
                                 </button>
                             )}
                         </div>
-                        {supportingEvidence ? (
-                            <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
-                                ✓ {supportingEvidence.name} ({(supportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
-                            </span>
+                        {supportingEvidenceFiles.length > 0 ? (
+                            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {supportingEvidenceFiles.map((file, idx) => (
+                                    <div key={`${file.name}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(0,169,157,0.05)', border: '1px solid rgba(0,169,157,0.18)', borderRadius: 6 }}>
+                                        <span style={{ fontSize: 11, color: 'var(--status-active)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const next = supportingEvidenceFiles.filter((_, i) => i !== idx);
+                                                setSupportingEvidenceFiles(next);
+                                                onFileChange?.(next);
+                                            }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 2 }}
+                                            aria-label={`Remove ${file.name}`}
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                                <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                    {supportingEvidenceFiles.length} file{supportingEvidenceFiles.length === 1 ? '' : 's'} selected — uploaded after the task is saved.
+                                </span>
+                            </div>
                         ) : initial.supportingEvidenceUrl ? (
                             <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, display: 'block' }}>
-                                Leave empty to keep current file. Select a new file above to replace it.
+                                Leave empty to keep current file. Select new files above to add attachments.
                             </span>
                         ) : null}
                     </div>
@@ -2671,8 +2694,10 @@ const TeamTab: React.FC<{
     const [empRecommendations, setEmpRecommendations] = useState<EmpRecDTO[]>([]);
     const [recLoading, setRecLoading] = useState(false);
     const [recError, setRecError] = useState('');
+    const [recDateFrom, setRecDateFrom] = useState('');
+    const [recDateTo, setRecDateTo] = useState('');
 
-    const fetchEmpRecommendations = async (empId: string, empName: string) => {
+    const fetchEmpRecommendations = async (empId: string, empName: string, dateFrom?: string, dateTo?: string) => {
         setRecLoading(true);
         setRecError('');
         setEmpRecommendations([]);
@@ -2680,7 +2705,10 @@ const TeamTab: React.FC<{
         setRecEmployeeName(empName);
         setShowRecModal(true);
         try {
-            const res = await api.get<any>(`/api/users/${empId}/recommendations`);
+            const params: any = { pageSize: 100 };
+            if (dateFrom) params.dateFrom = new Date(dateFrom).toISOString();
+            if (dateTo) params.dateTo = new Date(`${dateTo}T23:59:59`).toISOString();
+            const res = await api.get<any>(`/api/users/${empId}/recommendations`, { params });
             const json = res.data;
             const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
             setEmpRecommendations(list.map((r: any) => ({
@@ -2767,6 +2795,28 @@ const TeamTab: React.FC<{
                 size="md"
                 footer={<button className="btn" onClick={() => setShowRecModal(false)}>Close</button>}
             >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>From</label>
+                        <input type="date" value={recDateFrom} max={recDateTo || undefined}
+                            onChange={e => setRecDateFrom(e.target.value)}
+                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>To</label>
+                        <input type="date" value={recDateTo} min={recDateFrom || undefined}
+                            onChange={e => setRecDateTo(e.target.value)}
+                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
+                    </div>
+                    <button className="btn btn-sm" onClick={() => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo)}
+                        style={{ padding: '4px 8px', fontSize: 10 }}>
+                        Apply
+                    </button>
+                    <button className="btn btn-sm" onClick={() => { setRecDateFrom(''); setRecDateTo(''); fetchEmpRecommendations(recEmployee, recEmployeeName); }}
+                        style={{ padding: '4px 8px', fontSize: 10 }}>
+                        Clear
+                    </button>
+                </div>
                 {recLoading ? (
                     <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading recommendations...</div>
                 ) : recError ? (
@@ -4927,6 +4977,96 @@ export default function OpsAdminDashboard() {
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
     const [binTasks, setBinTasks] = useState<Task[]>([]);
 
+    // ── Awaiting Review (derived from task status = DonePendingReview) ──
+    const [awaitingReviewNotifs, setAwaitingReviewNotifs] = useState<NotificationItem[]>([]);
+    const [awaitingReviewRows, setAwaitingReviewRows] = useState<any[]>([]);
+
+    const fetchAwaitingReview = useCallback(async () => {
+        try {
+            const res = await api.get('/api/Task', { status: 2, pageNumber: 1, pageSize: 100 });
+            const json = res.data;
+            const d = json?.data;
+            const rawList: any[] = Array.isArray(json) ? json : (Array.isArray(d?.items) ? d.items : []);
+            const notifs: NotificationItem[] = [];
+            const rows: any[] = [];
+            const additions: Task[] = [];
+            const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+            const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+            rawList.forEach((t: any) => {
+                const taskId = t.id ?? t.taskId;
+                const title = (t.title ?? t.taskTitle ?? '').length > 50 ? (t.title ?? t.taskTitle ?? '').slice(0, 50) + '...' : (t.title ?? t.taskTitle ?? '');
+                const updatedAt = t.updatedAt ?? t.createdAt ?? new Date().toISOString();
+                const createdDate = new Date(updatedAt);
+                const now = new Date();
+                const isToday = createdDate.toDateString() === now.toDateString();
+                notifs.push({
+                    id: `review-${taskId}`,
+                    title: 'Awaiting Your Review',
+                    description: `Task '${title}' has been submitted for review.`,
+                    timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    read: false,
+                    type: 'info',
+                    category: 'system',
+                    isToday,
+                    source: 'System',
+                    relatedEntityId: taskId,
+                    relatedEntityType: 'task',
+                });
+                rows.push({
+                    notificationId: `review-${taskId}`,
+                    taskId,
+                    notificationType: 'TaskAwaitingReview',
+                    message: `Task '${title}' has been submitted for review.`,
+                    isRead: false,
+                    createdAt: updatedAt,
+                });
+                additions.push({
+                    taskId,
+                    taskTitle: t.title ?? t.taskTitle ?? '',
+                    taskDescription: t.description ?? t.taskDescription ?? '',
+                    taskCategory: t.taskCategory ?? '',
+                    taskReferenceNumber: t.taskReferenceNumber ?? '',
+                    classification: t.classification ?? t.Classification ?? 0,
+                    priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
+                    dueAt: t.deadline ?? t.dueAt ?? null,
+                    taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
+                    taskRemarks: t.progressNotes ?? t.taskRemarks ?? '',
+                    assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
+                    createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
+                    assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
+                    createdAt: t.createdAt ?? '',
+                    updatedAt: t.updatedAt ?? undefined,
+                    deleted: deletedTaskIds.has(taskId),
+                    supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
+                    isConfidential: t.isConfidential ?? false,
+                    isSLALocked: t.isSLALocked ?? false,
+                    attachmentCount: t.attachmentCount ?? 0,
+                });
+            });
+            setAwaitingReviewNotifs(notifs);
+            setAwaitingReviewRows(rows);
+            if (additions.length > 0) {
+                setAllTasks(prev => {
+                    const existing = new Set(prev.map(t => t.taskId));
+                    return [...prev, ...additions.filter(a => !existing.has(a.taskId))];
+                });
+            }
+        } catch { /* silent */ }
+    }, [deletedTaskIds]);
+
+    useEffect(() => { fetchAwaitingReview(); }, [fetchAwaitingReview]);
+
+    const mergedHeaderNotifications = useMemo(
+        () => [...awaitingReviewNotifs, ...headerNotifications],
+        [awaitingReviewNotifs, headerNotifications]
+    );
+
+    const mergedAllNotifications = useMemo(
+        () => [...awaitingReviewRows, ...allNotifications],
+        [awaitingReviewRows, allNotifications]
+    );
+
     // Server-side pagination for task list
     const [taskPage, setTaskPage] = useState(1);
     const [taskTotalPages, setTaskTotalPages] = useState(1);
@@ -4942,7 +5082,7 @@ export default function OpsAdminDashboard() {
     // Duplicate warning state
     const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateWarningDTO[]>([]);
     const [pendingTaskData, setPendingTaskData] = useState<CreateTaskDTO | null>(null);
-    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
     // -- Dashboard Data --
     const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
@@ -5308,16 +5448,26 @@ export default function OpsAdminDashboard() {
             const created = res.data;
             const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
 
-            // Upload supporting document if provided
-            if (taskId && pendingFile) {
-                const fileFormData = new FormData();
-                fileFormData.append('file', pendingFile);
-                await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData).catch(() => { });
-                setPendingFile(null);
+            // Upload supporting documents if provided
+            if (taskId && pendingFiles.length > 0) {
+                const results = await Promise.allSettled(pendingFiles.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setPendingFiles([]);
+                if (failed > 0) {
+                    error(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                } else {
+                    success(`Task created. ${uploaded} attachment(s) uploaded.`);
+                }
+            } else {
+                success('Task created successfully.');
             }
 
             setShowNew(false);
-            success('Task created successfully.');
             fetchTasks().catch(() => {});
             doFetchDashboard().catch(() => {});
         } catch (err: any) {
@@ -5337,10 +5487,28 @@ export default function OpsAdminDashboard() {
     const handleEditTask = async (taskId: string, data: UpdateTaskDTO) => {
         try {
             await api.put(`/api/Task/${taskId}`, data);
+
+            if (pendingFiles.length > 0) {
+                const results = await Promise.allSettled(pendingFiles.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setPendingFiles([]);
+                if (failed > 0) {
+                    error(`Task updated. ${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                } else {
+                    success(`Task updated. ${uploaded} attachment(s) uploaded.`);
+                }
+            } else {
+                success('Task updated successfully.');
+            }
+
             await fetchTasks();
             await doFetchDashboard();
             setEditingTask(null);
-            success('Task updated successfully.');
         } catch (err: any) {
             console.error('Update task error:', err);
             error(err.message || err.Message || 'Failed to update task.');
@@ -5389,6 +5557,7 @@ export default function OpsAdminDashboard() {
                 remarks: reviewerRemarks || undefined,
             });
             await fetchTasks();
+            await fetchAwaitingReview();
             await doFetchDashboard();
             success(
                 adminDecision === 'Approve & Close'
@@ -5532,6 +5701,7 @@ export default function OpsAdminDashboard() {
     // -- Polling fallback: refresh tasks periodically (silent, no dashboard loading state) --
     useEffect(() => {
         const interval = setInterval(async () => {
+            fetchAwaitingReview();
             setLoadingTasks(true);
             try {
                 const res = await api.get(`/api/Task?pageNumber=${taskPage}&pageSize=${taskPageSize}`);
@@ -5609,7 +5779,7 @@ export default function OpsAdminDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: displayRole }, { label: pageTitles[activeTab] }]}
-                    notifications={headerNotifications}
+                    notifications={mergedHeaderNotifications}
                     profile={{
                         name: employeeName || displayRole,
                         role: displayRole,
@@ -5755,9 +5925,9 @@ export default function OpsAdminDashboard() {
                                     currentPage={notifPage}
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
-                                    totalRecords={allNotifications.length}
+                                    totalRecords={mergedAllNotifications.length}
                                 >
-                                    {allNotifications.map(n => {
+                                    {mergedAllNotifications.map(n => {
                                         const badge = (() => {
                                             switch (n.notificationType) {
                                                 case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
@@ -5766,11 +5936,17 @@ export default function OpsAdminDashboard() {
                                                 case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
                                                 case 'PushBack': return { label: 'Pushed back', cls: 'default' };
                                                 case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                case 'TaskAwaitingReview': return { label: 'Awaiting Review', cls: 'task-assigned' };
                                                 default: return { label: n.notificationType, cls: 'default' };
                                             }
                                         })();
                                         return (
-                                            <tr key={n.notificationId}>
+                                            <tr key={n.notificationId} onClick={() => {
+                                                if (n.taskId) {
+                                                    const found = allTasks.find(t => t.taskId === n.taskId);
+                                                    if (found) setViewingTask(found);
+                                                }
+                                            }} style={{ cursor: n.taskId ? 'pointer' : 'default' }}>
                                                 <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                                                     {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </td>
@@ -5795,9 +5971,9 @@ export default function OpsAdminDashboard() {
                     teamMembers={teamMembers}
                     tasks={tasks}
                     onSave={data => handleNewTask(data as CreateTaskDTO)}
-                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setPendingTaskData(null); setPendingFile(null); }}
+                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setPendingTaskData(null); setPendingFiles([]); }}
                     showSuccess={success}
-                    onFileChange={f => setPendingFile(f)}
+                    onFileChange={f => setPendingFiles(f)}
                 />
             )}
             {editingTask && (
@@ -5810,6 +5986,7 @@ export default function OpsAdminDashboard() {
                     onSave={data => handleEditTask(editingTask.taskId, data as UpdateTaskDTO)}
                     onClose={() => setEditingTask(null)}
                     onDelete={() => handleDeleteTask(editingTask.taskId)}
+                    onFileChange={f => setPendingFiles(f)}
                 />
             )}
             {viewingTask && (
@@ -5884,6 +6061,7 @@ export default function OpsAdminDashboard() {
                     onCancel={() => {
                         setDuplicateWarnings([]);
                         setPendingTaskData(null);
+                        setPendingFiles([]);
                         setShowNew(false);
                     }}
                 />

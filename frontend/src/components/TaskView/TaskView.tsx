@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Pencil, X, Package, CheckCircle2,
     XCircle, Clock, AlertTriangle, ThumbsUp, RotateCcw, Lock,
-    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2, AlertCircle,
+    FileText, Download, Trash2, Paperclip, MessageSquare, Lightbulb, Loader2, AlertCircle, Upload,
 } from 'lucide-react';
 import TaskComments from '../TaskComments/TaskComments';
 import TaskRecommendations from '../TaskRecommendations/TaskRecommendations';
@@ -169,6 +169,9 @@ const TaskView: React.FC<TaskViewProps> = ({
     const [cancelReason, setCancelReason] = useState('');
     const [cancelling, setCancelling] = useState(false);
     const [downloadError, setDownloadError] = useState('');
+    const [uploadingAttachments, setUploadingAttachments] = useState(false);
+    const [attachmentUploadError, setAttachmentUploadError] = useState('');
+    const attachInputRef = useRef<HTMLInputElement>(null);
     const [confidentialConfirm, setConfidentialConfirm] = useState<{ open: boolean; pendingValue: boolean }>({ open: false, pendingValue: false });
     const [confidentialSaving, setConfidentialSaving] = useState(false);
     const { success: toastSuccess, error: toastError } = useToast();
@@ -179,7 +182,7 @@ const TaskView: React.FC<TaskViewProps> = ({
         if (!task.taskId) return;
         setAttachmentsLoading(true);
         try {
-            const res = await api.get<any>(`/api/tasks/${task.taskId}/attachments`);
+            const res = await api.get<any>(`/api/tasks/${task.taskId}/attachments`, { pageSize: 100 });
             const json = res.data;
             if (res.status === 200) {
                 const raw = json?.data?.items ?? json?.data ?? json;
@@ -228,6 +231,51 @@ const TaskView: React.FC<TaskViewProps> = ({
         onDeleteAttachment?.(attachmentId);
         setAttachments(prev => prev.filter(a => a.id !== attachmentId));
         setDeleteConfirmId(null);
+    };
+
+    const handleUploadFiles = async (files: FileList | File[]) => {
+        const selected = Array.from(files);
+        if (selected.length === 0) return;
+
+        const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'png'];
+        for (const file of selected) {
+            const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+            if (!allowed.includes(ext)) {
+                setAttachmentUploadError(`Unsupported format "${file.name}". Allowed: PDF, DOCX, XLSX, JPG, PNG.`);
+                toastError(`Unsupported format "${file.name}". Allowed: PDF, DOCX, XLSX, JPG, PNG.`);
+                return;
+            }
+            if (file.size > 20 * 1024 * 1024) {
+                setAttachmentUploadError(`"${file.name}" exceeds the maximum size of 20MB.`);
+                toastError(`"${file.name}" exceeds the maximum size of 20MB.`);
+                return;
+            }
+        }
+
+        if (attachInputRef.current) attachInputRef.current.value = '';
+        setUploadingAttachments(true);
+        setAttachmentUploadError('');
+
+        const results = await Promise.allSettled(selected.map(async (file) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            await api.upload(`/api/tasks/${task.taskId}/attachments`, formData);
+        }));
+
+        const failed = results.filter(r => r.status === 'rejected').length;
+        const uploaded = results.length - failed;
+        setUploadingAttachments(false);
+
+        if (uploaded > 0) {
+            toastSuccess(`${uploaded} attachment(s) uploaded successfully.`);
+            await fetchAttachments();
+            onUpdate?.({ ...task, attachmentCount: (task.attachmentCount ?? 0) + uploaded });
+        }
+        if (failed > 0) {
+            const msg = `${failed} attachment(s) failed to upload.`;
+            setAttachmentUploadError(msg);
+            toastError(msg);
+        }
     };
 
     const formatFileSize = (bytes: number): string => {
@@ -595,6 +643,29 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 {(task.attachmentCount ?? 0) > 0 && (
                                     <span className="tv-attach-count">{task.attachmentCount}</span>
                                 )}
+                                {isCoordOrManager && (
+                                    <>
+                                        <input
+                                            ref={attachInputRef}
+                                            type="file"
+                                            multiple
+                                            accept=".pdf,.docx,.xlsx,.jpg,.png"
+                                            style={{ display: 'none' }}
+                                            onChange={e => handleUploadFiles(e.target.files ?? [])}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="tv-btn tv-btn-outline-sm tv-attach-upload-btn"
+                                            onClick={() => attachInputRef.current?.click()}
+                                            disabled={uploadingAttachments}
+                                            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                            title="Upload one or more files"
+                                        >
+                                            {uploadingAttachments ? <Loader2 size={12} className="spin" /> : <Upload size={12} />}
+                                            {uploadingAttachments ? 'Uploading…' : 'Upload'}
+                                        </button>
+                                    </>
+                                )}
                             </span>
                             {attachmentsLoading ? (
                                 <div className="tv-text-box" style={{ color: 'var(--sidebar-text)', fontSize: 12 }}>
@@ -646,6 +717,11 @@ const TaskView: React.FC<TaskViewProps> = ({
                             {downloadError && (
                                 <div className="tv-text-box" style={{ color: 'var(--status-failed)', fontSize: 12, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <AlertCircle size={12} /> {downloadError}
+                                </div>
+                            )}
+                            {attachmentUploadError && (
+                                <div className="tv-text-box" style={{ color: 'var(--status-failed)', fontSize: 12, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <AlertCircle size={12} /> {attachmentUploadError}
                                 </div>
                             )}
                         </div>

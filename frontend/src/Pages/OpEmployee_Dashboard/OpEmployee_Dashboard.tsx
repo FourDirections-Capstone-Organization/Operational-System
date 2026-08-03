@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
@@ -1491,6 +1491,53 @@ export default function EmployeeDashboard() {
     const [notifPage, setNotifPage] = useState(1);
     const [notifTotalPages, setNotifTotalPages] = useState(1);
 
+    // ── Awaiting Review (derived from tasks in pending review) ──
+    const awaitingReviewNotifs = useMemo<NotificationItem[]>(() => {
+        const pendingReview = tasks.filter(t => t.status === 'pending-review' || t.status === 'done');
+        const now = new Date();
+        const nowStr = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return pendingReview.map(t => {
+            const name = t.name.length > 50 ? t.name.slice(0, 50) + '...' : t.name;
+            return {
+                id: `review-${t.id}`,
+                title: 'Awaiting Review',
+                description: `Task '${name}' is awaiting review.`,
+                timestamp: nowStr,
+                date: 'Today',
+                read: false,
+                type: 'info',
+                category: 'system',
+                isToday: true,
+                source: 'System',
+                relatedEntityId: t.id,
+                relatedEntityType: 'task' as const,
+            };
+        });
+    }, [tasks]);
+
+    const mergedHeaderNotifications = useMemo(
+        () => [...awaitingReviewNotifs, ...headerNotifications],
+        [awaitingReviewNotifs, headerNotifications]
+    );
+
+    const awaitingReviewRows = useMemo(() => {
+        const pendingReview = tasks.filter(t => t.status === 'pending-review' || t.status === 'done');
+        const nowIso = new Date().toISOString();
+        return pendingReview.map(t => ({
+            notificationId: `review-${t.id}`,
+            taskId: t.id,
+            notificationType: 'TaskAwaitingReview',
+            message: `Task '${t.name}' is awaiting review.`,
+            isRead: false,
+            createdAt: nowIso,
+        }));
+    }, [tasks]);
+
+    const mergedAllNotifications = useMemo(
+        () => [...awaitingReviewRows, ...allNotifications],
+        [awaitingReviewRows, allNotifications]
+    );
+
     const fetchAllNotifications = useCallback(async (page: number) => {
         setNotifLoading(true);
         try {
@@ -1681,7 +1728,7 @@ export default function EmployeeDashboard() {
                 <GlobalHeader
                     title={pageTitles[activeTab]}
                     breadcrumbs={[{ label: 'Employee' }, { label: pageTitles[activeTab] }]}
-                    notifications={headerNotifications}
+                    notifications={mergedHeaderNotifications}
                     profile={{
                         name: user.fullName || 'Employee',
                         role: toDisplayRole(user.role) || 'Employee',
@@ -1760,7 +1807,7 @@ export default function EmployeeDashboard() {
                             </div>
                             {notifLoading ? (
                                 <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
-                            ) : allNotifications.length === 0 ? (
+                            ) : mergedAllNotifications.length === 0 ? (
                                 <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
                             ) : (
                                 <DataTable
@@ -1770,9 +1817,9 @@ export default function EmployeeDashboard() {
                                     currentPage={notifPage}
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
-                                    totalRecords={allNotifications.length}
+                                    totalRecords={mergedAllNotifications.length}
                                 >
-                                    {allNotifications.map(n => {
+                                    {mergedAllNotifications.map(n => {
                                         const badge = (() => {
                                             switch (n.notificationType) {
                                                 case 'TaskAssigned': return { label: 'Assigned', cls: 'task-assigned' };
@@ -1781,11 +1828,17 @@ export default function EmployeeDashboard() {
                                                 case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
                                                 case 'PushBack': return { label: 'Pushed back', cls: 'default' };
                                                 case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                case 'TaskAwaitingReview': return { label: 'Awaiting Review', cls: 'task-assigned' };
                                                 default: return { label: n.notificationType, cls: 'default' };
                                             }
                                         })();
                                         return (
-                                            <tr key={n.notificationId}>
+                                            <tr key={n.notificationId} onClick={() => {
+                                                if (n.taskId) {
+                                                    const found = tasks.find(t => t.id === n.taskId);
+                                                    if (found) setViewingId(found.id);
+                                                }
+                                            }} style={{ cursor: n.taskId ? 'pointer' : 'default' }}>
                                                 <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                                                     {new Date(n.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </td>

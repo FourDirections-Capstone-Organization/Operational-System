@@ -2714,6 +2714,73 @@ export default function Dashboard() {
             fetchAllNotifications(1);
         }
     }, [activeTab]);
+
+    // ── Awaiting Review (derived from task status = DonePendingReview) ──
+    const [awaitingReviewNotifs, setAwaitingReviewNotifs] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
+    const [awaitingReviewRows, setAwaitingReviewRows] = useState<any[]>([]);
+
+    const fetchAwaitingReview = async () => {
+        try {
+            const res = await api.get('/api/Task', { params: { status: 2, pageNumber: 1, pageSize: 500 } });
+            const json = res.data;
+            const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
+            const now = new Date();
+            setAwaitingReviewNotifs(raw.map((t: any) => {
+                const taskId = t.id ?? t.taskId;
+                const title = (t.title ?? t.taskTitle ?? '').length > 50 ? (t.title ?? t.taskTitle ?? '').slice(0, 50) + '...' : (t.title ?? t.taskTitle ?? '');
+                const createdDate = new Date(t.updatedAt ?? t.createdAt ?? new Date().toISOString());
+                const isToday = createdDate.toDateString() === now.toDateString();
+                return {
+                    id: `review-${taskId}`,
+                    title: 'Awaiting Your Review',
+                    description: `Task '${title}' has been submitted for review.`,
+                    timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                    read: false,
+                    type: 'info',
+                    category: 'system',
+                    isToday,
+                    source: 'System',
+                    relatedEntityId: taskId,
+                    relatedEntityType: 'task',
+                } as import('../../components/GlobalHeader/GlobalHeader').NotificationItem;
+            }));
+            setAwaitingReviewRows(raw.map((t: any) => ({
+                notificationId: `review-${t.id ?? t.taskId}`,
+                taskId: t.id ?? t.taskId,
+                notificationType: 'TaskAwaitingReview',
+                message: `Task '${t.title ?? t.taskTitle ?? ''}' has been submitted for review.`,
+                isRead: false,
+                createdAt: t.updatedAt ?? t.createdAt ?? new Date().toISOString(),
+            })));
+        } catch { /* silent */ }
+    };
+
+    useEffect(() => { fetchAwaitingReview(); }, []);
+    useEffect(() => {
+        const interval = setInterval(fetchAwaitingReview, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const mergedHeaderNotifications = useMemo(
+        () => [...awaitingReviewNotifs, ...headerNotifications],
+        [awaitingReviewNotifs, headerNotifications]
+    );
+
+    const mergedAllNotifications = useMemo(
+        () => [...awaitingReviewRows, ...allNotifications],
+        [awaitingReviewRows, allNotifications]
+    );
+
+    const openManagerTaskById = (id: string) => {
+        api.get(`/api/Task/${id}`)
+            .then(res => {
+                const json = res.data;
+                const raw = json?.data ?? json;
+                if (raw) setTmDetailTask(mapManagerTaskToView(raw));
+            })
+            .catch(() => {});
+    };
     const [activityLogEmployee, setActivityLogEmployee] = useState('');
     const [activityLogType, setActivityLogType] = useState('');
     const [activityLogDateFrom, setActivityLogDateFrom] = useState('');
@@ -2911,7 +2978,7 @@ export default function Dashboard() {
                     <GlobalHeader
                         title={pageTitles[activeTab]}
                         breadcrumbs={[{ label: 'Manager' }, { label: pageTitles[activeTab] }]}
-                        notifications={headerNotifications}
+                        notifications={mergedHeaderNotifications}
                         profile={{
                             name: employeeName || 'Manager',
                             role: 'MANAGER',
@@ -2921,8 +2988,9 @@ export default function Dashboard() {
                         onLogout={handleLogout}
                         onViewAllNotifications={() => setActiveTab('notifications')}
                         onNotificationAction={n => {
-                            if (n.relatedEntityType === 'task') setActiveTab('tasks');
-                            else if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
+                            if (n.relatedEntityId && n.relatedEntityType === 'task') {
+                                openManagerTaskById(n.relatedEntityId);
+                            } else if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
                             else setActiveTab('notifications');
                         }}
                     />
@@ -2990,7 +3058,7 @@ export default function Dashboard() {
                             </div>
                             {notifLoading ? (
                                 <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading notifications...</p></div>
-                            ) : allNotifications.length === 0 ? (
+                            ) : mergedAllNotifications.length === 0 ? (
                                 <div className="empty-state"><Bell size={22} /><p>No notifications</p></div>
                             ) : (
                                 <DataTable
@@ -3000,9 +3068,9 @@ export default function Dashboard() {
                                     currentPage={notifPage}
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
-                                    totalRecords={allNotifications.length}
+                                    totalRecords={mergedAllNotifications.length}
                                 >
-                                    {allNotifications.map(n => {
+                                    {mergedAllNotifications.map(n => {
                                         const badge = (() => {
                                             const type = typeof n.notificationType === 'number' ? NOTIF_TYPE_MAP[n.notificationType] || 'Unknown' : n.notificationType || 'Unknown';
                                             switch (type) {
@@ -3012,6 +3080,7 @@ export default function Dashboard() {
                                                 case 'DeadlineWarning': return { label: 'Deadline', cls: 'deadline' };
                                                 case 'PushBack': return { label: 'Pushed back', cls: 'default' };
                                                 case 'TaskCancelled': return { label: 'Cancelled', cls: 'default' };
+                                                case 'TaskAwaitingReview': return { label: 'Awaiting Review', cls: 'task-assigned' };
                                                 default: return { label: type, cls: 'default' };
                                             }
                                         })();
@@ -3020,6 +3089,7 @@ export default function Dashboard() {
                                                 if (n.taskId) {
                                                     const found = tmTasks.find(t => t.id === n.taskId);
                                                     if (found) setTmDetailTask(mapManagerTaskToView(found));
+                                                    else openManagerTaskById(n.taskId);
                                                 }
                                             }} style={{ cursor: n.taskId ? 'pointer' : 'default' }}>
                                                 <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>

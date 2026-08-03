@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Models.Enums;
 using Backend.Modules.TaskManagement;
 using Backend.Modules.RoleBasedAccessControl;
 
@@ -13,10 +15,12 @@ namespace Backend.Controllers;
 public class RecommendationController : ControllerBase
 {
     private readonly IRecommendationService _recommendationService;
+    private readonly IAuditLogService _auditLogService;
 
-    public RecommendationController(IRecommendationService recommendationService)
+    public RecommendationController(IRecommendationService recommendationService, IAuditLogService auditLogService)
     {
         _recommendationService = recommendationService;
+        _auditLogService = auditLogService;
     }
 
     [HttpPost("tasks/{taskId:guid}/recommendations")]
@@ -57,6 +61,40 @@ public class RecommendationController : ControllerBase
         [FromQuery] DateTime? dateTo = null)
     {
         var result = await _recommendationService.GetByAssigneeIdAsync(userId, pageNumber, pageSize, dateFrom, dateTo);
+
+        try
+        {
+            await _auditLogService.LogAsync(
+                GetUserIdFromClaims(),
+                AuditActionType.Read,
+                "Recommendation",
+                userId,
+                GetIpAddress(),
+                "Recommendation history accessed for employee",
+                "Recommendations");
+        }
+        catch
+        {
+            // audit logging must never break the response
+        }
+
         return Ok(result);
+    }
+
+    private Guid? GetUserIdFromClaims()
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userIdGuid))
+            return null;
+        return userIdGuid;
+    }
+
+    private string? GetIpAddress()
+    {
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+            return forwardedFor.Split(',').First().Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString();
     }
 }

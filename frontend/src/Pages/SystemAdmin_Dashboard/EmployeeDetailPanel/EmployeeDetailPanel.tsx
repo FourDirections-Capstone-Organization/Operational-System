@@ -25,6 +25,7 @@ import {
     Package,
     Truck,
     Activity,
+    Lightbulb,
 } from 'lucide-react';
 import './EmployeeDetailPanel.css';
 import { useToast } from '../../../components/Toast/Toast';
@@ -92,6 +93,22 @@ interface ActivityLog {
     timestamp: string;
     activityType?: string;
 }
+
+interface RecommendationRecord {
+    id: string;
+    taskTitle: string;
+    coordinatorName: string;
+    category: string;
+    notes: string;
+    createdAt: string;
+}
+
+const REC_CATEGORY_LABELS: Record<number, string> = {
+    0: 'Timeliness',
+    1: 'Work Quality',
+    2: 'Communication',
+    3: 'Other',
+};
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 
@@ -437,7 +454,7 @@ function EditProfileModal({ profile, onClose, onSaved, rolesList }: EditModalPro
 
 interface EmployeeDetailPanelProps {
     employee: RecentEmployee;
-    initialSection?: 'overview' | 'activity';
+    initialSection?: 'overview' | 'activity' | 'recommendations';
     onBack: () => void;
     onEmployeeUpdated: (updated: RecentEmployee) => void;
     rolesList?: string[];
@@ -458,9 +475,11 @@ export default function EmployeeDetailPanel({
     const [loadingLogs, setLoadingLogs] = useState(true);
     const [showEdit, setShowEdit] = useState(false);
     const [deleting, setDeleting] = useState(false);
-    const [activeSection, setActiveSection] = useState<'overview' | 'activity'>(initialSection);
+    const [activeSection, setActiveSection] = useState<'overview' | 'activity' | 'recommendations'>(initialSection);
     const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+    const [recommendations, setRecommendations] = useState<RecommendationRecord[]>([]);
+    const [recLoading, setRecLoading] = useState(false);
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
@@ -503,6 +522,38 @@ export default function EmployeeDetailPanel({
             }
         };
         fetchLogs();
+    }, [profile.employeeNumber]);
+
+    // Fetch Recommendation History
+    useEffect(() => {
+        const fetchRecommendations = async () => {
+            setRecLoading(true);
+            try {
+                const lookupRes = await api.get(`/api/User/employee-number/${encodeURIComponent(profile.employeeNumber)}`);
+                const lookupData = lookupRes.data;
+                const userId = lookupData?.data?.id ?? lookupData?.id;
+                if (userId) {
+                    const res = await api.get(`/api/users/${userId}/recommendations`, { params: { pageSize: 100 } });
+                    const json = res.data;
+                    const items = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
+                    setRecommendations(items.map((r: any) => ({
+                        id: r.id ?? r.recommendationId ?? '',
+                        taskTitle: r.taskTitle ?? '',
+                        coordinatorName: r.coordinatorName ?? '',
+                        category: REC_CATEGORY_LABELS[r.category as number] ?? String(r.category ?? ''),
+                        notes: r.notes ?? '',
+                        createdAt: r.createdAt ?? '',
+                    })));
+                } else {
+                    setRecommendations([]);
+                }
+            } catch {
+                setRecommendations([]);
+            } finally {
+                setRecLoading(false);
+            }
+        };
+        fetchRecommendations();
     }, [profile.employeeNumber]);
 
     // Password gate helpers
@@ -683,6 +734,7 @@ export default function EmployeeDetailPanel({
                     { key: 'overview', icon: User, label: 'Overview' },
                     { key: 'deliveries', icon: Truck, label: 'Deliveries' },
                     { key: 'activity', icon: ClipboardList, label: 'Activity Logs' },
+                    { key: 'recommendations', icon: Lightbulb, label: 'Recommendations' },
                 ] as const).map(({ key, icon: Icon, label }) => (
                     <button
                         key={key}
@@ -868,6 +920,49 @@ export default function EmployeeDetailPanel({
                                     </tr>
                                 ))}
                             </DataTable>
+                        )}
+                    </div>
+                )}
+
+                {activeSection === 'recommendations' && (
+                    <div className="ed-card">
+                        <div className="ed-card-header">
+                            <h3>
+                                <Lightbulb size={15} /> Recommendation History
+                            </h3>
+                            <span className="ed-badge-count">{recommendations.length} entries</span>
+                        </div>
+                        {recLoading ? (
+                            <div className="ed-empty">
+                                <Loader2 size={22} className="spin" />
+                                <p>Loading recommendations…</p>
+                            </div>
+                        ) : recommendations.length === 0 ? (
+                            <div className="ed-empty">
+                                <Lightbulb size={22} />
+                                <p>No recommendations found</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 8 }}>
+                                {recommendations.map(r => (
+                                    <div key={r.id} style={{ padding: '12px 14px', background: 'var(--bg-main)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(67, 24, 255, 0.08)', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                                {r.category}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                                {r.createdAt ? fmtDateTime(r.createdAt) : ''}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{r.notes}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                            <span><User size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{r.coordinatorName || '—'}</span>
+                                            <span>·</span>
+                                            <span>Task: {r.taskTitle || '—'}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         )}
                     </div>
                 )}
