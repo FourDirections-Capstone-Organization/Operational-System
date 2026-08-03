@@ -4903,7 +4903,7 @@ export default function OpsAdminDashboard() {
             date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             read: n.isRead ?? false,
             type: typeLabels[type] || 'info',
-            category: type.toLowerCase(),
+            category: 'system',
             isToday,
             source: 'System',
             relatedEntityId: n.relatedTaskId ?? n.taskId ?? null,
@@ -4977,60 +4977,95 @@ export default function OpsAdminDashboard() {
     const [deletedTaskIds, setDeletedTaskIds] = useState<Set<string>>(new Set());
     const [binTasks, setBinTasks] = useState<Task[]>([]);
 
-    // ── Awaiting Review (derived from task status = DonePendingReview) ──
+    // ── Awaiting Review + Overdue (derived from task status/deadlines) ──
     const [awaitingReviewNotifs, setAwaitingReviewNotifs] = useState<NotificationItem[]>([]);
     const [awaitingReviewRows, setAwaitingReviewRows] = useState<any[]>([]);
+    const [overdueNotifs, setOverdueNotifs] = useState<NotificationItem[]>([]);
+    const [overdueRows, setOverdueRows] = useState<any[]>([]);
 
     const fetchAwaitingReview = useCallback(async () => {
         try {
-            const res = await api.get('/api/Task', { status: 2, pageNumber: 1, pageSize: 100 });
+            const res = await api.get('/api/Task', { pageNumber: 1, pageSize: 100 });
             const json = res.data;
             const d = json?.data;
             const rawList: any[] = Array.isArray(json) ? json : (Array.isArray(d?.items) ? d.items : []);
-            const notifs: NotificationItem[] = [];
-            const rows: any[] = [];
+            const reviewNotifs: NotificationItem[] = [];
+            const reviewRows: any[] = [];
+            const overdueNotifsList: NotificationItem[] = [];
+            const overdueRowsList: any[] = [];
             const additions: Task[] = [];
             const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
             const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
+            const now = new Date();
             rawList.forEach((t: any) => {
                 const taskId = t.id ?? t.taskId;
-                const title = (t.title ?? t.taskTitle ?? '').length > 50 ? (t.title ?? t.taskTitle ?? '').slice(0, 50) + '...' : (t.title ?? t.taskTitle ?? '');
+                const rawTitle = t.title ?? t.taskTitle ?? '';
+                const title = rawTitle.length > 50 ? rawTitle.slice(0, 50) + '...' : rawTitle;
                 const updatedAt = t.updatedAt ?? t.createdAt ?? new Date().toISOString();
                 const createdDate = new Date(updatedAt);
-                const now = new Date();
                 const isToday = createdDate.toDateString() === now.toDateString();
-                notifs.push({
-                    id: `review-${taskId}`,
-                    title: 'Awaiting Your Review',
-                    description: `Task '${title}' has been submitted for review.`,
-                    timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                    date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                    read: false,
-                    type: 'info',
-                    category: 'system',
-                    isToday,
-                    source: 'System',
-                    relatedEntityId: taskId,
-                    relatedEntityType: 'task',
-                });
-                rows.push({
-                    notificationId: `review-${taskId}`,
-                    taskId,
-                    notificationType: 'TaskAwaitingReview',
-                    message: `Task '${title}' has been submitted for review.`,
-                    isRead: false,
-                    createdAt: updatedAt,
-                });
+                const statusNum = t.status ?? -1;
+                const deadlineStr = t.deadline ?? t.dueAt ?? null;
+                const isOverdue = statusNum !== 2 && statusNum !== 3 && statusNum !== 5
+                    && !!deadlineStr && new Date(deadlineStr) < now;
+
+                if (statusNum === 2) {
+                    reviewNotifs.push({
+                        id: `review-${taskId}`,
+                        title: 'Awaiting Your Review',
+                        description: `Task '${title}' has been submitted for review.`,
+                        timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        read: false,
+                        type: 'info',
+                        category: 'system',
+                        isToday,
+                        source: 'System',
+                        relatedEntityId: taskId,
+                        relatedEntityType: 'task',
+                    });
+                    reviewRows.push({
+                        notificationId: `review-${taskId}`,
+                        taskId,
+                        notificationType: 'TaskAwaitingReview',
+                        message: `Task '${title}' has been submitted for review.`,
+                        isRead: false,
+                        createdAt: updatedAt,
+                    });
+                } else if (isOverdue) {
+                    overdueNotifsList.push({
+                        id: `overdue-${taskId}`,
+                        title: 'Task Overdue',
+                        description: `Task '${title}' is overdue.`,
+                        timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        read: false,
+                        type: 'alert',
+                        category: 'system',
+                        isToday,
+                        source: 'System',
+                        relatedEntityId: taskId,
+                        relatedEntityType: 'task',
+                    });
+                    overdueRowsList.push({
+                        notificationId: `overdue-${taskId}`,
+                        taskId,
+                        notificationType: 'TaskOverdue',
+                        message: `Task '${title}' is overdue.`,
+                        isRead: false,
+                        createdAt: deadlineStr,
+                    });
+                }
                 additions.push({
                     taskId,
-                    taskTitle: t.title ?? t.taskTitle ?? '',
+                    taskTitle: rawTitle,
                     taskDescription: t.description ?? t.taskDescription ?? '',
                     taskCategory: t.taskCategory ?? '',
                     taskReferenceNumber: t.taskReferenceNumber ?? '',
                     classification: t.classification ?? t.Classification ?? 0,
                     priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
-                    dueAt: t.deadline ?? t.dueAt ?? null,
-                    taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
+                    dueAt: deadlineStr,
+                    taskStatus: STATUS_LABELS[statusNum] ?? t.taskStatus ?? '',
                     taskRemarks: t.progressNotes ?? t.taskRemarks ?? '',
                     assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
                     createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
@@ -5044,8 +5079,10 @@ export default function OpsAdminDashboard() {
                     attachmentCount: t.attachmentCount ?? 0,
                 });
             });
-            setAwaitingReviewNotifs(notifs);
-            setAwaitingReviewRows(rows);
+            setAwaitingReviewNotifs(reviewNotifs);
+            setAwaitingReviewRows(reviewRows);
+            setOverdueNotifs(overdueNotifsList);
+            setOverdueRows(overdueRowsList);
             if (additions.length > 0) {
                 setAllTasks(prev => {
                     const existing = new Set(prev.map(t => t.taskId));
@@ -5057,15 +5094,23 @@ export default function OpsAdminDashboard() {
 
     useEffect(() => { fetchAwaitingReview(); }, [fetchAwaitingReview]);
 
-    const mergedHeaderNotifications = useMemo(
-        () => [...awaitingReviewNotifs, ...headerNotifications],
-        [awaitingReviewNotifs, headerNotifications]
-    );
+    const mergedHeaderNotifications = useMemo(() => {
+        const realOverdueIds = new Set(
+            headerNotifications
+                .filter(n => n.relatedEntityId && typeof n.title === 'string' && n.title.toLowerCase().includes('is overdue'))
+                .map(n => n.relatedEntityId as string)
+        );
+        return [...awaitingReviewNotifs, ...overdueNotifs.filter(n => !realOverdueIds.has(n.relatedEntityId as string)), ...headerNotifications];
+    }, [awaitingReviewNotifs, overdueNotifs, headerNotifications]);
 
-    const mergedAllNotifications = useMemo(
-        () => [...awaitingReviewRows, ...allNotifications],
-        [awaitingReviewRows, allNotifications]
-    );
+    const mergedAllNotifications = useMemo(() => {
+        const realOverdueIds = new Set(
+            allNotifications
+                .filter(n => n.notificationType === 'TaskOverdue' && n.taskId)
+                .map(n => n.taskId as string)
+        );
+        return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications];
+    }, [awaitingReviewRows, overdueRows, allNotifications]);
 
     // Server-side pagination for task list
     const [taskPage, setTaskPage] = useState(1);
@@ -5095,6 +5140,13 @@ export default function OpsAdminDashboard() {
     const mountedRef = useRef(true);
     const filtersRef = useRef(dashboardFilters);
     filtersRef.current = dashboardFilters;
+
+    const taskPageRef = useRef(taskPage);
+    taskPageRef.current = taskPage;
+    const taskPageSizeRef = useRef(taskPageSize);
+    taskPageSizeRef.current = taskPageSize;
+    const deletedTaskIdsRef = useRef(deletedTaskIds);
+    deletedTaskIdsRef.current = deletedTaskIds;
 
     useEffect(() => {
         return () => { mountedRef.current = false; };
@@ -5237,11 +5289,13 @@ export default function OpsAdminDashboard() {
     };
 
     // -- Update fetchTasks --
-    const fetchTasks = async () => {
-        setLoadingTasks(true);
-        setDashboardLoading(true);
+    const fetchTasks = useCallback(async (silent: boolean = false) => {
+        if (!silent) {
+            setLoadingTasks(true);
+            setDashboardLoading(true);
+        }
         try {
-            const res = await api.get(`/api/Task?pageNumber=${taskPage}&pageSize=${taskPageSize}`);
+            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}`);
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
@@ -5278,7 +5332,7 @@ export default function OpsAdminDashboard() {
                 assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
                 createdAt: t.createdAt ?? '',
                 updatedAt: t.updatedAt ?? undefined,
-                deleted: deletedTaskIds.has(t.id ?? t.taskId),
+                deleted: deletedTaskIdsRef.current.has(t.id ?? t.taskId),
                 supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
                 isConfidential: t.isConfidential ?? false,
                 isSLALocked: t.isSLALocked ?? false,
@@ -5288,11 +5342,11 @@ export default function OpsAdminDashboard() {
             setAllTasks(normalized);
             setTasks(normalized.filter(t => !t.deleted));
         } catch {
-            console.warn('[fetchTasks] Failed to load tasks');
+            if (!silent) console.warn('[fetchTasks] Failed to load tasks');
         } finally {
-            setLoadingTasks(false);
+            if (!silent) setLoadingTasks(false);
         }
-    };
+    }, []);
 
     const fetchBinRecords = async () => {
         try {
@@ -5698,53 +5752,23 @@ export default function OpsAdminDashboard() {
         fetchActivityLogs(1);
     }, []);
 
-    // -- Polling fallback: refresh tasks periodically (silent, no dashboard loading state) --
+    // -- Polling: keep notifications fresh on every tab --
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const interval = setInterval(() => {
+            fetchHeaderNotifications();
             fetchAwaitingReview();
-            setLoadingTasks(true);
-            try {
-                const res = await api.get(`/api/Task?pageNumber=${taskPage}&pageSize=${taskPageSize}`);
-                const jsonRes = res.data;
-                const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
-                if (jsonRes?.data?.totalCount !== undefined) {
-                    setTaskTotalRecords(jsonRes.data.totalCount);
-                    setTaskTotalPages(jsonRes.data.totalPages ?? 1);
-                }
-                const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
-                const STATUS_LABELS: Record<number, string> = { 0: 'Assigned', 1: 'In Progress', 2: 'Pending Admin Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled' };
-                const normalized: Task[] = rawList.map(t => ({
-                    taskId: t.id ?? t.taskId,
-                    taskTitle: t.title ?? t.taskTitle ?? '',
-                    taskDescription: t.description ?? t.taskDescription ?? '',
-                    taskCategory: t.taskCategory ?? '',
-                    taskReferenceNumber: t.taskReferenceNumber ?? '',
-                    classification: t.classification ?? t.Classification ?? 0,
-                    priority: (PRIORITY_LABELS[t.priorityLevel] || t.priority || 'Medium') as Priority,
-                    dueAt: t.deadline ?? t.dueAt ?? null,
-                    taskStatus: STATUS_LABELS[t.status] ?? t.taskStatus ?? '',
-                    taskRemarks: t.progressNotes ?? t.taskRemarks ?? '',
-                    assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
-                    createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
-                    assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
-                    createdAt: t.createdAt ?? '',
-                    updatedAt: t.updatedAt ?? undefined,
-                    deleted: deletedTaskIds.has(t.id ?? t.taskId),
-                    supportingEvidenceUrl: t.supportingEvidenceUrl ?? '',
-                    isConfidential: t.isConfidential ?? false,
-                    isSLALocked: t.isSLALocked ?? false,
-                    attachmentCount: t.attachmentCount ?? 0,
-                }));
-                setAllTasks(normalized);
-                setTasks(normalized.filter((t: Task) => !t.deleted));
-            } catch {
-                // silent — polling failure is non-critical
-            } finally {
-                setLoadingTasks(false);
-            }
         }, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    // -- Silent auto-refresh of the task list while the Tasks tab is open --
+    useEffect(() => {
+        if (activeTab !== 'tasks') return;
+        const interval = setInterval(() => {
+            fetchTasks(true);
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [activeTab]);
 
     // Re-fetch tasks when page or page size changes
     useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize]);

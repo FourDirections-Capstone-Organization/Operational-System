@@ -503,7 +503,7 @@ export default function EmployeeDetailPanel({
                 const lookupData = lookupRes.data;
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (userId) {
-                    const res = await api.get('/api/audit-logs', { params: { userId, pageSize: 50 } });
+                    const res = await api.get('/api/audit-logs', { userId, pageSize: 50 });
                     const json = res.data;
                     const items = json?.isSuccess && json?.data?.items ? json.data.items : [];
                     setActivityLogs(items.map((log: any) => ({
@@ -533,7 +533,7 @@ export default function EmployeeDetailPanel({
                 const lookupData = lookupRes.data;
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (userId) {
-                    const res = await api.get(`/api/users/${userId}/recommendations`, { params: { pageSize: 100 } });
+                    const res = await api.get(`/api/users/${userId}/recommendations`, { pageSize: 100 });
                     const json = res.data;
                     const items = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
                     setRecommendations(items.map((r: any) => ({

@@ -461,7 +461,7 @@ export default function RoleManagementTab() {
         try {
             const [caRes, coordRes] = await Promise.all([
                 api.get('/api/client-accounts').catch(() => null),
-                api.get('/api/user', { params: { role: 1 } }).catch(() => null),
+                api.get('/api/user', { role: 1 }).catch(() => null),
             ]);
             if (caRes) {
                 const rd = caRes.data;
@@ -547,7 +547,7 @@ export default function RoleManagementTab() {
     const fetchAuditLog = async () => {
         setAuditLoading(true);
         try {
-            const res = await api.get('/api/audit-logs', { params: { module: 'organization', limit: 20 } });
+            const res = await api.get('/api/audit-logs', { module: 'organization', limit: 20 });
             const data = res.data;
             const raw: any[] = Array.isArray(data) ? data : (data.data?.items ?? (Array.isArray(data.data) ? data.data : data.$values ?? []));
             setAuditEntries(raw.map((e: any): OrgAuditEntry => ({

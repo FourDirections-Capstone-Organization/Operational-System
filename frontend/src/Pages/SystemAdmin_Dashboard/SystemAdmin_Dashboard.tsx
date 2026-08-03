@@ -2322,8 +2322,8 @@ export default function Dashboard() {
         };
     };
 
-    const fetchManagerTasks = async () => {
-        setTmLoading(true);
+    const fetchManagerTasks = async (silent: boolean = false) => {
+        if (!silent) setTmLoading(true);
         try {
             const res = await api.get('/api/Task', { pageNumber: 1, pageSize: 500 });
             const json = res.data;
@@ -2344,7 +2344,7 @@ export default function Dashboard() {
                 isSLALocked: t.isSLALocked ?? false,
             })));
         } catch { setTmTasks([]); }
-        setTmLoading(false);
+        if (!silent) setTmLoading(false);
     };
 
     useEffect(() => { if (activeTab === 'tasks') { fetchManagerTasks(); } }, [activeTab]);
@@ -2662,15 +2662,17 @@ export default function Dashboard() {
             date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             read: n.isRead ?? false,
             type: typeLabels[type] || 'info',
-            category: type.toLowerCase(),
+            category: 'system',
             isToday,
             source: 'System',
+            relatedEntityId: n.relatedTaskId ?? n.taskId ?? null,
+            relatedEntityType: n.relatedTaskId || n.taskId ? 'task' as const : undefined,
         };
     };
 
     const fetchHeaderNotifications = async () => {
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const res = await api.get('/api/Notification', { pageNumber: 1, pageSize: 10 });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -2684,7 +2686,7 @@ export default function Dashboard() {
     const fetchAllNotifications = async (page: number) => {
         setNotifLoading(true);
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const res = await api.get('/api/Notification', { pageNumber: page, pageSize: NOTIF_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -2715,62 +2717,119 @@ export default function Dashboard() {
         }
     }, [activeTab]);
 
-    // ── Awaiting Review (derived from task status = DonePendingReview) ──
+    // ── Awaiting Review + Overdue (derived from task status/deadlines) ──
     const [awaitingReviewNotifs, setAwaitingReviewNotifs] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
     const [awaitingReviewRows, setAwaitingReviewRows] = useState<any[]>([]);
+    const [overdueNotifs, setOverdueNotifs] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
+    const [overdueRows, setOverdueRows] = useState<any[]>([]);
 
     const fetchAwaitingReview = async () => {
         try {
-            const res = await api.get('/api/Task', { params: { status: 2, pageNumber: 1, pageSize: 500 } });
+            const res = await api.get('/api/Task', { pageNumber: 1, pageSize: 500 });
             const json = res.data;
             const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             const now = new Date();
-            setAwaitingReviewNotifs(raw.map((t: any) => {
+            const reviewNotifs: import('../../components/GlobalHeader/GlobalHeader').NotificationItem[] = [];
+            const reviewRows: any[] = [];
+            const overdueNotifsList: import('../../components/GlobalHeader/GlobalHeader').NotificationItem[] = [];
+            const overdueRowsList: any[] = [];
+            raw.forEach((t: any) => {
                 const taskId = t.id ?? t.taskId;
-                const title = (t.title ?? t.taskTitle ?? '').length > 50 ? (t.title ?? t.taskTitle ?? '').slice(0, 50) + '...' : (t.title ?? t.taskTitle ?? '');
+                const rawTitle = t.title ?? t.taskTitle ?? '';
+                const title = rawTitle.length > 50 ? rawTitle.slice(0, 50) + '...' : rawTitle;
                 const createdDate = new Date(t.updatedAt ?? t.createdAt ?? new Date().toISOString());
                 const isToday = createdDate.toDateString() === now.toDateString();
-                return {
-                    id: `review-${taskId}`,
-                    title: 'Awaiting Your Review',
-                    description: `Task '${title}' has been submitted for review.`,
-                    timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                    date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                    read: false,
-                    type: 'info',
-                    category: 'system',
-                    isToday,
-                    source: 'System',
-                    relatedEntityId: taskId,
-                    relatedEntityType: 'task',
-                } as import('../../components/GlobalHeader/GlobalHeader').NotificationItem;
-            }));
-            setAwaitingReviewRows(raw.map((t: any) => ({
-                notificationId: `review-${t.id ?? t.taskId}`,
-                taskId: t.id ?? t.taskId,
-                notificationType: 'TaskAwaitingReview',
-                message: `Task '${t.title ?? t.taskTitle ?? ''}' has been submitted for review.`,
-                isRead: false,
-                createdAt: t.updatedAt ?? t.createdAt ?? new Date().toISOString(),
-            })));
+                const statusNum = t.status ?? -1;
+                const deadlineStr = t.deadline ?? t.dueAt ?? null;
+                const isOverdue = statusNum !== 2 && statusNum !== 3 && statusNum !== 5
+                    && !!deadlineStr && new Date(deadlineStr) < now;
+
+                if (statusNum === 2) {
+                    reviewNotifs.push({
+                        id: `review-${taskId}`,
+                        title: 'Awaiting Your Review',
+                        description: `Task '${title}' has been submitted for review.`,
+                        timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        read: false,
+                        type: 'info',
+                        category: 'system',
+                        isToday,
+                        source: 'System',
+                        relatedEntityId: taskId,
+                        relatedEntityType: 'task',
+                    });
+                    reviewRows.push({
+                        notificationId: `review-${taskId}`,
+                        taskId,
+                        notificationType: 'TaskAwaitingReview',
+                        message: `Task '${title}' has been submitted for review.`,
+                        isRead: false,
+                        createdAt: t.updatedAt ?? t.createdAt ?? new Date().toISOString(),
+                    });
+                } else if (isOverdue) {
+                    overdueNotifsList.push({
+                        id: `overdue-${taskId}`,
+                        title: 'Task Overdue',
+                        description: `Task '${title}' is overdue.`,
+                        timestamp: createdDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        read: false,
+                        type: 'alert',
+                        category: 'system',
+                        isToday,
+                        source: 'System',
+                        relatedEntityId: taskId,
+                        relatedEntityType: 'task',
+                    });
+                    overdueRowsList.push({
+                        notificationId: `overdue-${taskId}`,
+                        taskId,
+                        notificationType: 'TaskOverdue',
+                        message: `Task '${title}' is overdue.`,
+                        isRead: false,
+                        createdAt: deadlineStr,
+                    });
+                }
+            });
+            setAwaitingReviewNotifs(reviewNotifs);
+            setAwaitingReviewRows(reviewRows);
+            setOverdueNotifs(overdueNotifsList);
+            setOverdueRows(overdueRowsList);
         } catch { /* silent */ }
     };
 
     useEffect(() => { fetchAwaitingReview(); }, []);
     useEffect(() => {
-        const interval = setInterval(fetchAwaitingReview, 30000);
+        const interval = setInterval(() => {
+            fetchHeaderNotifications();
+            fetchAwaitingReview();
+            if (activeTab === 'tasks') fetchManagerTasks(true);
+            if (activeTab === 'dashboard') {
+                fetchActivityLogs(1, true);
+                fetchEmployees(1, undefined, true);
+            }
+        }, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [activeTab]);
 
-    const mergedHeaderNotifications = useMemo(
-        () => [...awaitingReviewNotifs, ...headerNotifications],
-        [awaitingReviewNotifs, headerNotifications]
-    );
+    const mergedHeaderNotifications = useMemo(() => {
+        const realOverdueIds = new Set(
+            headerNotifications
+                .filter(n => n.relatedEntityId && typeof n.title === 'string' && n.title.toLowerCase().includes('is overdue'))
+                .map(n => n.relatedEntityId as string)
+        );
+        return [...awaitingReviewNotifs, ...overdueNotifs.filter(n => !realOverdueIds.has(n.relatedEntityId as string)), ...headerNotifications];
+    }, [awaitingReviewNotifs, overdueNotifs, headerNotifications]);
 
-    const mergedAllNotifications = useMemo(
-        () => [...awaitingReviewRows, ...allNotifications],
-        [awaitingReviewRows, allNotifications]
-    );
+    const mergedAllNotifications = useMemo(() => {
+        const realOverdueIds = new Set(
+            allNotifications
+                .filter(n => n.notificationType === 'TaskOverdue' && n.taskId)
+                .map(n => n.taskId as string)
+        );
+        return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications];
+    }, [awaitingReviewRows, overdueRows, allNotifications]);
 
     const openManagerTaskById = (id: string) => {
         api.get(`/api/Task/${id}`)
@@ -2786,8 +2845,8 @@ export default function Dashboard() {
     const [activityLogDateFrom, setActivityLogDateFrom] = useState('');
     const [activityLogDateTo, setActivityLogDateTo] = useState('');
 
-    const fetchActivityLogs = async (page: number) => {
-        setActivityLogLoading(true);
+    const fetchActivityLogs = async (page: number, silent: boolean = false) => {
+        if (!silent) setActivityLogLoading(true);
         try {
             const params: Record<string, any> = { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE };
             if (activityLogSearch) params.search = activityLogSearch;
@@ -2800,7 +2859,7 @@ export default function Dashboard() {
             if (activityLogType) params.actionType = activityLogType;
             if (activityLogDateFrom) params.dateRangeStart = activityLogDateFrom;
             if (activityLogDateTo) params.dateRangeEnd = activityLogDateTo;
-            const res = await api.get('/api/audit-logs', { params });
+            const res = await api.get('/api/audit-logs', params);
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -2822,7 +2881,7 @@ export default function Dashboard() {
         } catch {
             setActivityLogs([]);
         } finally {
-            setActivityLogLoading(false);
+            if (!silent) setActivityLogLoading(false);
         }
     };
 
@@ -2854,8 +2913,8 @@ export default function Dashboard() {
         }
     };
 
-    const fetchEmployees = (page: number = 1, filters: { search: string; role: string; status: string } = { search: '', role: '', status: '' }) => {
-        setEmpLoading(true);
+    const fetchEmployees = (page: number = 1, filters: { search: string; role: string; status: string } = { search: '', role: '', status: '' }, silent: boolean = false) => {
+        if (!silent) setEmpLoading(true);
         const params: Record<string, any> = { PageNumber: String(page), PageSize: String(PAGE_SIZE) };
         if (filters.search) params.search = filters.search;
         if (filters.role) params.role = toBackendRole(filters.role);
@@ -2889,7 +2948,7 @@ export default function Dashboard() {
                 setEmployees([]);
                 setRecentEmployees([]);
             })
-            .finally(() => setEmpLoading(false));
+            .finally(() => { if (!silent) setEmpLoading(false); });
     };
 
     useEffect(() => {

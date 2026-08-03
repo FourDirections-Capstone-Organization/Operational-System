@@ -1463,7 +1463,7 @@ export default function EmployeeDashboard() {
             date: isToday ? 'Today' : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             read: n.isRead ?? false,
             type: typeLabels[type] || 'info',
-            category: type.toLowerCase(),
+            category: 'system',
             isToday,
             source: 'System',
             relatedEntityId: n.relatedTaskId ?? n.taskId ?? null,
@@ -1473,7 +1473,7 @@ export default function EmployeeDashboard() {
 
     const fetchHeaderNotifications = useCallback(async () => {
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: 1, pageSize: 10 } });
+            const res = await api.get('/api/Notification', { pageNumber: 1, pageSize: 10 });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -1541,7 +1541,7 @@ export default function EmployeeDashboard() {
     const fetchAllNotifications = useCallback(async (page: number) => {
         setNotifLoading(true);
         try {
-            const res = await api.get('/api/Notification', { params: { pageNumber: page, pageSize: NOTIF_PAGE_SIZE } });
+            const res = await api.get('/api/Notification', { pageNumber: page, pageSize: NOTIF_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -1579,7 +1579,7 @@ export default function EmployeeDashboard() {
 
     const fetchActivityLogs = async (page: number) => {
         try {
-            const res = await api.get('/api/audit-logs/my', { params: { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE } });
+            const res = await api.get('/api/audit-logs/my', { pageNumber: page, pageSize: ACTIVITY_LOG_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -1658,6 +1658,15 @@ export default function EmployeeDashboard() {
 
         fetchTasks();
         fetchActivityLogs(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            fetchHeaderNotifications();
+            fetchTasks();
+        }, 30000);
+        return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
