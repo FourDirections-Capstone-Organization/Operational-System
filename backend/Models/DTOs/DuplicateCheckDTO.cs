@@ -27,3 +27,22 @@ public class DuplicateMatchDTO
     public string Status { get; set; } = string.Empty;
     public double SimilarityPercentage { get; set; }
 }
+
+public class DuplicateDecisionDTO
+{
+    [Required]
+    [MaxLength(150)]
+    public string Title { get; set; } = string.Empty;
+
+    [MaxLength(2000)]
+    public string? Description { get; set; }
+
+    [Required]
+    public string Decision { get; set; } = string.Empty;
+
+    public int MatchCount { get; set; }
+
+    public double? TopSimilarity { get; set; }
+
+    public List<Guid>? MatchedTaskIds { get; set; }
+}

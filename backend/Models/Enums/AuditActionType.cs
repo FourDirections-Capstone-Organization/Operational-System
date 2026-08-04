@@ -12,5 +12,6 @@ public enum AuditActionType
     Upload,
     Export,
     AccessDenied,
-    BlockedAction
+    BlockedAction,
+    DuplicateOverride
 }

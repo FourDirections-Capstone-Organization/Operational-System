@@ -181,6 +181,49 @@ const fmtDate = (d: string): string => {
     });
 };
 
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+    Login: 'Login', Logout: 'Logout', Create: 'Create', Read: 'Read', Update: 'Update',
+    Delete: 'Delete', StatusChange: 'Status Change', Upload: 'Upload', Export: 'Export',
+    AccessDenied: 'Access Denied', BlockedAction: 'Blocked Action', DuplicateOverride: 'Duplicate Override',
+};
+
+const formatActionType = (raw?: string): string => {
+    if (!raw) return '—';
+    if (AUDIT_ACTION_LABELS[raw]) return AUDIT_ACTION_LABELS[raw];
+    return raw.replace(/([A-Z])/g, ' $1').trim();
+};
+
+const getAuditBadgeStyle = (raw: string): { background: string; color: string } => {
+    switch (raw) {
+        case 'Login': case 'Create':
+            return { background: 'var(--status-active-bg)', color: 'var(--status-active)' };
+        case 'Logout':
+            return { background: 'var(--status-pending-bg)', color: 'var(--status-pending)' };
+        case 'Delete': case 'AccessDenied': case 'BlockedAction':
+            return { background: 'var(--status-failed-bg)', color: 'var(--status-failed)' };
+        case 'DuplicateOverride':
+            return { background: '#ede9fe', color: '#6d28d9' };
+        default:
+            return { background: 'var(--status-new-bg)', color: 'var(--status-new)' };
+    }
+};
+
+const fmtChangeValue = (v?: string | null): string => {
+    if (!v) return '';
+    const s = String(v);
+    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+};
+
+const renderChanges = (oldValue?: string | null, newValue?: string | null) => {
+    if (!oldValue && !newValue) return '—';
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+            {oldValue ? <span title={String(oldValue)}>Old: {fmtChangeValue(oldValue)}</span> : null}
+            {newValue ? <span title={String(newValue)}>New: {fmtChangeValue(newValue)}</span> : null}
+        </div>
+    );
+};
+
 const isEffectivelyOverdue = (t: Task): boolean =>
     t.status !== 'completed' && t.status !== 'done' && t.status !== 'pending-review' && t.status !== 'assigned' && !!t.deadline && new Date(t.deadline + 'T00:00:00') < new Date();
 
@@ -1783,7 +1826,7 @@ export default function EmployeeDashboard() {
                     <div className="dashboard-content" style={{ padding: '0 28px 28px' }}>
                         <DataTable
                             title=""
-                            headers={['Date & Time', 'Description']}
+                            headers={['Date & Time', 'Action', 'Affected Employee / Entity', 'Description', 'Changes (Old → New)']}
                             loading={false}
                             emptyMessage="No activity logs found."
                             emptyIcon={<Activity size={24} />}
@@ -1792,14 +1835,36 @@ export default function EmployeeDashboard() {
                             totalPages={activityLogTotalPages}
                             onPageChange={p => fetchActivityLogs(p)}
                         >
-                            {activityLogs.map((log: any) => (
+                            {activityLogs.map((log: any) => {
+                                const badge = getAuditBadgeStyle(log.actionType ?? '');
+                                return (
                                 <tr key={log.id}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                                         {log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
                                     </td>
+                                    <td>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
+                                            background: badge.background, color: badge.color,
+                                        }}>
+                                            {formatActionType(log.actionType)}
+                                        </span>
+                                    </td>
+                                    <td style={{ fontSize: 13 }}>
+                                        <div style={{ color: 'var(--text-primary)' }}>
+                                            {[log.actorName, log.actorRole].filter(Boolean).join(', ') || '—'}
+                                        </div>
+                                        {log.targetEntity && (
+                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                                Entity: {log.targetEntity}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
+                                    <td style={{ color: 'var(--text-primary)' }}>{renderChanges(log.oldValue, log.newValue)}</td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </DataTable>
                     </div>
                 )}

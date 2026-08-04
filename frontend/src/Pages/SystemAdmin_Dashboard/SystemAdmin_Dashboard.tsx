@@ -155,6 +155,10 @@ interface ActivityLog {
     activityType: string;
     description: string;
     createdAt: string;
+    actorRole?: string;
+    targetEntity?: string;
+    oldValue?: string | null;
+    newValue?: string | null;
 }
 
 interface RecentEmployee {
@@ -295,6 +299,61 @@ const getEmployeeDisplayName = (emp: RecentEmployee): string => {
         );
     }
     return emp.employeeName ?? '';
+};
+
+// ─── Audit log helpers ───────────────────────────────────────────────────────
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+    Login: 'Login',
+    Logout: 'Logout',
+    Create: 'Create',
+    Read: 'Read',
+    Update: 'Update',
+    Delete: 'Delete',
+    StatusChange: 'Status Change',
+    Upload: 'Upload',
+    Export: 'Export',
+    AccessDenied: 'Access Denied',
+    BlockedAction: 'Blocked Action',
+    DuplicateOverride: 'Duplicate Override',
+};
+
+const formatActionType = (raw?: string): string => {
+    if (!raw) return '—';
+    if (AUDIT_ACTION_LABELS[raw]) return AUDIT_ACTION_LABELS[raw];
+    return raw.replace(/([A-Z])/g, ' $1').trim();
+};
+
+const getAuditBadgeStyle = (raw: string, isBiomarker: boolean): { background: string; color: string } => {
+    if (isBiomarker) return { background: '#ede9fe', color: '#6d28d9' };
+    switch (raw) {
+        case 'Login': case 'Create':
+            return { background: 'var(--status-active-bg)', color: 'var(--status-active)' };
+        case 'Logout':
+            return { background: 'var(--status-pending-bg)', color: 'var(--status-pending)' };
+        case 'Delete': case 'AccessDenied': case 'BlockedAction':
+            return { background: 'var(--status-failed-bg)', color: 'var(--status-failed)' };
+        case 'DuplicateOverride':
+            return { background: '#ede9fe', color: '#6d28d9' };
+        default:
+            return { background: 'var(--status-new-bg)', color: 'var(--status-new)' };
+    }
+};
+
+const fmtChangeValue = (v?: string | null): string => {
+    if (!v) return '';
+    const s = String(v);
+    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+};
+
+const renderChanges = (oldValue?: string | null, newValue?: string | null) => {
+    if (!oldValue && !newValue) return '—';
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+            {oldValue ? <span title={String(oldValue)}>Old: {fmtChangeValue(oldValue)}</span> : null}
+            {newValue ? <span title={String(newValue)}>New: {fmtChangeValue(newValue)}</span> : null}
+        </div>
+    );
 };
 
 function validate(form: FormState): FieldError {
@@ -2872,6 +2931,10 @@ export default function Dashboard() {
                     activityType: log.actionType ?? log.activityType ?? '',
                     description: log.description ?? '',
                     createdAt: log.timestamp ?? log.createdAt ?? '',
+                    actorRole: log.actorRole ?? '',
+                    targetEntity: log.targetEntity ?? '',
+                    oldValue: log.oldValue ?? null,
+                    newValue: log.newValue ?? null,
                 })));
                 setActivityLogPage(d.pageNumber || page);
                 setActivityLogTotalPages(d.totalPages || 1);
@@ -3224,7 +3287,7 @@ export default function Dashboard() {
                     <div className="dashboard-content" style={{ padding: 0 }}>
                         <DataTable
                             title=""
-                            headers={['Date & Time', 'Activity Type', 'Employee', 'Description']}
+                            headers={['Date & Time', 'Action', 'Affected Employee / Entity', 'Description', 'Changes (Old → New)']}
                             searchQuery={activityLogSearch}
                             onSearchChange={val => setActivityLogSearch(val)}
                             searchPlaceholder="Search description, employee…"
@@ -3240,20 +3303,9 @@ export default function Dashboard() {
                                     <select value={activityLogType} onChange={e => setActivityLogType(e.target.value)}
                                         style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 130, boxSizing: 'border-box', outline: 'none', cursor: 'pointer', background: '#fff' }}>
                                         <option value="">All Types</option>
-                                        <option value="Login">Login</option>
-                                        <option value="Logout">Logout</option>
-                                        <option value="Profile Update">Profile Update</option>
-                                        <option value="Task Created">Task Created</option>
-                                        <option value="Task Updated">Task Updated</option>
-                                        <option value="Task Status Updated">Task Status Updated</option>
-                                        <option value="Account Created">Account Created</option>
-                                        <option value="Approval Request Submitted">Approval Request Submitted</option>
-                                        <option value="Approval Tier Approved">Approval Tier Approved</option>
-                                        <option value="Approval Tier Rejected">Approval Tier Rejected</option>
-                                        <option value="Biomarker Scan">Biomarker Scan</option>
-                                        <option value="Biomarker Flag">Biomarker Flag</option>
-                                        <option value="SLA Breach">SLA Breach</option>
-                                        <option value="Workload Overload">Workload Overload</option>
+                                        {Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
                                     </select>
                                     <input type="date" value={activityLogDateFrom} onChange={e => setActivityLogDateFrom(e.target.value)}
                                         style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 130, boxSizing: 'border-box', outline: 'none' }} />
@@ -3278,6 +3330,7 @@ export default function Dashboard() {
                             {allActivityLogs.map(log => {
                                 const empName = [log.firstName, log.middleName, log.lastName, log.suffix].filter(Boolean).join(' ');
                                 const isBiomarker = log.activityLogId.startsWith('bio-');
+                                const badge = getAuditBadgeStyle(log.activityType, isBiomarker);
                                 return (
                                     <tr key={log.activityLogId}>
                                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
@@ -3286,18 +3339,24 @@ export default function Dashboard() {
                                         <td>
                                             <span style={{
                                                 display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
-                                                background: log.activityType === 'Login' ? 'var(--status-active-bg)' :
-                                                    log.activityType === 'Logout' ? 'var(--status-pending-bg)' :
-                                                        isBiomarker ? '#ede9fe' : 'var(--status-new-bg)',
-                                                color: log.activityType === 'Login' ? 'var(--status-active)' :
-                                                    log.activityType === 'Logout' ? 'var(--status-pending)' :
-                                                        isBiomarker ? '#6d28d9' : 'var(--status-new)',
+                                                background: badge.background, color: badge.color,
                                             }}>
-                                                {log.activityType}
+                                                {formatActionType(log.activityType)}
                                             </span>
                                         </td>
-                                        <td style={{ fontSize: 13 }}>{isBiomarker ? 'Biomarker Scan' : (empName || 'System')}</td>
+                                        <td style={{ fontSize: 13 }}>
+                                            <div style={{ color: 'var(--text-primary)' }}>
+                                                {isBiomarker ? 'Biomarker Scan' : (empName || 'System')}
+                                                {log.actorRole ? <span style={{ color: 'var(--text-secondary)' }}>, {log.actorRole}</span> : null}
+                                            </div>
+                                            {log.targetEntity && (
+                                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                                    Entity: {log.targetEntity}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
+                                        <td style={{ color: 'var(--text-primary)' }}>{renderChanges(log.oldValue, log.newValue)}</td>
                                     </tr>
                                 );
                             })}

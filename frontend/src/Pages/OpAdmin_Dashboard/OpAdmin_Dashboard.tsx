@@ -232,6 +232,17 @@ interface DuplicateWarningDTO {
     similarityPercentage: number;
 }
 
+// Enriched match detail (fetched per-task from /api/Task/{id})
+interface DuplicateDetailDTO extends DuplicateWarningDTO {
+    referenceNumber?: string;
+    description?: string;
+    deadline?: string | null;
+    priority?: string;
+    assignee?: string;
+    loading: boolean;
+    error?: boolean;
+}
+
 // --- Reopen Request Types ------------------------------------------------------
 
 interface ReopenRequest {
@@ -463,6 +474,49 @@ const fmtDate = (d: string): string => {
 const fmtDateTime = (d: string): string => {
     if (!d) return '—';
     return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+    Login: 'Login', Logout: 'Logout', Create: 'Create', Read: 'Read', Update: 'Update',
+    Delete: 'Delete', StatusChange: 'Status Change', Upload: 'Upload', Export: 'Export',
+    AccessDenied: 'Access Denied', BlockedAction: 'Blocked Action', DuplicateOverride: 'Duplicate Override',
+};
+
+const formatActionType = (raw?: string): string => {
+    if (!raw) return '—';
+    if (AUDIT_ACTION_LABELS[raw]) return AUDIT_ACTION_LABELS[raw];
+    return raw.replace(/([A-Z])/g, ' $1').trim();
+};
+
+const getAuditBadgeStyle = (raw: string): { background: string; color: string } => {
+    switch (raw) {
+        case 'Login': case 'Create':
+            return { background: 'var(--status-active-bg)', color: 'var(--status-active)' };
+        case 'Logout':
+            return { background: 'var(--status-pending-bg)', color: 'var(--status-pending)' };
+        case 'Delete': case 'AccessDenied': case 'BlockedAction':
+            return { background: 'var(--status-failed-bg)', color: 'var(--status-failed)' };
+        case 'DuplicateOverride':
+            return { background: '#ede9fe', color: '#6d28d9' };
+        default:
+            return { background: 'var(--status-new-bg)', color: 'var(--status-new)' };
+    }
+};
+
+const fmtChangeValue = (v?: string | null): string => {
+    if (!v) return '';
+    const s = String(v);
+    return s.length > 60 ? s.slice(0, 60) + '…' : s;
+};
+
+const renderChanges = (oldValue?: string | null, newValue?: string | null) => {
+    if (!oldValue && !newValue) return '—';
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+            {oldValue ? <span title={String(oldValue)}>Old: {fmtChangeValue(oldValue)}</span> : null}
+            {newValue ? <span title={String(newValue)}>New: {fmtChangeValue(newValue)}</span> : null}
+        </div>
+    );
 };
 
 const statusToProgress = (s: string): number => ({
@@ -4768,11 +4822,32 @@ const ReopenTab: React.FC<{
 
 interface DuplicateWarningModalProps {
     duplicates: DuplicateWarningDTO[];
+    details: DuplicateDetailDTO[];
+    newTaskTitle?: string;
+    newTaskDescription?: string;
+    onViewTask: (taskId: string) => void;
     onContinue: () => void;
     onCancel: () => void;
 }
 
-const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({ duplicates, onContinue, onCancel }) => (
+const similarityColor = (p: number): string =>
+    p >= 90 ? 'var(--status-failed)' : p >= 80 ? '#c05c00' : p >= 70 ? '#9a6e00' : 'var(--text-primary)';
+
+const fmtDeadline = (d?: string | null): string => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return '—';
+    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const snippet = (s?: string): string => {
+    if (!s) return '';
+    return s.length > 120 ? s.slice(0, 120) + '…' : s;
+};
+
+const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({
+    duplicates, details, newTaskTitle, newTaskDescription, onViewTask, onContinue, onCancel,
+}) => (
     <FormModal isOpen onClose={onCancel}
         title="Potential duplicate task detected."
         subtitle={`The system found ${duplicates.length} similar task${duplicates.length !== 1 ? 's' : ''} in existing records. Review the matches below.`}
@@ -4784,28 +4859,52 @@ const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({ duplicate
             </div>
         }
     >
+        {newTaskTitle && (
+            <div style={{ margin: '4px 0 12px', padding: '10px 12px', background: 'rgba(2, 132, 199, 0.06)', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 8, fontSize: 13 }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>New task: {newTaskTitle}</div>
+                {newTaskDescription && (
+                    <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{snippet(newTaskDescription)}</div>
+                )}
+            </div>
+        )}
         <div style={{ overflowX: 'auto', margin: '8px 0 4px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                     <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Existing Task Title</th>
-                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Task ID</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)', width: 130 }}>Similarity</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Existing Task</th>
                         <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Status</th>
-                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Similarity</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Priority</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Deadline</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Assignee</th>
+                        <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Description</th>
+                        <th style={{ padding: '8px 8px' }}></th>
                     </tr>
                 </thead>
                 <tbody>
-                    {duplicates.map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--text-primary)' }}>{d.title}</td>
-                            <td style={{ padding: '10px 8px', fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                                {d.taskId.length > 8 ? d.taskId.slice(0, 8) + '...' : d.taskId}
+                    {details.map((d, i) => (
+                        <tr key={d.taskId || i} style={{ borderBottom: '1px solid var(--border)', verticalAlign: 'top' }}>
+                            <td style={{ padding: '10px 8px', minWidth: 120 }}>
+                                <div style={{ fontWeight: 700, color: similarityColor(d.similarityPercentage) }}>{d.similarityPercentage}%</div>
+                                <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, marginTop: 4 }}>
+                                    <div style={{ width: `${Math.min(100, d.similarityPercentage)}%`, height: '100%', background: similarityColor(d.similarityPercentage), borderRadius: 3 }} />
+                                </div>
+                            </td>
+                            <td style={{ padding: '10px 8px' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{d.title}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{d.referenceNumber || (d.taskId.length > 8 ? d.taskId.slice(0, 8) + '…' : d.taskId)}</div>
                             </td>
                             <td style={{ padding: '10px 8px' }}>
                                 <span className={statusBadgeClass(d.status)} style={{ fontSize: 11 }}>{d.status}</span>
                             </td>
-                            <td style={{ padding: '10px 8px', fontWeight: 700, color: d.similarityPercentage >= 90 ? 'var(--status-failed)' : d.similarityPercentage >= 80 ? '#c05c00' : d.similarityPercentage >= 70 ? '#9a6e00' : 'var(--text-primary)' }}>
-                                {d.similarityPercentage}%
+                            <td style={{ padding: '10px 8px', color: 'var(--text-primary)' }}>{d.loading ? '…' : (d.priority || '—')}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{d.loading ? '…' : fmtDeadline(d.deadline)}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-primary)' }}>{d.loading ? '…' : (d.assignee || '—')}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-secondary)', maxWidth: 260 }}>
+                                {d.loading ? <span style={{ fontSize: 11, fontStyle: 'italic' }}>Loading…</span> : (snippet(d.description) || '—')}
+                            </td>
+                            <td style={{ padding: '10px 8px' }}>
+                                <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => onViewTask(d.taskId)}><Eye size={13} /> View</button>
                             </td>
                         </tr>
                     ))}
@@ -5126,6 +5225,8 @@ export default function OpsAdminDashboard() {
 
     // Duplicate warning state
     const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateWarningDTO[]>([]);
+    const [duplicateDetails, setDuplicateDetails] = useState<DuplicateDetailDTO[]>([]);
+    const [viewingDuplicateTask, setViewingDuplicateTask] = useState<TaskViewTask | null>(null);
     const [pendingTaskData, setPendingTaskData] = useState<CreateTaskDTO | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
@@ -5491,6 +5592,7 @@ export default function OpsAdminDashboard() {
                     if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
                         setDuplicateWarnings(checkJson.data.matches);
                         setPendingTaskData(data);
+                        fetchDuplicateDetails(checkJson.data.matches);
                         return;
                     }
                 } catch {
@@ -5534,6 +5636,104 @@ export default function OpsAdminDashboard() {
             const fallback = status === 500 ? 'Server error - check console for details.' : 'Failed to create task.';
             error(serverMsg || detail || fallback);
             setShowNew(false);
+        }
+    };
+
+    // -- Record duplicate-warning decision (continue/cancel) --
+    const recordDuplicateDecision = async (decision: 'continue' | 'cancel') => {
+        if (!pendingTaskData) return;
+        try {
+            await api.post('/api/Duplicate/decision', {
+                title: pendingTaskData.title,
+                description: pendingTaskData.description,
+                decision,
+                matchCount: duplicateWarnings.length,
+                topSimilarity: duplicateWarnings[0]?.similarityPercentage ?? null,
+                matchedTaskIds: duplicateWarnings.map(d => d.taskId),
+            });
+        } catch {
+            // decision recording must never block the flow
+        }
+    };
+
+    // -- Enrich duplicate matches with per-task detail (parallel fetch) --
+    const fetchDuplicateDetails = async (matches: DuplicateWarningDTO[]) => {
+        if (!matches.length) return;
+        setDuplicateDetails(matches.map(m => ({ ...m, loading: true })));
+        const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+        const results = await Promise.allSettled(
+            matches.map(m => api.get(`/api/Task/${m.taskId}`).then(res => res?.data?.data ?? res?.data))
+        );
+        setDuplicateDetails(matches.map((m, i) => {
+            const r = results[i];
+            if (r.status !== 'fulfilled' || !r.value) {
+                return { ...m, loading: false, error: true };
+            }
+            const dto: any = r.value;
+            return {
+                ...m,
+                referenceNumber: dto.referenceNumber ?? dto.taskReferenceNumber ?? '',
+                description: dto.description ?? '',
+                deadline: dto.deadline ?? null,
+                priority: (PRIORITY_LABELS[dto.priorityLevel] ?? dto.priority ?? '') as string,
+                assignee: dto.assignees?.length > 0 ? (dto.assignees[0].fullName ?? '') : '',
+                loading: false,
+                error: false,
+            };
+        }));
+    };
+
+    // -- Map /api/Task/{id} response into a TaskViewTask --
+    const mapTaskDetailToTaskView = (dto: any): TaskViewTask => {
+        const STATUS_LABELS: Record<number, TaskViewTask['taskStatus']> = {
+            0: 'Not Started', 1: 'In Progress', 2: 'Done/Pending Review',
+            3: 'Completed', 4: 'On Hold', 5: 'Cancelled',
+        };
+        const PRIORITY_LABELS: Record<number, TaskViewTask['priority']> = {
+            0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent',
+        };
+        const rawStatus = dto.status;
+        let taskStatus: TaskViewTask['taskStatus'];
+        if (typeof rawStatus === 'number') {
+            taskStatus = STATUS_LABELS[rawStatus] ?? 'Not Started';
+        } else {
+            const s: string = (rawStatus ?? '') as string;
+            if (s === 'Pending Admin Review' || s === 'DonePendingReview') taskStatus = 'Done/Pending Review';
+            else if (s === 'NotStarted') taskStatus = 'Not Started';
+            else if (s === 'InProgress') taskStatus = 'In Progress';
+            else if (s === 'OnHold') taskStatus = 'On Hold';
+            else if (s === 'Completed') taskStatus = 'Completed';
+            else if (s === 'Cancelled') taskStatus = 'Cancelled';
+            else taskStatus = (s as TaskViewTask['taskStatus']) || 'Not Started';
+        }
+        return {
+            taskId: dto.id ?? '',
+            taskTitle: dto.title ?? '',
+            taskDescription: dto.description ?? '',
+            priority: PRIORITY_LABELS[dto.priorityLevel] ?? ((dto.priority as TaskViewTask['priority']) || 'Medium'),
+            dueAt: dto.deadline ?? null,
+            taskStatus,
+            taskRemarks: dto.progressNotes ?? '',
+            assignedEmployee: dto.assignees?.length > 0 ? (dto.assignees[0].fullName ?? '') : '',
+            createdByEmployee: dto.createdByName ?? '',
+            assignedTo: dto.assignees?.length > 0 ? (dto.assignees[0].userId ?? '') : '',
+            createdAt: dto.createdAt ?? '',
+            isConfidential: dto.isConfidential ?? false,
+            isSLALocked: dto.isSLALocked ?? false,
+            attachmentCount: dto.attachmentCount ?? 0,
+            assignedDepartmentId: dto.assignedDepartmentId ?? undefined,
+            assignedDepartmentName: dto.assignedDepartmentName ?? undefined,
+        };
+    };
+
+    // -- Open a matched task in the full TaskView --
+    const openDuplicateTask = async (taskId: string) => {
+        try {
+            const res = await api.get(`/api/Task/${taskId}`);
+            const dto = res?.data?.data ?? res?.data;
+            setViewingDuplicateTask(mapTaskDetailToTaskView(dto));
+        } catch {
+            error('Failed to load task details.');
         }
     };
 
@@ -5906,7 +6106,7 @@ export default function OpsAdminDashboard() {
                     <div className="dashboard-content">
                         <DataTable
                             title="My Activity Logs"
-                            headers={['Date & Time', 'Description']}
+                            headers={['Date & Time', 'Action', 'Affected Employee / Entity', 'Description', 'Changes (Old → New)']}
                             loading={false}
                             emptyMessage="No activity logs found."
                             emptyIcon={<Activity size={24} />}
@@ -5915,14 +6115,36 @@ export default function OpsAdminDashboard() {
                             totalPages={activityLogTotalPages}
                             onPageChange={p => fetchActivityLogs(p)}
                         >
-                            {activityLogs.map((log: any) => (
+                            {activityLogs.map((log: any) => {
+                                const badge = getAuditBadgeStyle(log.actionType ?? '');
+                                return (
                                 <tr key={log.id}>
                                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                                         {fmtDateTime(log.timestamp)}
                                     </td>
+                                    <td>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
+                                            background: badge.background, color: badge.color,
+                                        }}>
+                                            {formatActionType(log.actionType)}
+                                        </span>
+                                    </td>
+                                    <td style={{ fontSize: 13 }}>
+                                        <div style={{ color: 'var(--text-primary)' }}>
+                                            {[log.actorName, log.actorRole].filter(Boolean).join(', ') || '—'}
+                                        </div>
+                                        {log.targetEntity && (
+                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                                Entity: {log.targetEntity}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
+                                    <td style={{ color: 'var(--text-primary)' }}>{renderChanges(log.oldValue, log.newValue)}</td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </DataTable>
                     </div>
                 )}
@@ -5995,7 +6217,7 @@ export default function OpsAdminDashboard() {
                     teamMembers={teamMembers}
                     tasks={tasks}
                     onSave={data => handleNewTask(data as CreateTaskDTO)}
-                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setPendingTaskData(null); setPendingFiles([]); }}
+                    onClose={() => { setShowNew(false); setDuplicateWarnings([]); setDuplicateDetails([]); setViewingDuplicateTask(null); setPendingTaskData(null); setPendingFiles([]); }}
                     showSuccess={success}
                     onFileChange={f => setPendingFiles(f)}
                 />
@@ -6072,21 +6294,54 @@ export default function OpsAdminDashboard() {
                     onClose={() => setReviewingRequest(null)}
                 />
             )}
-            {duplicateWarnings.length > 0 && pendingTaskData && (
+            {duplicateWarnings.length > 0 && pendingTaskData && !viewingDuplicateTask && (
                 <DuplicateWarningModal
                     duplicates={duplicateWarnings}
-                    onContinue={() => {
+                    details={duplicateDetails}
+                    newTaskTitle={pendingTaskData.title}
+                    newTaskDescription={pendingTaskData.description}
+                    onViewTask={openDuplicateTask}
+                    onContinue={async () => {
                         const task = pendingTaskData;
+                        await recordDuplicateDecision('continue');
                         setShowNew(false);
                         setDuplicateWarnings([]);
+                        setDuplicateDetails([]);
                         setPendingTaskData(null);
                         handleNewTask(task, true);
                     }}
-                    onCancel={() => {
+                    onCancel={async () => {
+                        await recordDuplicateDecision('cancel');
                         setDuplicateWarnings([]);
+                        setDuplicateDetails([]);
                         setPendingTaskData(null);
                         setPendingFiles([]);
                         setShowNew(false);
+                    }}
+                />
+            )}
+            {viewingDuplicateTask && (
+                <TaskView
+                    task={viewingDuplicateTask}
+                    onEdit={() => { setEditingTask(viewingDuplicateTask as unknown as Task); setViewingDuplicateTask(null); }}
+                    onReopen={() => handleReopenTask(viewingDuplicateTask.taskId)}
+                    onClose={() => setViewingDuplicateTask(null)}
+                    onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via duplicate review.')}
+                    onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
+                    onPushBack={async (id, comment) => {
+                        try {
+                            await api.patch(`/api/Task/${id}/push-back`, { comment });
+                            await fetchTasks();
+                            await doFetchDashboard();
+                            setViewingDuplicateTask(null);
+                            success('Task pushed back to In Progress.');
+                        } catch (err: any) {
+                            error(err.message ?? 'Push back failed.');
+                        }
+                    }}
+                    onUpdate={(updated) => {
+                        setViewingDuplicateTask(updated);
+                        fetchTasks();
                     }}
                 />
             )}
