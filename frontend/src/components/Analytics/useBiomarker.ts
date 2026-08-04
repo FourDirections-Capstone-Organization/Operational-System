@@ -114,6 +114,8 @@ function transformAlertsToViolations(alerts: BiomarkerAlertDTO[]): BiomarkerViol
                 : `${a.metricName}-${a.departmentId?.slice(0, 8) || ''}`,
             detectedAt: a.scanDateTime || a.createdAt,
             status: mapStatus(a),
+            currentValue: a.currentValue,
+            thresholdValue: a.thresholdValue,
         };
     });
 }
@@ -265,3 +267,69 @@ export function useBiomarker(filters?: BiomarkerFilters): UseBiomarkerReturn {
 }
 
 export default useBiomarker;
+
+// ─── Chart Data Hook ─────────────────────────────────────────────────────────
+
+export interface UseBiomarkerChartsReturn {
+    violations: BiomarkerViolation[];
+    loading: boolean;
+    online: boolean;
+    lastRefresh: number;
+}
+
+/**
+ * Fetches a larger filtered alert dataset (up to CHART_FETCH_LIMIT rows) so the
+ * dashboard can aggregate charts client-side. Polls on the same cadence as the
+ * paged table data.
+ */
+export function useBiomarkerCharts(filters?: BiomarkerFilters): UseBiomarkerChartsReturn {
+    const [violations, setViolations] = useState<BiomarkerViolation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [online, setOnline] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState(Date.now());
+    const mountedRef = useRef(true);
+    const fetchGenRef = useRef(0);
+
+    const refreshData = useCallback(async () => {
+        const generation = ++fetchGenRef.current;
+        const healthy = await analyticsService.checkHealth();
+
+        if (!mountedRef.current) return;
+
+        if (healthy) {
+            const paged = await analyticsService.fetchLatestAlertsPaged(1, analyticsService.CHART_FETCH_LIMIT, filters);
+            if (generation !== fetchGenRef.current) return; // stale — a newer fetch started
+            if (paged && mountedRef.current) {
+                setViolations(transformAlertsToViolations(paged.paged.items));
+                setOnline(true);
+            }
+        } else {
+            if (generation !== fetchGenRef.current) return;
+            setViolations([]);
+            setOnline(false);
+        }
+
+        if (mountedRef.current) {
+            setLoading(false);
+            setLastRefresh(Date.now());
+        }
+    }, [filters]);
+
+    // ── Initial Load ──
+    useEffect(() => {
+        mountedRef.current = true;
+        setLoading(true);
+        refreshData();
+        return () => { mountedRef.current = false; };
+    }, [refreshData]);
+
+    // ── Polling ──
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refreshData();
+        }, POLL_INTERVAL_MS);
+        return () => clearInterval(interval);
+    }, [refreshData]);
+
+    return { violations, loading, online, lastRefresh };
+}

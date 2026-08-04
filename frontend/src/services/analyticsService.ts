@@ -74,6 +74,8 @@ export interface BiomarkerViolation {
     taskReference: string;
     detectedAt: string;
     status: ViolationStatus;
+    currentValue?: number;
+    thresholdValue?: number;
 }
 
 export interface ScanMeta {
@@ -88,6 +90,7 @@ export type AnalyticsHealthStatus = 'loading' | 'online' | 'offline' | 'error';
 // ─── Analytics Service ───
 
 const HEALTH_CHECK_TIMEOUT = 5000;
+const CHART_FETCH_LIMIT = 500;
 
 async function healthCheckInternal(): Promise<boolean> {
     try {
@@ -136,4 +139,7 @@ export const analyticsService = {
             return false;
         }
     },
+
+    /** Max alerts fetched for client-side chart aggregations */
+    CHART_FETCH_LIMIT,
 };

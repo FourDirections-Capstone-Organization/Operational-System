@@ -2,15 +2,19 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     AlertTriangle, Clock, Users, Activity, Shield,
     RefreshCw, Loader2, Calendar, CheckCircle2, XCircle,
-    AlertCircle, UserCheck, RotateCcw,
+    AlertCircle, UserCheck, RotateCcw, BarChart3, Filter,
     Radio
 } from 'lucide-react';
+import {
+    ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
 import './BiomarkerDashboard.css';
 import StatusCard from '../../components/StatusCard/StatusCard';
 import DataTable, { DataTableColumn, DataTableTab } from '../../components/ui/DataTable';
 import Select from '../../components/ui/Select';
 import api from '../../api';
-import { useBiomarker, AnalyticsStatusBadge } from '../../components/Analytics';
+import { useBiomarker, useBiomarkerCharts, AnalyticsStatusBadge } from '../../components/Analytics';
 import {
     ViolationType, Severity, ViolationStatus,
     BiomarkerViolation
@@ -126,6 +130,98 @@ export default function BiomarkerDashboard() {
 
     // ── Filtered violations ──
     const filteredViolations = violations;
+
+    // ── Chart dataset (larger filtered fetch, aggregated client-side) ──
+    const chart = useBiomarkerCharts(filters);
+    const chartRows = chart.violations;
+
+    const TYPE_COLORS: Record<ViolationType, string> = {
+        sla_breach: '#dc2626',
+        workload_overload: '#d97706',
+        biomarker_flag: '#7c3aed',
+    };
+    const SEVERITY_COLORS: Record<Severity, string> = {
+        Critical: '#dc2626',
+        High: '#ea580c',
+        Medium: '#ca8a04',
+        Low: '#16a34a',
+    };
+    const chartTooltipProps = {
+        contentStyle: { borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, background: 'var(--s1)' },
+        labelStyle: { fontWeight: 700 },
+        itemStyle: { fontSize: 12 },
+    };
+
+    const byTypeData = useMemo(() => {
+        const counts: Record<ViolationType, number> = { sla_breach: 0, workload_overload: 0, biomarker_flag: 0 };
+        chartRows.forEach(v => { counts[v.type] += 1; });
+        return ([
+            { name: 'SLA Breach', key: 'sla_breach' as ViolationType, value: counts.sla_breach },
+            { name: 'Workload Overload', key: 'workload_overload' as ViolationType, value: counts.workload_overload },
+            { name: 'Biomarker Flag', key: 'biomarker_flag' as ViolationType, value: counts.biomarker_flag },
+        ]).filter(d => d.value > 0);
+    }, [chartRows]);
+
+    const bySeverityData = useMemo(() => {
+        const counts: Record<Severity, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+        chartRows.forEach(v => { counts[v.severity] += 1; });
+        return (Object.keys(counts) as Severity[])
+            .map(s => ({ name: s, value: counts[s] }))
+            .filter(d => d.value > 0);
+    }, [chartRows]);
+
+    const byDepartmentData = useMemo(() => {
+        const map = new Map<string, number>();
+        chartRows.forEach(v => {
+            const dept = v.department || 'Unassigned';
+            map.set(dept, (map.get(dept) ?? 0) + 1);
+        });
+        return Array.from(map.entries())
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 8);
+    }, [chartRows]);
+
+    const trendData = useMemo(() => {
+        const days: { key: string; label: string }[] = [];
+        const now = new Date();
+        for (let i = 13; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            days.push({
+                key: d.toLocaleDateString('en-CA'),
+                label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            });
+        }
+        const buckets = new Map(days.map(d => [d.key, { sla_breach: 0, workload_overload: 0, biomarker_flag: 0 }]));
+        chartRows.forEach(v => {
+            const key = new Date(v.detectedAt).toLocaleDateString('en-CA');
+            const b = buckets.get(key);
+            if (b) b[v.type] += 1;
+        });
+        return days.map(d => {
+            const b = buckets.get(d.key)!;
+            return { label: d.label, 'SLA Breach': b.sla_breach, 'Workload Overload': b.workload_overload, 'Biomarker Flag': b.biomarker_flag };
+        });
+    }, [chartRows]);
+
+    const workloadData = useMemo(() => {
+        const map = new Map<string, { name: string; current: number; threshold: number }>();
+        chartRows.forEach(v => {
+            if (v.type !== 'workload_overload' || (v.currentValue ?? 0) <= 0) return;
+            const key = v.employeeName || v.employeeNumber || v.id;
+            const current = v.currentValue ?? 0;
+            const threshold = v.thresholdValue ?? 0;
+            const existing = map.get(key);
+            if (existing) {
+                existing.current = Math.max(existing.current, current);
+                existing.threshold = Math.max(existing.threshold, threshold);
+            } else {
+                map.set(key, { name: v.employeeName || v.employeeNumber || 'Unknown', current, threshold });
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => b.current - a.current).slice(0, 8);
+    }, [chartRows]);
 
     // ── Handlers ──
     const handleManualScan = useCallback(async () => {
@@ -324,6 +420,133 @@ export default function BiomarkerDashboard() {
                     variant="info"
                     subtext="Flags generated from violations"
                 />
+            </div>
+
+            {/* ── Analytics Overview ── */}
+            <div className="bd-section">
+                <div className="bd-section-header">
+                    <h4>Analytics Overview</h4>
+                    <span className="bd-chart-meta">
+                        {hasActiveFilters && <span className="bd-chart-filter-note"><Filter size={11} /> Based on current filters</span>}
+                        <span className="bd-chart-updated">
+                            {chart.loading ? 'Loading…' : `Updated ${new Date(chart.lastRefresh).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`}
+                        </span>
+                    </span>
+                </div>
+                {!chart.online ? (
+                    <div className="bd-chart-empty">
+                        <AlertTriangle size={22} />
+                        <p>Analytics service is offline. Charts will appear once the biomarker engine is reachable.</p>
+                    </div>
+                ) : chartRows.length === 0 ? (
+                    <div className="bd-chart-empty">
+                        <BarChart3 size={22} />
+                        <p>No violation data to chart. Run a scan or adjust your filters.</p>
+                    </div>
+                ) : (
+                    <div className="bd-chart-grid">
+                        <div className="bd-chart-card">
+                            <div className="bd-chart-card-header">
+                                <span className="bd-chart-card-title">Violations by Type</span>
+                                <span className="bd-chart-card-count">{chartRows.length} total</span>
+                            </div>
+                            <div className="bd-chart-body">
+                                <ResponsiveContainer width="100%" height={210}>
+                                    <PieChart>
+                                        <Pie data={byTypeData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={2} strokeWidth={0}>
+                                            {byTypeData.map(entry => (
+                                                <Cell key={entry.key} fill={TYPE_COLORS[entry.key]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip {...chartTooltipProps} />
+                                        <Legend iconSize={10} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bd-chart-card">
+                            <div className="bd-chart-card-header">
+                                <span className="bd-chart-card-title">Violations by Severity</span>
+                                <span className="bd-chart-card-count">{chartRows.length} total</span>
+                            </div>
+                            <div className="bd-chart-body">
+                                <ResponsiveContainer width="100%" height={210}>
+                                    <PieChart>
+                                        <Pie data={bySeverityData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={2} strokeWidth={0}>
+                                            {bySeverityData.map(entry => (
+                                                <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip {...chartTooltipProps} />
+                                        <Legend iconSize={10} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bd-chart-card">
+                            <div className="bd-chart-card-header">
+                                <span className="bd-chart-card-title">Top Departments</span>
+                                <span className="bd-chart-card-count">{byDepartmentData.length} dept(s)</span>
+                            </div>
+                            <div className="bd-chart-body">
+                                <ResponsiveContainer width="100%" height={210}>
+                                    <BarChart data={byDepartmentData} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                                        <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                                        <Tooltip {...chartTooltipProps} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                                        <Bar dataKey="value" name="Violations" fill="#00A99D" radius={[0, 4, 4, 0]} barSize={14} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        <div className="bd-chart-card">
+                            <div className="bd-chart-card-header">
+                                <span className="bd-chart-card-title">Daily Trend — Last 14 Days</span>
+                                <span className="bd-chart-card-count">by type</span>
+                            </div>
+                            <div className="bd-chart-body">
+                                <ResponsiveContainer width="100%" height={210}>
+                                    <BarChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                        <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={1} />
+                                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                                        <Tooltip {...chartTooltipProps} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                                        <Legend iconSize={10} />
+                                        <Bar dataKey="SLA Breach" stackId="trend" fill={TYPE_COLORS.sla_breach} barSize={12} />
+                                        <Bar dataKey="Workload Overload" stackId="trend" fill={TYPE_COLORS.workload_overload} barSize={12} />
+                                        <Bar dataKey="Biomarker Flag" stackId="trend" fill={TYPE_COLORS.biomarker_flag} barSize={12} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {workloadData.length > 0 && (
+                            <div className="bd-chart-card">
+                                <div className="bd-chart-card-header">
+                                    <span className="bd-chart-card-title">Workload vs Threshold</span>
+                                    <span className="bd-chart-card-count">{workloadData.length} employee(s)</span>
+                                </div>
+                                <div className="bd-chart-body">
+                                    <ResponsiveContainer width="100%" height={210}>
+                                        <BarChart data={workloadData} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                                            <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                                            <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                                            <Tooltip {...chartTooltipProps} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                                            <Legend iconSize={10} />
+                                            <Bar dataKey="current" name="Current" fill="#ea580c" radius={[0, 4, 4, 0]} barSize={8} />
+                                            <Bar dataKey="threshold" name="Threshold" fill="#9ca3af" radius={[0, 4, 4, 0]} barSize={8} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* ── Violations DataTable ── */}
