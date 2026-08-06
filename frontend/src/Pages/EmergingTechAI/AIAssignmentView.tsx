@@ -408,7 +408,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                 priority: 'Priority',
                 classification: 'Classification',
                 scope: 'Assignment Scope',
-                destination: 'Destination',
+                destination: 'Select Employee',
             };
             const missing = Object.keys(newErrors)
                 .map(key => labelMap[key] ?? key)
