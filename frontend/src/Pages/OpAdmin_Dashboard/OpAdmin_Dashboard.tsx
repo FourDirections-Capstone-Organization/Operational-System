@@ -191,6 +191,8 @@ interface Task {
     assignedEmployee: string;
     createdByEmployee: string;
     assignedTo: string;
+    /** Each assignee plus the completion percentage the employee reported. */
+    assignees?: { fullName: string; completionPercentage: number }[];
     createdAt: string;
     updatedAt?: string;
     deleted?: boolean;
@@ -1472,7 +1474,40 @@ const ViewModal: React.FC<ViewModalProps> = ({ task, onEdit, onReopen, onStatusC
                 <div className="view-modal-section">
                     <label className="view-modal-label">Assigned To:</label>
                     <div className="view-modal-assignee-box">
-                        {task.assignedEmployee || 'Unassigned'}
+                        {task.assignees && task.assignees.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                                {task.assignees.map((a, i) => {
+                                    const pct = a.completionPercentage ?? 0;
+                                    return (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span className="view-modal-assignee-name" style={{ flex: 1, fontWeight: 600 }}>
+                                                {a.fullName || 'Unassigned'}
+                                            </span>
+                                            <span
+                                                title="Completion percentage set by the employee"
+                                                style={{
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    padding: '1px 7px',
+                                                    borderRadius: 4,
+                                                    background: pct >= 100
+                                                        ? 'rgba(5,150,105,0.12)'
+                                                        : pct >= 50
+                                                            ? 'rgba(0,169,157,0.12)'
+                                                            : 'rgba(148,163,184,0.15)',
+                                                    color: pct >= 100 ? '#059669' : pct >= 50 ? '#00A99D' : 'var(--text-secondary)',
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                {pct}%
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            task.assignedEmployee || 'Unassigned'
+                        )}
                     </div>
                 </div>
 
@@ -5686,6 +5721,10 @@ export default function OpsAdminDashboard() {
                 assignedEmployee: t.assignees?.length > 0 ? t.assignees[0].fullName ?? '' : '',
                 createdByEmployee: t.createdByName ?? t.createdByEmployee ?? '',
                 assignedTo: t.assignees?.length > 0 ? t.assignees[0].userId ?? '' : '',
+                assignees: (t.assignees ?? []).map((a: any) => ({
+                    fullName: a.fullName ?? a.FullName ?? '',
+                    completionPercentage: a.completionPercentage ?? a.CompletionPercentage ?? 0,
+                })),
                 createdAt: t.createdAt ?? '',
                 updatedAt: t.updatedAt ?? undefined,
                 deleted: deletedTaskIdsRef.current.has(t.id ?? t.taskId),
