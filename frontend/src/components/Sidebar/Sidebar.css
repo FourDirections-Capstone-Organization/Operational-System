@@ -252,8 +252,14 @@
 
 .nav-label {
   flex: 1;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.3;
+  word-break: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   transition: opacity 0.25s;
 }
 
@@ -330,6 +336,7 @@
   padding: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
+  flex-shrink: 0;
 }
 
 /* ── Profile Card ────────────────────────────────────────────────────────── */
@@ -343,6 +350,7 @@
   cursor: pointer;
   transition: background 0.2s;
   overflow: hidden;
+  min-width: 0;
   color: rgba(255, 255, 255, 0.85);
   border: 1px solid transparent;
 }
@@ -371,6 +379,7 @@
 
 .profile-info {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   transition: opacity 0.25s;
   display: flex;
@@ -394,6 +403,15 @@
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);
   display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The up/down selector chevron must never shrink or get clipped by the
+   profile card's overflow-hidden when the name is long. */
+.profile-selector-icon {
+  flex-shrink: 0;
 }
 
 /* ── Profile Popover Dropdown ────────────────────────────────────────────── */
