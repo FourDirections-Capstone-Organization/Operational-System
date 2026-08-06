@@ -770,7 +770,8 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     const [urgentStatus, setUrgentStatus] = useState('');
     const [urgentPage, setUrgentPage] = useState(1);
 
-    const PAGE_SIZE = 6;
+    const URGENT_PAGE_SIZE = 6;
+    const PROGRESS_PAGE_SIZE = 9;
 
     const total = tasks.length;
     const done = tasks.filter(t => t.status === 'completed').length;
@@ -786,18 +787,18 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     const progressFiltered = progressSource
         .filter(t => !progressSearch || t.name.toLowerCase().includes(progressSearch.toLowerCase()))
         .filter(t => !progressStatus || effectiveStatus(t) === progressStatus);
-    const progressTotalPages = Math.max(1, Math.ceil(progressFiltered.length / PAGE_SIZE));
+    const progressTotalPages = Math.max(1, Math.ceil(progressFiltered.length / PROGRESS_PAGE_SIZE));
     const safeProgressPage = Math.min(progressPage, progressTotalPages);
-    const progressItems = progressFiltered.slice((safeProgressPage - 1) * PAGE_SIZE, safeProgressPage * PAGE_SIZE);
+    const progressItems = progressFiltered.slice((safeProgressPage - 1) * PROGRESS_PAGE_SIZE, safeProgressPage * PROGRESS_PAGE_SIZE);
 
     // High Priority - not completed, searchable + status filter, paginated.
     const urgentFiltered = tasks
         .filter(t => t.priority === 'high' && t.status !== 'completed')
         .filter(t => !urgentSearch || t.name.toLowerCase().includes(urgentSearch.toLowerCase()))
         .filter(t => !urgentStatus || effectiveStatus(t) === urgentStatus);
-    const urgentTotalPages = Math.max(1, Math.ceil(urgentFiltered.length / PAGE_SIZE));
+    const urgentTotalPages = Math.max(1, Math.ceil(urgentFiltered.length / URGENT_PAGE_SIZE));
     const safeUrgentPage = Math.min(urgentPage, urgentTotalPages);
-    const urgentItems = urgentFiltered.slice((safeUrgentPage - 1) * PAGE_SIZE, safeUrgentPage * PAGE_SIZE);
+    const urgentItems = urgentFiltered.slice((safeUrgentPage - 1) * URGENT_PAGE_SIZE, safeUrgentPage * URGENT_PAGE_SIZE);
 
     const statusFilterOptions = Object.entries(statusMeta).filter(([key]) => key !== 'done');
 
