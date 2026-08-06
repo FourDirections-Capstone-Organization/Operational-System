@@ -27,7 +27,7 @@ public class TaskCommentService : ITaskCommentService
     }
 
     public async Task<ApiResponseDTO<TaskCommentResponseDTO>> CreateAsync(
-        Guid taskId, string content, IFormFile? file, Guid authorId)
+        Guid taskId, string content, List<IFormFile>? attachments, Guid authorId)
     {
         var taskExists = await _db.Tasks.AnyAsync(t => t.Id == taskId);
         if (!taskExists)
@@ -48,33 +48,46 @@ public class TaskCommentService : ITaskCommentService
             CreatedAt = DateTime.UtcNow
         };
 
-        if (file is not null && file.Length > 0)
+        if (attachments is not null && attachments.Count > 0)
         {
-            var extension = Path.GetExtension(file.FileName).ToLower();
-            if (!_fileSettings.AllowedFileTypes.Contains(extension))
-                return ApiResponseDTO<TaskCommentResponseDTO>.Failure(
-                    $"Unsupported file format. Allowed: {string.Join(", ", _fileSettings.AllowedFileTypes)}");
-
-            if (file.Length > _fileSettings.MaxFileSizeBytes)
-                return ApiResponseDTO<TaskCommentResponseDTO>.Failure(
-                    $"File exceeds the maximum allowed size ({_fileSettings.MaxFileSizeBytes / 1024 / 1024}MB)");
-
             var uploadDir = Path.Combine(Directory.GetCurrentDirectory(),
                 _fileSettings.UploadPath, "comments", taskId.ToString());
 
             if (!Directory.Exists(uploadDir))
                 Directory.CreateDirectory(uploadDir);
 
-            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
-            var filePath = Path.Combine(uploadDir, uniqueFileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            foreach (var file in attachments)
             {
-                await file.CopyToAsync(stream);
-            }
+                if (file is null || file.Length == 0)
+                    continue;
 
-            comment.AttachmentFilePath = filePath;
-            comment.AttachmentFileName = file.FileName;
+                var extension = Path.GetExtension(file.FileName).ToLower();
+                if (!_fileSettings.AllowedFileTypes.Contains(extension))
+                    return ApiResponseDTO<TaskCommentResponseDTO>.Failure(
+                        $"Unsupported file format. Allowed: {string.Join(", ", _fileSettings.AllowedFileTypes)}");
+
+                if (file.Length > _fileSettings.MaxFileSizeBytes)
+                    return ApiResponseDTO<TaskCommentResponseDTO>.Failure(
+                        $"File exceeds the maximum allowed size ({_fileSettings.MaxFileSizeBytes / 1024 / 1024}MB)");
+
+                var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(uploadDir, uniqueFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                comment.Attachments ??= new List<TaskCommentAttachment>();
+                comment.Attachments.Add(new TaskCommentAttachment
+                {
+                    FilePath = filePath,
+                    FileName = file.FileName,
+                    FileSize = file.Length,
+                    FileType = extension,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
         }
 
         _db.TaskComments.Add(comment);
@@ -129,6 +142,7 @@ public class TaskCommentService : ITaskCommentService
 
         var query = _db.TaskComments
             .Include(c => c.Author)
+            .Include(c => c.Attachments)
             .Where(c => c.TaskId == taskId && !c.IsDeleted);
 
         var totalCount = await query.CountAsync();
@@ -197,9 +211,61 @@ public class TaskCommentService : ITaskCommentService
         return ApiResponseDTO<bool>.Success(true, "Comment deleted successfully");
     }
 
+    public async Task<ApiResponseDTO<TaskCommentAttachment>> GetAttachmentAsync(Guid commentId, Guid attachmentId)
+    {
+        var comment = await _db.TaskComments.FindAsync(commentId);
+        if (comment is null)
+            return ApiResponseDTO<TaskCommentAttachment>.Failure("Comment not found");
+
+        var attachment = await _db.TaskCommentAttachments
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.CommentId == commentId);
+        if (attachment is null)
+            return ApiResponseDTO<TaskCommentAttachment>.Failure("Attachment not found");
+
+        return ApiResponseDTO<TaskCommentAttachment>.Success(attachment);
+    }
+
+    public async Task<ApiResponseDTO<TaskComment>> GetLegacyAttachmentAsync(Guid commentId)
+    {
+        var comment = await _db.TaskComments.FindAsync(commentId);
+        if (comment is null)
+            return ApiResponseDTO<TaskComment>.Failure("Comment not found");
+
+        if (string.IsNullOrEmpty(comment.AttachmentFilePath) || !System.IO.File.Exists(comment.AttachmentFilePath))
+            return ApiResponseDTO<TaskComment>.Failure("Attachment not found");
+
+        return ApiResponseDTO<TaskComment>.Success(comment);
+    }
+
     private async Task<TaskCommentResponseDTO> MapToResponseDTOAsync(TaskComment comment)
     {
         await _db.Entry(comment).Reference(c => c.Author).LoadAsync();
+
+        var attachments = (comment.Attachments ?? new List<TaskCommentAttachment>())
+            .OrderBy(a => a.CreatedAt)
+            .Select(a => new TaskCommentAttachmentDTO
+            {
+                Id = a.Id,
+                CommentId = a.CommentId,
+                FileName = a.FileName,
+                FileSize = a.FileSize,
+                FileType = a.FileType,
+                CreatedAt = a.CreatedAt
+            })
+            .ToList();
+
+        // Backward compatibility: legacy single-file comments store the file
+        // name directly on the comment; surface it in the attachments list too.
+        if (attachments.Count == 0 && !string.IsNullOrEmpty(comment.AttachmentFileName))
+        {
+            attachments.Add(new TaskCommentAttachmentDTO
+            {
+                Id = Guid.Empty,
+                CommentId = comment.Id,
+                FileName = comment.AttachmentFileName,
+                CreatedAt = comment.CreatedAt
+            });
+        }
 
         return new TaskCommentResponseDTO
         {
@@ -211,6 +277,7 @@ public class TaskCommentService : ITaskCommentService
                 : "Unknown",
             Content = comment.Content,
             AttachmentFileName = comment.AttachmentFileName,
+            Attachments = attachments,
             IsDeleted = comment.IsDeleted,
             CreatedAt = comment.CreatedAt,
             UpdatedAt = comment.UpdatedAt

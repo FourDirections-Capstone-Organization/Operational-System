@@ -22,17 +22,51 @@ public class TaskCommentController : ControllerBase
     public async Task<IActionResult> Create(
         Guid taskId,
         [FromForm] string content,
-        [FromForm] IFormFile? attachment = null)
+        [FromForm] List<IFormFile>? attachments = null)
     {
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var authorId))
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
 
-        var result = await _commentService.CreateAsync(taskId, content, attachment, authorId);
+        var result = await _commentService.CreateAsync(taskId, content, attachments, authorId);
         if (!result.IsSuccess)
             return BadRequest(result);
 
         return CreatedAtAction(nameof(GetByTask), new { taskId }, result);
+    }
+
+    [HttpGet("{commentId:guid}/attachments/{attachmentId:guid}/download")]
+    public async Task<IActionResult> DownloadAttachment(Guid taskId, Guid commentId, Guid attachmentId)
+    {
+        var result = await _commentService.GetAttachmentAsync(commentId, attachmentId);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        var attachment = result.Data!;
+
+        if (!System.IO.File.Exists(attachment.FilePath))
+            return NotFound(ApiResponseDTO<object>.Failure("File not found on disk"));
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(attachment.FilePath);
+        return File(fileBytes, "application/octet-stream", attachment.FileName);
+    }
+
+    [HttpGet("{commentId:guid}/attachment/download")]
+    public async Task<IActionResult> DownloadLegacyAttachment(Guid taskId, Guid commentId)
+    {
+        // Backward compatibility: comments created before multi-file attachments
+        // store a single file directly on the comment row.
+        var result = await _commentService.GetLegacyAttachmentAsync(commentId);
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        var comment = result.Data!;
+        var fileName = string.IsNullOrEmpty(comment.AttachmentFileName)
+            ? Path.GetFileName(comment.AttachmentFilePath!)
+            : comment.AttachmentFileName;
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(comment.AttachmentFilePath!);
+        return File(fileBytes, "application/octet-stream", fileName);
     }
 
     [HttpGet]

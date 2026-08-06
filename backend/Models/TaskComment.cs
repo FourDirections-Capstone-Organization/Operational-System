@@ -22,6 +22,11 @@ public class TaskComment
     [MaxLength(255)]
     public string? AttachmentFileName { get; set; }
 
+    /// <summary>
+    /// Files attached to this comment. Supports one or more files per comment.
+    /// </summary>
+    public ICollection<TaskCommentAttachment>? Attachments { get; set; }
+
     public bool IsDeleted { get; set; } = false;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

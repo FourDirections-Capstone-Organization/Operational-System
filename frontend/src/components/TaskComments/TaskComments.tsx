@@ -9,6 +9,13 @@ import api from '../../api';
 import axios from 'axios';
 import './TaskComments.css';
 
+interface CommentAttachmentDTO {
+    id: string;
+    fileName: string;
+    fileSize?: number;
+    fileType?: string;
+}
+
 interface CommentDTO {
     taskCommentId: string;
     taskId: string;
@@ -17,6 +24,7 @@ interface CommentDTO {
     authorName: string;
     message: string;
     attachmentFileName?: string;
+    attachments?: CommentAttachmentDTO[];
     createdAt: string;
     updatedAt?: string;
 }
@@ -56,7 +64,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [newMessage, setNewMessage] = useState('');
-    const [attachment, setAttachment] = useState<File | null>(null);
+    const [attachments, setAttachments] = useState<File[]>([]);
     const [sending, setSending] = useState(false);
     const { success } = useToast();
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -79,6 +87,16 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                 authorName: c.authorName ?? '',
                 message: c.content ?? c.message ?? '',
                 attachmentFileName: c.attachmentFileName ?? '',
+                attachments: Array.isArray(c.attachments)
+                    ? c.attachments.map((a: any) => ({
+                        // Zero-GUID marks a legacy single-file comment with no
+                        // attachment record; route its download via the legacy endpoint.
+                        id: (a.id && a.id !== '00000000-0000-0000-0000-000000000000') ? a.id : '',
+                        fileName: a.fileName ?? '',
+                        fileSize: a.fileSize,
+                        fileType: a.fileType,
+                    }))
+                    : (c.attachmentFileName ? [{ id: '', fileName: c.attachmentFileName }] : []),
                 createdAt: c.createdAt ?? '',
                 updatedAt: c.updatedAt ?? undefined,
             })));
@@ -99,34 +117,42 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     }, [comments]);
 
     const handleAttachmentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (file.size > 20 * 1024 * 1024) { setError('Attachment exceeds maximum size of 20MB.'); return; }
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        if (!['pdf', 'docx', 'xlsx', 'jpg', 'png', 'jpeg'].includes(ext ?? '')) {
-            setError('Allowed file types: PDF, DOCX, XLSX, JPG, PNG.');
-            return;
+        const files = Array.from(e.target.files ?? []);
+        if (e.target.value) e.target.value = '';
+        if (files.length === 0) return;
+        for (const file of files) {
+            if (file.size > 20 * 1024 * 1024) { setError('Attachment exceeds maximum size of 20MB.'); return; }
+            const ext = file.name.split('.').pop()?.toLowerCase();
+            if (!['pdf', 'docx', 'xlsx', 'jpg', 'png', 'jpeg'].includes(ext ?? '')) {
+                setError('Allowed file types: PDF, DOCX, XLSX, JPG, PNG.');
+                return;
+            }
         }
-        setAttachment(file);
+        setAttachments(files);
         setError('');
     };
 
-    const handleDownloadAttachment = async (commentId: string, fileName: string) => {
+    const handleDownloadAttachment = async (commentId: string, attachmentId: string, fileName: string) => {
         const token = localStorage.getItem('authToken');
         try {
-            const res = await axios.get(`/api/attachments/${commentId}/download`, {
+            // Multi-file comments use the per-attachment endpoint; legacy
+            // single-file comments (no attachment id) use the comment-level endpoint.
+            const url = attachmentId
+                ? `/api/tasks/${taskId}/comments/${commentId}/attachments/${attachmentId}/download`
+                : `/api/tasks/${taskId}/comments/${commentId}/attachment/download`;
+            const res = await axios.get(url, {
                 responseType: 'blob',
                 headers: { Authorization: `Bearer ${token}` },
             });
             const blob = res.data;
-            const url = URL.createObjectURL(blob);
+            const objectUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
+            a.href = objectUrl;
             a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(objectUrl);
         } catch {
             setError('Unable to download attachment. The file may no longer be available.');
         }
@@ -139,10 +165,10 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
         try {
             const fd = new FormData();
             fd.append('content', newMessage.trim());
-            if (attachment) fd.append('attachment', attachment);
+            attachments.forEach(file => fd.append('attachments', file));
             await api.upload(`/api/tasks/${taskId}/comments`, fd);
             setNewMessage('');
-            setAttachment(null);
+            setAttachments([]);
             success('Comment added successfully.');
             await fetchComments();
         } catch (err: any) {
@@ -248,14 +274,19 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                                         <div className={`tc-bubble${isMe ? ' tc-bubble-mine' : ' tc-bubble-theirs'}`}>
                                             {c.message}
                                         </div>
-                                        {c.attachmentFileName && (
-                                            <button
-                                                className="tc-attachment-link"
-                                                onClick={() => handleDownloadAttachment(c.taskCommentId, c.attachmentFileName!)}
-                                                title="Download attachment"
-                                            >
-                                                <Paperclip size={12} /> {c.attachmentFileName}
-                                            </button>
+                                        {(c.attachments && c.attachments.length > 0) && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
+                                                {c.attachments.map(a => (
+                                                    <button
+                                                        key={a.id || a.fileName}
+                                                        className="tc-attachment-link"
+                                                        onClick={() => handleDownloadAttachment(c.taskCommentId, a.id, a.fileName)}
+                                                        title="Download attachment"
+                                                    >
+                                                        <Paperclip size={12} /> {a.fileName}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         )}
                                         <div className="tc-meta">
                                             <span className="tc-time">{fmtDateTime(c.createdAt)}</span>
@@ -305,9 +336,9 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                             disabled={sending}
                         />
                         <div className="tc-input-actions">
-                            <label className="tc-attach-btn" title="Attach file (PDF, DOCX, XLSX, JPG, PNG, max 20MB)">
+                            <label className="tc-attach-btn" title="Attach one or more files (PDF, DOCX, XLSX, JPG, PNG, max 20MB each)">
                                 <Paperclip size={14} />
-                                <input type="file" hidden accept=".pdf,.docx,.xlsx,.jpg,.png,.jpeg" onChange={handleAttachmentChange} />
+                                <input type="file" hidden multiple accept=".pdf,.docx,.xlsx,.jpg,.png,.jpeg" onChange={handleAttachmentChange} />
                             </label>
                             <span className="tc-char-count">{newMessage.length}/1000</span>
                             <button className="tc-send-btn" onClick={handleSend}
@@ -317,11 +348,24 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                         </div>
                     </div>
                 </div>
-                {attachment && (
-                    <div className="tc-attach-preview">
-                        <Paperclip size={12} />
-                        <span>{attachment.name}</span>
-                        <button className="tc-attach-remove" onClick={() => setAttachment(null)}><X size={14} /></button>
+                {attachments.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                        {attachments.map((file, idx) => (
+                            <div className="tc-attach-preview" key={`${file.name}-${idx}`}>
+                                <Paperclip size={12} />
+                                <span>{file.name}</span>
+                                <button
+                                    className="tc-attach-remove"
+                                    onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                                    aria-label={`Remove ${file.name}`}
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ))}
+                        <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                            {attachments.length} file{attachments.length === 1 ? '' : 's'} selected
+                        </span>
                     </div>
                 )}
                 <p className="tc-hint">Shift + Enter for new line</p>

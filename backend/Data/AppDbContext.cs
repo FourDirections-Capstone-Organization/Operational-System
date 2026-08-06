@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<AnnouncementComment> AnnouncementComments => Set<AnnouncementComment>();
     public DbSet<Recommendation> Recommendations => Set<Recommendation>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
+    public DbSet<TaskCommentAttachment> TaskCommentAttachments => Set<TaskCommentAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<BiomarkerAlert> BiomarkerAlerts => Set<BiomarkerAlert>();
 
@@ -228,6 +229,22 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.TaskId, e.IsDeleted });
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // TaskCommentAttachment Configuration
+        modelBuilder.Entity<TaskCommentAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.FilePath).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.FileType).HasMaxLength(50);
+
+            entity.HasOne(a => a.Comment)
+                .WithMany(c => c.Attachments)
+                .HasForeignKey(a => a.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.CommentId);
         });
 
         // AuditLog Configuration
