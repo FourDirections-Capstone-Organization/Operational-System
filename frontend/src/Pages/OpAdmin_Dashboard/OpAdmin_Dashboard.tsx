@@ -63,6 +63,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
 import SubTabNav from '../../components/ui/SubTabNav';
+import TimePicker from '../../components/ui/TimePicker';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
 import api from '../../api';
 import axios from 'axios';
@@ -1005,26 +1006,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                         className={`${errors.dueAt ? 'input-error' : form.dueAt ? 'input-success' : ''}`}
                                         style={{ flex: 1, minWidth: 0 }}
                                     />
-                                    <select
+                                    <TimePicker
                                         value={form.dueAt ? form.dueAt.slice(11, 16) : ''}
-                                        onChange={e => {
-                                            const t = e.target.value;
+                                        onChange={t => {
                                             const date = form.dueAt ? form.dueAt.slice(0, 10) : '';
                                             setForm(prev => ({ ...prev, dueAt: date && t ? `${date}T${t}` : prev.dueAt }));
                                             setErrors(prev => ({ ...prev, dueAt: '' }));
                                         }}
-                                        className={`${errors.dueAt ? 'input-error' : ''}`}
-                                        style={{
-                                            padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
-                                            fontSize: 13, background: 'var(--bg-card)', color: 'var(--text-primary)',
-                                            fontFamily: 'inherit', outline: 'none', cursor: 'pointer', minWidth: 118,
-                                        }}
-                                    >
-                                        <option value="">Select time</option>
-                                        {TIME_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                        ))}
-                                    </select>
+                                        disabled={slaLocked}
+                                    />
                                 </div>
                             )}
                             <FieldErr name="dueAt" />
@@ -5104,21 +5094,6 @@ const snippet = (s?: string): string => {
     if (!s) return '';
     return s.length > 120 ? s.slice(0, 120) + '…' : s;
 };
-
-// User-friendly time picker options (every 30 minutes) — displayed as "hh:mm AM/PM",
-// stored as 24h "HH:mm" to match the deadline value format (YYYY-MM-DDTHH:mm).
-const TIME_OPTIONS: { value: string; label: string }[] = (() => {
-    const opts: { value: string; label: string }[] = [];
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            const label = new Date(2000, 0, 1, h, m)
-                .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            opts.push({ value, label });
-        }
-    }
-    return opts;
-})();
 
 const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({
     duplicates, details, newTaskTitle, newTaskDescription, onViewTask, onContinue, onCancel,

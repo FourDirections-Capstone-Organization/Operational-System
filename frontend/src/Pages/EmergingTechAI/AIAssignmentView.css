@@ -78,6 +78,7 @@
 
     .ai-field input[type="text"],
     .ai-field input[type="datetime-local"],
+    .ai-field input[type="date"],
     .ai-field textarea,
     .ai-field select {
         padding: 10px 12px;
@@ -93,6 +94,7 @@
 
         .ai-field input[type="text"]:hover,
         .ai-field input[type="datetime-local"]:hover,
+        .ai-field input[type="date"]:hover,
         .ai-field textarea:hover,
         .ai-field select:hover {
             border-color: var(--border-hover);
@@ -100,6 +102,7 @@
 
         .ai-field input[type="text"]:focus,
         .ai-field input[type="datetime-local"]:focus,
+        .ai-field input[type="date"]:focus,
         .ai-field textarea:focus,
         .ai-field select:focus {
             border-color: var(--primary);

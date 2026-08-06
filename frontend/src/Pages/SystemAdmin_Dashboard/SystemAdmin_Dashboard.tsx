@@ -68,23 +68,9 @@ import TaskManager from '../../components/TaskManager/TaskManager';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
+import TimePicker from '../../components/ui/TimePicker';
 import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
 import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
-
-// User-friendly time picker options (every 30 minutes) — displayed as "hh:mm AM/PM",
-// stored as 24h "HH:mm" to match the deadline value format (YYYY-MM-DDTHH:mm).
-const TIME_OPTIONS: { value: string; label: string }[] = (() => {
-    const opts: { value: string; label: string }[] = [];
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            const label = new Date(2000, 0, 1, h, m)
-                .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            opts.push({ value, label });
-        }
-    }
-    return opts;
-})();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -3668,22 +3654,14 @@ export default function Dashboard() {
                                         min={new Date().toISOString().slice(0, 10)}
                                         style={{ flex: 1, minWidth: 0, ...(newTaskForm.priority === 'Urgent' ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
                                     />
-                                    <select
-                                        className="fm-input"
+                                    <TimePicker
                                         value={newTaskForm.deadline ? newTaskForm.deadline.slice(11, 16) : ''}
-                                        onChange={e => {
-                                            const t = e.target.value;
+                                        onChange={t => {
                                             const date = newTaskForm.deadline ? newTaskForm.deadline.slice(0, 10) : '';
                                             setNewTaskForm(p => ({ ...p, deadline: date && t ? `${date}T${t}` : p.deadline }));
                                         }}
                                         disabled={newTaskForm.priority === 'Urgent'}
-                                        style={{ minWidth: 118, cursor: 'pointer', ...(newTaskForm.priority === 'Urgent' ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
-                                    >
-                                        <option value="">Select time</option>
-                                        {TIME_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 {newTaskErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
@@ -4062,22 +4040,14 @@ export default function Dashboard() {
                                         min={new Date().toISOString().slice(0, 10)}
                                         style={{ flex: 1, minWidth: 0, ...((editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
                                     />
-                                    <select
-                                        className="fm-input"
+                                    <TimePicker
                                         value={editForm.deadline ? editForm.deadline.slice(11, 16) : ''}
-                                        onChange={e => {
-                                            const t = e.target.value;
+                                        onChange={t => {
                                             const date = editForm.deadline ? editForm.deadline.slice(0, 10) : '';
                                             setEditForm(p => ({ ...p, deadline: date && t ? `${date}T${t}` : p.deadline }));
                                         }}
                                         disabled={editForm.priority === 'Urgent' || (tmEditingTask?.isSLALocked ?? false)}
-                                        style={{ minWidth: 118, cursor: 'pointer', ...((editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
-                                    >
-                                        <option value="">Select time</option>
-                                        {TIME_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 {editErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>

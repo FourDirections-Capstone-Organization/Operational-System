@@ -9,6 +9,7 @@ import './AIAssignmentView.css';
 import api from '../../api';
 import { useToast } from '../../components/Toast/Toast';
 import FormModal from '../../components/FormModal/FormModal';
+import TimePicker from '../../components/ui/TimePicker';
 import { aiService, SlaRiskResponseDTO } from '../../services/aiService';
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -108,21 +109,6 @@ const formatDateForInput = (d: Date): string => {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-
-// User-friendly time picker options (every 30 minutes), displayed as "hh:mm AM/PM"
-// but stored as 24h "HH:mm" to match the deadline value format.
-const TIME_OPTIONS: { value: string; label: string }[] = (() => {
-    const opts: { value: string; label: string }[] = [];
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            const label = new Date(2000, 0, 1, h, m)
-                .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            opts.push({ value, label });
-        }
-    }
-    return opts;
-})();
 
 // ─── Component ────────────────────────────────────────────────────────────
 
@@ -912,26 +898,15 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                                         className={errors.dueAt ? 'ai-input-error' : ''}
                                         style={{ flex: 1, minWidth: 0 }}
                                     />
-                                    <select
+                                    <TimePicker
                                         value={form.dueAt ? form.dueAt.slice(11, 16) : ''}
-                                        onChange={e => {
-                                            const t = e.target.value;
+                                        onChange={t => {
                                             const date = form.dueAt ? form.dueAt.slice(0, 10) : '';
                                             setForm(prev => ({ ...prev, dueAt: date && t ? `${date}T${t}` : prev.dueAt }));
                                             setErrors(prev => ({ ...prev, dueAt: '' }));
                                         }}
-                                        className={errors.dueAt ? 'ai-input-error' : ''}
-                                        style={{
-                                            padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
-                                            fontSize: 13, background: 'var(--bg-card)', color: 'var(--text-primary)',
-                                            fontFamily: 'inherit', outline: 'none', cursor: 'pointer', minWidth: 118,
-                                        }}
-                                    >
-                                        <option value="">Select time</option>
-                                        {TIME_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
-                                        ))}
-                                    </select>
+                                        disabled={slaLocked}
+                                    />
                                 </div>
                             )}
                             <FieldErr name="dueAt" />
