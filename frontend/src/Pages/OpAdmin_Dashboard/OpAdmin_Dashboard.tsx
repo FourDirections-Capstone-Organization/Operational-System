@@ -5413,6 +5413,11 @@ export default function OpsAdminDashboard() {
         }
         try {
             const statusParam = taskTabRef.current === 'completed' ? `&status=3` : ``;
+            // The Active tab filters out Done tasks client-side (TaskManager tabTasks),
+            // so exclude Completed (status 3) server-side BEFORE pagination. Otherwise a
+            // Completed task landing on a page gets dropped client-side and that page
+            // shows fewer rows than the page size.
+            const excludeStatusParam = taskTabRef.current === 'active' ? `&excludeStatus=3` : ``;
             // Dropdown filters are sent server-side so the server filters AND paginates
             // consistently — each page then shows the same number of matching rows.
             const prioParam = taskFilterPrioRef.current ? `&priority=${encodeURIComponent(taskFilterPrioRef.current)}` : ``;
@@ -5421,7 +5426,7 @@ export default function OpsAdminDashboard() {
                 ? `&classification=${CLASSIFICATION_PARAM_MAP[taskFilterClassificationRef.current] ?? taskFilterClassificationRef.current}`
                 : ``;
             const assigneeParam = taskFilterAssigneeRef.current ? `&assignedToUserId=${encodeURIComponent(taskFilterAssigneeRef.current)}` : ``;
-            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}${statusParam}${prioParam}${classificationParam}${assigneeParam}`);
+            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}${statusParam}${excludeStatusParam}${prioParam}${classificationParam}${assigneeParam}`);
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 

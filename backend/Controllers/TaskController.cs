@@ -51,7 +51,8 @@ public class TaskController : ControllerBase
         [FromQuery] TaskClassification? classification = null,
         [FromQuery] Guid? assignedToUserId = null,
         [FromQuery] Guid? departmentId = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] Models.Enums.TaskStatus? excludeStatus = null)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
@@ -72,7 +73,7 @@ public class TaskController : ControllerBase
         var result = await _taskService.GetAllAsync(
             requestUserId, requestUserRole, requestUserDepartmentId,
             pageNumber, pageSize,
-            status, priority, classification, assignedToUserId, departmentId, search);
+            status, priority, classification, assignedToUserId, departmentId, search, excludeStatus);
         return Ok(result);
     }
 
