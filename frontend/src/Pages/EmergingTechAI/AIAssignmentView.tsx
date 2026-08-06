@@ -1424,10 +1424,30 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                             )}
 
                             <div className="ai-summary-actions">
-                                <button className="btn" onClick={() => setStep('form')}>
+                                <button
+                                    className="btn"
+                                    onClick={() => setStep('form')}
+                                    style={{
+                                        background: 'var(--warn-bg, rgba(217, 119, 6, 0.12))',
+                                        color: 'var(--warn, #D97706)',
+                                        borderColor: 'var(--warn, #D97706)',
+                                        fontWeight: 700,
+                                    }}
+                                >
                                     <ChevronLeft size={14} /> Revise
                                 </button>
-                                <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+                                <button
+                                    className="btn"
+                                    onClick={handleSubmit}
+                                    disabled={submitting}
+                                    style={{
+                                        background: 'var(--ok, #059669)',
+                                        color: '#fff',
+                                        borderColor: 'var(--ok, #059669)',
+                                        fontWeight: 700,
+                                        boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)',
+                                    }}
+                                >
                                     {submitting ? (
                                         <><Loader2 size={14} className="ai-spin" /> Assigning...</>
                                     ) : (
