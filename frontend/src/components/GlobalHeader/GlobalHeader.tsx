@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import ConfirmModal from '../ConfirmModal/ConfirmModal';
 import type { NotificationItem } from '../notificationTypes';
+import api from '../../api';
 import './GlobalHeader.css';
 
 export type { NotificationItem };
@@ -239,11 +240,25 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     }
   }, [unreadCount]);
 
+  // Persist "mark as read" to the backend so it survives polling/refetch.
+  // Derived/pinned notifications (ids like "review-…" / "overdue-…") are not
+  // real rows, so only real GUID ids are sent to the API.
+  const isRealNotificationId = (id: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  const markAsRead = (id: string) => {
+    setNotifications(prev => prev.map(item => item.id === id ? { ...item, read: true } : item));
+    if (isRealNotificationId(id)) {
+      api.patch(`/api/Notification/${id}/read`).catch(() => { /* non-fatal */ });
+    }
+  };
+
   const markAllAsRead = () => {
     setNotifications(prev => prev.map(n => {
       const isRelevant = roleRelevantNotifications.some(r => r.id === n.id);
       return isRelevant ? { ...n, read: true } : n;
     }));
+    api.patch('/api/Notification/read-all').catch(() => { /* non-fatal */ });
   };
 
   const clearAll = () => {
@@ -255,7 +270,10 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
 
   const toggleReadStatus = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const current = notifications.find(n => n.id === id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+    // Persist only the "mark as read" direction (there is no unread API endpoint).
+    if (current && !current.read) markAsRead(id);
   };
 
   // Group sorted notifications into Today vs Earlier
@@ -397,7 +415,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                 className={`notification-dropdown-item ${!n.read ? 'unread' : ''} ${isCritical ? 'critical' : ''}`}
                                 onClick={() => {
                                   if (!n.read) {
-                                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                    markAsRead(n.id);
                                   }
                                   onNotificationAction?.(n);
                                 }}
@@ -424,10 +442,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                       <div className="notification-actions-right">
                                         <button
                                           className="mark-as-read-btn-text"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: !item.read } : item));
-                                          }}
+                                          onClick={(e) => toggleReadStatus(n.id, e)}
                                           title={n.read ? "Mark as unread" : "Mark as read"}
                                           aria-label={n.read ? "Mark as unread" : "Mark as read"}
                                         >
@@ -475,7 +490,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                 className={`notification-dropdown-item ${!n.read ? 'unread' : ''} ${isCritical ? 'critical' : ''}`}
                                 onClick={() => {
                                   if (!n.read) {
-                                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                    markAsRead(n.id);
                                   }
                                   onNotificationAction?.(n);
                                 }}
@@ -502,10 +517,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                       <div className="notification-actions-right">
                                         <button
                                           className="mark-as-read-btn-text"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: !item.read } : item));
-                                          }}
+                                          onClick={(e) => toggleReadStatus(n.id, e)}
                                           title={n.read ? "Mark as unread" : "Mark as read"}
                                           aria-label={n.read ? "Mark as unread" : "Mark as read"}
                                         >

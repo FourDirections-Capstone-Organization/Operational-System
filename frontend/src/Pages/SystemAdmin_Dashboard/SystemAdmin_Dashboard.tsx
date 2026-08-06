@@ -2922,7 +2922,9 @@ export default function Dashboard() {
                 .filter(n => n.notificationType === 'TaskOverdue' && n.taskId)
                 .map(n => n.taskId as string)
         );
-        return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications];
+        // Newest first so recent notifications appear at the top of the page
+        return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [awaitingReviewRows, overdueRows, allNotifications]);
 
     const openManagerTaskById = (id: string) => {
@@ -3157,6 +3159,15 @@ export default function Dashboard() {
                         onSettings={() => setActiveTab('settings')}
                         onLogout={handleLogout}
                         onViewAllNotifications={() => setActiveTab('notifications')}
+                        onNotificationsUpdate={(items) => {
+                            // GlobalHeader pushes back the full merged list (derived
+                            // pins + real notifications). Keep only the real rows to
+                            // avoid duplicating the pins when the list is re-merged.
+                            setHeaderNotifications((items as import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]).filter(n => {
+                                const id = String(n.id ?? '');
+                                return !id.startsWith('review-') && !id.startsWith('overdue-');
+                            }));
+                        }}
                         onNotificationAction={n => {
                             if (n.relatedEntityId && n.relatedEntityType === 'task') {
                                 openManagerTaskById(n.relatedEntityId);

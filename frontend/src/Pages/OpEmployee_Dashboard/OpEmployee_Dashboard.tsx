@@ -1813,7 +1813,9 @@ export default function EmployeeDashboard() {
     }, [tasks]);
 
     const mergedAllNotifications = useMemo(
-        () => [...awaitingReviewRows, ...allNotifications],
+        // Newest first so recent notifications appear at the top of the page
+        () => [...awaitingReviewRows, ...allNotifications]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         [awaitingReviewRows, allNotifications]
     );
 
@@ -2044,6 +2046,15 @@ export default function EmployeeDashboard() {
                     onSettings={() => setActiveTab('profile')}
                     onLogout={handleLogout}
                     onViewAllNotifications={() => setActiveTab('notifications')}
+                    onNotificationsUpdate={(items) => {
+                        // GlobalHeader pushes back the full merged list (derived
+                        // pins + real notifications). Keep only the real rows to
+                        // avoid duplicating the pins when the list is re-merged.
+                        setHeaderNotifications((items as NotificationItem[]).filter(n => {
+                            const id = String(n.id ?? '');
+                            return !id.startsWith('review-') && !id.startsWith('overdue-');
+                        }));
+                    }}
                     onNotificationAction={n => {
                         if (n.relatedEntityId && n.relatedEntityType === 'task') {
                             const found = tasks.find(t => t.id === n.relatedEntityId);
