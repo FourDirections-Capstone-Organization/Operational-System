@@ -94,8 +94,40 @@ public class DashboardService : IDashboardService
             .OrderByDescending(w => w.ActiveTaskCount)
             .ToList();
 
-        var departmentWorkload = activeTasks
-            .Where(t => t.AssignedDepartmentId.HasValue)
+        // ── Department workload summary ─────────────────────────────────────────
+        // Spans ALL departments (not just the coordinator's own) so the summary
+        // card shows every department's load. Explicit dashboard filters still
+        // apply, but the coordinator's implicit department scope does not.
+        var deptWorkloadQuery = _db.Tasks
+            .Include(t => t.AssignedDepartment)
+            .Include(t => t.Assignments)
+            .Where(t => t.AssignedDepartmentId.HasValue && activeStatuses.Contains(t.Status))
+            .AsQueryable();
+
+        if (filters != null)
+        {
+            if (filters.DateRangeStart.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.CreatedAt >= filters.DateRangeStart.Value.ToUniversalTime());
+
+            if (filters.DateRangeEnd.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.CreatedAt <= filters.DateRangeEnd.Value.ToUniversalTime().Date.AddDays(1));
+
+            if (filters.DepartmentId.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.AssignedDepartmentId == filters.DepartmentId.Value);
+
+            if (filters.Status.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.Status == filters.Status.Value);
+
+            if (filters.EmployeeId.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.Assignments.Any(a => a.AssignedUserId == filters.EmployeeId.Value));
+
+            if (filters.AssignmentScope.HasValue)
+                deptWorkloadQuery = deptWorkloadQuery.Where(t => t.AssignmentScope == filters.AssignmentScope.Value);
+        }
+
+        var departmentWorkloadTasks = await deptWorkloadQuery.ToListAsync();
+
+        var departmentWorkload = departmentWorkloadTasks
             .GroupBy(t => t.AssignedDepartmentId!.Value)
             .Select(g => new DepartmentWorkloadDTO
             {
@@ -155,9 +187,6 @@ public class DashboardService : IDashboardService
             .Include(t => t.Assignments)
             .AsQueryable();
 
-        if (requestUserRole == UserRole.Coordinator && requestUserDepartmentId.HasValue)
-            query = query.Where(t => t.AssignedDepartmentId == requestUserDepartmentId.Value);
-
         if (filters != null)
         {
             if (filters.DateRangeStart.HasValue)
@@ -170,11 +199,12 @@ public class DashboardService : IDashboardService
                 query = query.Where(t => t.AssignedDepartmentId == filters.DepartmentId.Value);
         }
 
-        var tasks = await query.ToListAsync();
-        var activeTasks = tasks.Where(t => activeStatuses.Contains(t.Status)).ToList();
+        var tasks = await query
+            .Where(t => t.AssignedDepartmentId.HasValue && activeStatuses.Contains(t.Status))
+            .ToListAsync();
         var now = DateTime.UtcNow;
 
-        var departmentWorkload = activeTasks
+        var departmentWorkload = tasks
             .Where(t => t.AssignedDepartmentId.HasValue)
             .GroupBy(t => t.AssignedDepartmentId!.Value)
             .Select(g => new DepartmentWorkloadDTO
