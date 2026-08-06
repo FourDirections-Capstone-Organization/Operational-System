@@ -37,8 +37,8 @@ public class TaskCommentService : ITaskCommentService
         if (author is null)
             return ApiResponseDTO<TaskCommentResponseDTO>.Failure("User not found");
 
-        if (string.IsNullOrWhiteSpace(content))
-            return ApiResponseDTO<TaskCommentResponseDTO>.Failure("Comment content is required");
+        if (string.IsNullOrWhiteSpace(content) && (attachments is null || attachments.Count == 0))
+            return ApiResponseDTO<TaskCommentResponseDTO>.Failure("Comment content or an attachment is required");
 
         var comment = new TaskComment
         {

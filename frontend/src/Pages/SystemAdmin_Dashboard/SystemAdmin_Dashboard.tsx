@@ -2575,6 +2575,19 @@ export default function Dashboard() {
         }
     }, [showNewTask]);
 
+    // -- Delete a task attachment --
+    const handleManagerDeleteAttachment = async (attachmentId: string) => {
+        try {
+            await api.delete(`/api/attachments/${attachmentId}`);
+            success('Attachment deleted.');
+            setTmDetailTask(prev => prev ? { ...prev, attachmentCount: Math.max(0, (prev.attachmentCount ?? 0) - 1) } : prev);
+            fetchManagerTasks();
+        } catch (err: any) {
+            error(err.response?.data?.message || err.response?.data?.Message || 'Failed to delete attachment.');
+            throw err;
+        }
+    };
+
     const handleManagerCreateTask = async (e: React.FormEvent) => {
         e.preventDefault();
         const errs: Record<string, string> = {};
@@ -3496,6 +3509,7 @@ export default function Dashboard() {
                             error('Failed to reject task.');
                         }
                     }}
+                    onDeleteAttachment={handleManagerDeleteAttachment}
                     onUpdate={(updated) => {
                         setTmDetailTask(updated);
                         fetchManagerTasks();

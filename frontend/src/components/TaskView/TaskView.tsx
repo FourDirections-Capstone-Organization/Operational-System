@@ -73,7 +73,7 @@ interface TaskViewProps {
     onClose: () => void;
     onApprove?: (taskId: string) => void;
     onReject?: (taskId: string, reason: string) => void;
-    onDeleteAttachment?: (attachmentId: string) => void;
+    onDeleteAttachment?: (attachmentId: string) => void | Promise<void>;
     onPushBack?: (taskId: string, comment: string) => void;
     onUpdate?: (updatedTask: TaskViewTask) => void;
 }
@@ -227,10 +227,16 @@ const TaskView: React.FC<TaskViewProps> = ({
         }
     };
 
-    const handleDelete = (attachmentId: string) => {
-        onDeleteAttachment?.(attachmentId);
-        setAttachments(prev => prev.filter(a => a.id !== attachmentId));
-        setDeleteConfirmId(null);
+    const handleDelete = async (attachmentId: string) => {
+        try {
+            // Only remove from the list once the parent confirms the delete
+            // succeeded on the server, so a failed delete doesn't lose the item.
+            await onDeleteAttachment?.(attachmentId);
+            setAttachments(prev => prev.filter(a => a.id !== attachmentId));
+            setDeleteConfirmId(null);
+        } catch {
+            setDeleteConfirmId(null);
+        }
     };
 
     const handleUploadFiles = async (files: FileList | File[]) => {

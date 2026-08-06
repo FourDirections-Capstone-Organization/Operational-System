@@ -5799,6 +5799,20 @@ export default function OpsAdminDashboard() {
         }
     };
 
+    // -- Delete a task attachment --
+    const handleDeleteAttachment = async (attachmentId: string) => {
+        try {
+            await api.delete(`/api/attachments/${attachmentId}`);
+            success('Attachment deleted.');
+            setDetailTask(prev => prev ? { ...prev, attachmentCount: Math.max(0, (prev.attachmentCount ?? 0) - 1) } : prev);
+            setViewingDuplicateTask(prev => prev ? { ...prev, attachmentCount: Math.max(0, (prev.attachmentCount ?? 0) - 1) } : prev);
+            fetchTasks();
+        } catch (err: any) {
+            error(err.response?.data?.message || err.response?.data?.Message || 'Failed to delete attachment.');
+            throw err;
+        }
+    };
+
     // -- Reopen Task (direct admin override) --
     const handleReopenTask = async (taskId: string) => {
         try {
@@ -6293,6 +6307,7 @@ export default function OpsAdminDashboard() {
                     onClose={() => setDetailTask(null)}
                     onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via TaskView.')}
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
+                    onDeleteAttachment={handleDeleteAttachment}
                     onPushBack={async (id, comment) => {
                         try {
                             await api.patch(`/api/Task/${id}/push-back`, { comment });
@@ -6366,6 +6381,7 @@ export default function OpsAdminDashboard() {
                     onClose={() => setViewingDuplicateTask(null)}
                     onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via duplicate review.')}
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
+                    onDeleteAttachment={handleDeleteAttachment}
                     onPushBack={async (id, comment) => {
                         try {
                             await api.patch(`/api/Task/${id}/push-back`, { comment });

@@ -159,7 +159,8 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
     };
 
     const handleSend = async () => {
-        if (!newMessage.trim()) { setError('Comment content is required.'); return; }
+        // A comment can be sent with only an attachment (no typed message).
+        if (!newMessage.trim() && attachments.length === 0) { setError('Comment content is required.'); return; }
         setError('');
         setSending(true);
         try {
@@ -342,7 +343,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
                             </label>
                             <span className="tc-char-count">{newMessage.length}/1000</span>
                             <button className="tc-send-btn" onClick={handleSend}
-                                disabled={!newMessage.trim() || sending} aria-label="Send">
+                                disabled={(!newMessage.trim() && attachments.length === 0) || sending} aria-label="Send">
                                 {sending ? <Loader2 size={14} className="tc-spin" /> : <Send size={14} />}
                             </button>
                         </div>
