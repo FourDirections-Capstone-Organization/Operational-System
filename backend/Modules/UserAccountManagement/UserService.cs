@@ -437,7 +437,13 @@ public class UserService : IUserService
             IsPasswordChanged = user.IsPasswordChanged,
             CreatedAt = user.CreatedAt,
             FullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}"
-                .Replace("  ", " ").Trim()
+                .Replace("  ", " ").Trim(),
+            // Online while the user has an active session (LastActivityAt kept fresh
+            // by requests/heartbeat); Offline after logout or session timeout.
+            PresenceStatus = user.LastActivityAt.HasValue
+                && (DateTime.UtcNow - user.LastActivityAt.Value).TotalMinutes <= 15
+                ? "Online"
+                : "Offline"
         };
     }
 

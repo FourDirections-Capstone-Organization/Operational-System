@@ -24,4 +24,6 @@ public class UserResponseDTO
     public bool IsPasswordChanged { get; set; }
     public DateTime CreatedAt { get; set; }
     public string FullName { get; set; } = string.Empty;
+    /// <summary>Online/Offline derived from the user's active session activity.</summary>
+    public string PresenceStatus { get; set; } = "Offline";
 }

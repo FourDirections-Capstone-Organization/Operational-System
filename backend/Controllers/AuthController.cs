@@ -51,8 +51,13 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("logout")]
-    public IActionResult Logout()
+    public async Task<IActionResult> Logout()
     {
+        var userId = GetUserIdFromClaims();
+        if (userId.HasValue)
+        {
+            await _authService.LogoutAsync(userId.Value);
+        }
         return Ok(new { message = "Logged out successfully" });
     }
 

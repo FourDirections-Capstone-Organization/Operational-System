@@ -224,6 +224,24 @@ public class AuthService : IAuthService
         return ApiResponseDTO<bool>.Success(true, "Password changed successfully");
     }
 
+    public async Task<ApiResponseDTO<bool>> LogoutAsync(Guid userId)
+    {
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null)
+            return ApiResponseDTO<bool>.Failure("User not found");
+
+        // End the session and mark the user Offline (presence is derived from
+        // LastActivityAt).
+        user.RefreshToken = null;
+        user.RefreshTokenExpiry = null;
+        user.LastActivityAt = null;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return ApiResponseDTO<bool>.Success(true, "Logged out successfully");
+    }
+
     public async Task<ApiResponseDTO<AuthResponseDTO>> RefreshTokenAsync(string refreshToken)
     {
         var user = await _db.Users

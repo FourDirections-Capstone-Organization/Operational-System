@@ -2899,8 +2899,10 @@ export default function Dashboard() {
             fetchHeaderNotifications();
             fetchAwaitingReview();
             if (activeTab === 'tasks') fetchManagerTasks(true);
-            if (activeTab === 'dashboard') {
-                fetchActivityLogs(1, true);
+            if (activeTab === 'dashboard') fetchActivityLogs(1, true);
+            // Keep presence (Online/Offline) fresh on the dashboard and the
+            // Manage Employees list.
+            if (activeTab === 'dashboard' || activeTab === 'employees') {
                 fetchEmployees(1, undefined, true);
             }
         }, 30000);
