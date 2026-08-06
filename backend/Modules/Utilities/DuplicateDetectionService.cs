@@ -62,7 +62,7 @@ public class DuplicateDetectionService : IDuplicateDetectionService
                 {
                     TaskId = task.Id,
                     Title = task.Title,
-                    Status = task.Status.ToString(),
+                    Status = MapStatusDisplay(task.Status),
                     SimilarityPercentage = Math.Round(combinedSimilarity * 100, 1)
                 });
             }
@@ -78,6 +78,19 @@ public class DuplicateDetectionService : IDuplicateDetectionService
         };
 
         return ApiResponseDTO<DuplicateCheckResultDTO>.Success(result);
+    }
+
+    private string MapStatusDisplay(Models.Enums.TaskStatus status)
+    {
+        return status switch
+        {
+            Models.Enums.TaskStatus.NotStarted => "Not Started",
+            Models.Enums.TaskStatus.InProgress => "In Progress",
+            Models.Enums.TaskStatus.DonePendingReview => "Done/Pending Review",
+            Models.Enums.TaskStatus.OnHold => "On Hold",
+            Models.Enums.TaskStatus.Cancelled => "Cancelled",
+            _ => status.ToString()
+        };
     }
 
     private HashSet<string> TokenizeText(string text)
