@@ -47,6 +47,7 @@ import StatusCard from '../../components/StatusCard/StatusCard';
 import FormModal from '../../components/FormModal/FormModal';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable from '../../components/ui/DataTable';
+import Pagination from '../../components/ui/Pagination';
 import TaskComments from '../../components/TaskComments/TaskComments';
 import TaskRecommendations from '../../components/TaskRecommendations/TaskRecommendations';
 import api from '../../api';
@@ -1415,15 +1416,21 @@ const RecommendationHistoryCard: React.FC = () => {
     const [records, setRecords] = useState<RecommendationRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const HISTORY_PAGE_SIZE = 6;
 
-    const fetchHistory = useCallback(async () => {
+    const fetchHistory = useCallback(async (pageOverride?: number) => {
+        const targetPage = pageOverride ?? page;
         if (!accountId) { setLoading(false); return; }
         setLoading(true);
         setError('');
         try {
-            const res = await api.get(`/api/users/${accountId}/recommendations`, { pageNumber: 1, pageSize: 100 });
+            const res = await api.get(`/api/users/${accountId}/recommendations`, { pageNumber: targetPage, pageSize: HISTORY_PAGE_SIZE });
             const json = res.data;
-            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
+            const d = json?.data;
+            const list: any[] = json.isSuccess && Array.isArray(d?.items) ? d.items : (json.isSuccess && Array.isArray(d) ? d : []);
             setRecords(list.map((r: any) => ({
                 recommendationId: r.id ?? r.recommendationId,
                 category: REC_CATEGORY_LABELS[r.category as number] ?? String(r.category ?? ''),
@@ -1432,13 +1439,16 @@ const RecommendationHistoryCard: React.FC = () => {
                 taskTitle: r.taskTitle ?? '',
                 createdAt: r.createdAt ?? '',
             })));
+            setTotalPages(d?.totalPages || 1);
+            setTotalCount(d?.totalCount ?? list.length);
         } catch (err: any) {
             setError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
             setRecords([]);
+            setTotalPages(1);
         } finally {
             setLoading(false);
         }
-    }, [accountId]);
+    }, [accountId, page]);
 
     useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
@@ -1446,7 +1456,7 @@ const RecommendationHistoryCard: React.FC = () => {
         <div className="card" style={{ marginTop: 20 }}>
             <div className="card-header-layout">
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Lightbulb size={15} /> Recommendation History</h3>
-                {records.length > 0 && <span className="badge badge-blue">{records.length} entries</span>}
+                {totalCount > 0 && <span className="badge badge-blue">{totalCount} entries</span>}
             </div>
             {loading ? (
                 <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading recommendations…</p></div>
@@ -1474,6 +1484,11 @@ const RecommendationHistoryCard: React.FC = () => {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+            {!loading && !error && records.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
+                    <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
                 </div>
             )}
         </div>

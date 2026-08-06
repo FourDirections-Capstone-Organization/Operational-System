@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Lightbulb, Loader2, Send, AlertCircle, User, Clock } from 'lucide-react';
 import { useToast } from '../Toast/Toast';
 import api from '../../api';
+import Pagination from '../ui/Pagination';
 import './TaskRecommendations.css';
 
 interface RecommendationDTO {
@@ -39,6 +40,9 @@ const CATEGORY_LABELS: Record<number, string> = {
     3: 'Other',
 };
 
+// Keep the panel compact — paginate instead of letting the list overflow.
+const PAGE_SIZE = 5;
+
 const fmtDateTime = (d: string): string => {
     if (!d) return '';
     const date = new Date(d);
@@ -51,6 +55,8 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
     const [recommendations, setRecommendations] = useState<RecommendationDTO[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [category, setCategory] = useState(CATEGORY_OPTIONS[0]);
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -58,13 +64,15 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
     const userRole = localStorage.getItem('userRole') ?? '';
     const isCoordinator = userRole === 'Coordinator' || userRole === 'Manager';
 
-    const fetchRecommendations = useCallback(async () => {
+    const fetchRecommendations = useCallback(async (pageOverride?: number) => {
+        const targetPage = pageOverride ?? page;
         setLoading(true);
         setError('');
         try {
-            const res = await api.get<any>(`/api/tasks/${taskId}/recommendations`);
+            const res = await api.get<any>(`/api/tasks/${taskId}/recommendations`, { pageNumber: targetPage, pageSize: PAGE_SIZE });
             const json = res.data;
-            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : (Array.isArray(json.data?.data) ? json.data.data : []));
+            const d = json?.data;
+            const list: any[] = json.isSuccess && Array.isArray(d?.items) ? d.items : (json.isSuccess && Array.isArray(d) ? d : []);
             setRecommendations(list.map((r: any) => ({
                 recommendationId: r.id ?? r.recommendationId,
                 category: CATEGORY_LABELS[r.category as number] ?? String(r.category),
@@ -74,13 +82,17 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
                 recommendedByName: r.coordinatorName ?? r.recommendedByName ?? '',
                 createdAt: r.createdAt ?? '',
             })));
+            setTotalPages(d?.totalPages || 1);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load recommendations.');
             setRecommendations([]);
+            setTotalPages(1);
         } finally {
             setLoading(false);
         }
-    }, [taskId]);
+    }, [taskId, page]);
+
+    useEffect(() => { setPage(1); }, [taskId]);
 
     useEffect(() => { fetchRecommendations(); }, [fetchRecommendations]);
 
@@ -95,8 +107,9 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
             });
             setNotes('');
             setCategory(CATEGORY_OPTIONS[0]);
+            setPage(1);
+            await fetchRecommendations(1);
             success('Recommendation submitted successfully.');
-            await fetchRecommendations();
         } catch (err: any) {
             setError(err.response?.data?.message || err.message || 'Failed to submit recommendation.');
         } finally {
@@ -134,6 +147,12 @@ const TaskRecommendations: React.FC<TaskRecommendationsProps> = ({ taskId }) => 
                     ))
                 )}
             </div>
+
+            {!loading && !error && recommendations.length > 0 && (
+                <div style={{ padding: '4px 14px 6px', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                    <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+                </div>
+            )}
 
             {isCoordinator && (
                 <div className="tr-form">

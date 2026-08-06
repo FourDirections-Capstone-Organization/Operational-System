@@ -61,6 +61,7 @@ import ActionButton from '../../components/ActionButton/ActionButton';
 import ConfirmationModal from '../../components/ConfirmationModal/ConfirmationModal';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
+import Pagination from '../../components/ui/Pagination';
 import SubTabNav from '../../components/ui/SubTabNav';
 import TaskManager, { TMTask } from '../../components/TaskManager/TaskManager';
 import api from '../../api';
@@ -2754,21 +2755,26 @@ const TeamTab: React.FC<{
     const [recError, setRecError] = useState('');
     const [recDateFrom, setRecDateFrom] = useState('');
     const [recDateTo, setRecDateTo] = useState('');
+    const [recPage, setRecPage] = useState(1);
+    const [recTotalPages, setRecTotalPages] = useState(1);
+    const REC_PAGE_SIZE = 8;
 
-    const fetchEmpRecommendations = async (empId: string, empName: string, dateFrom?: string, dateTo?: string) => {
+    const fetchEmpRecommendations = async (empId: string, empName: string, dateFrom?: string, dateTo?: string, page: number = 1) => {
         setRecLoading(true);
         setRecError('');
         setEmpRecommendations([]);
         setRecEmployee(empId);
         setRecEmployeeName(empName);
+        setRecPage(page);
         setShowRecModal(true);
         try {
-            const params: any = { pageSize: 100 };
+            const params: any = { pageNumber: page, pageSize: REC_PAGE_SIZE };
             if (dateFrom) params.dateFrom = new Date(dateFrom).toISOString();
             if (dateTo) params.dateTo = new Date(`${dateTo}T23:59:59`).toISOString();
             const res = await api.get<any>(`/api/users/${empId}/recommendations`, { params });
             const json = res.data;
-            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
+            const d = json?.data;
+            const list: any[] = json.isSuccess && Array.isArray(d?.items) ? d.items : (json.isSuccess && Array.isArray(d) ? d : []);
             setEmpRecommendations(list.map((r: any) => ({
                 recommendationId: r.id ?? r.recommendationId,
                 category: CATEGORY_LABELS[r.category as number] ?? String(r.category),
@@ -2777,8 +2783,10 @@ const TeamTab: React.FC<{
                 taskTitle: r.taskTitle ?? '',
                 createdAt: r.createdAt ?? '',
             })));
+            setRecTotalPages(d?.totalPages || 1);
         } catch (err: any) {
             setRecError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
+            setRecTotalPages(1);
         } finally {
             setRecLoading(false);
         }
@@ -2899,6 +2907,15 @@ const TeamTab: React.FC<{
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+                {!recLoading && !recError && empRecommendations.length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
+                        <Pagination
+                            currentPage={recPage}
+                            totalPages={recTotalPages}
+                            onPageChange={p => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo, p)}
+                        />
                     </div>
                 )}
             </FormModal>

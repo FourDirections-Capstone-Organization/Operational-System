@@ -32,6 +32,7 @@ import { useToast } from '../../../components/Toast/Toast';
 import FormModal from '../../../components/FormModal/FormModal';
 import ConfirmationModal from '../../../components/ConfirmationModal/ConfirmationModal';
 import DataTable from '../../../components/ui/DataTable';
+import Pagination from '../../../components/ui/Pagination';
 import api from '../../../api';
 
 interface ConfirmModalState {
@@ -528,6 +529,10 @@ export default function EmployeeDetailPanel({
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     const [recommendations, setRecommendations] = useState<RecommendationRecord[]>([]);
     const [recLoading, setRecLoading] = useState(false);
+    const [recPage, setRecPage] = useState(1);
+    const [recTotalPages, setRecTotalPages] = useState(1);
+    const [recTotalCount, setRecTotalCount] = useState(0);
+    const REC_PAGE_SIZE = 6;
     const { success, error } = useToast();
     const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(CONFIRM_CLOSED);
 
@@ -577,6 +582,11 @@ export default function EmployeeDetailPanel({
         fetchLogs();
     }, [profile.employeeNumber]);
 
+    // Reset to page 1 when viewing a different employee
+    useEffect(() => {
+        setRecPage(1);
+    }, [profile.employeeNumber]);
+
     // Fetch Recommendation History
     useEffect(() => {
         const fetchRecommendations = async () => {
@@ -586,9 +596,10 @@ export default function EmployeeDetailPanel({
                 const lookupData = lookupRes.data;
                 const userId = lookupData?.data?.id ?? lookupData?.id;
                 if (userId) {
-                    const res = await api.get(`/api/users/${userId}/recommendations`, { pageSize: 100 });
+                    const res = await api.get(`/api/users/${userId}/recommendations`, { pageNumber: recPage, pageSize: REC_PAGE_SIZE });
                     const json = res.data;
-                    const items = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
+                    const d = json?.data;
+                    const items = json?.isSuccess && Array.isArray(d?.items) ? d.items : [];
                     setRecommendations(items.map((r: any) => ({
                         id: r.id ?? r.recommendationId ?? '',
                         taskTitle: r.taskTitle ?? '',
@@ -597,17 +608,23 @@ export default function EmployeeDetailPanel({
                         notes: r.notes ?? '',
                         createdAt: r.createdAt ?? '',
                     })));
+                    setRecTotalPages(d?.totalPages || 1);
+                    setRecTotalCount(d?.totalCount ?? items.length);
                 } else {
                     setRecommendations([]);
+                    setRecTotalPages(1);
+                    setRecTotalCount(0);
                 }
             } catch {
                 setRecommendations([]);
+                setRecTotalPages(1);
+                setRecTotalCount(0);
             } finally {
                 setRecLoading(false);
             }
         };
         fetchRecommendations();
-    }, [profile.employeeNumber]);
+    }, [profile.employeeNumber, recPage]);
 
     // Password gate helpers
     const [gatePassword, setGatePassword] = useState('');
@@ -1005,7 +1022,7 @@ export default function EmployeeDetailPanel({
                             <h3>
                                 <Lightbulb size={15} /> Recommendation History
                             </h3>
-                            <span className="ed-badge-count">{recommendations.length} entries</span>
+                            <span className="ed-badge-count">{recTotalCount} entries</span>
                         </div>
                         {recLoading ? (
                             <div className="ed-empty">
@@ -1037,6 +1054,11 @@ export default function EmployeeDetailPanel({
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                        {!recLoading && recommendations.length > 0 && (
+                            <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
+                                <Pagination currentPage={recPage} totalPages={recTotalPages} onPageChange={setRecPage} />
                             </div>
                         )}
                     </div>
