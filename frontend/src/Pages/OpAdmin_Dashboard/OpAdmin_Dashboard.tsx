@@ -26,7 +26,6 @@ import {
     Loader2,
     User,
     Users,
-    Search,
     Trash2,
     Mail,
     RotateCcw,
@@ -1770,7 +1769,6 @@ const DashboardTab: React.FC<{
     tasks?: any[];
     onViewTask?: (task: any) => void;
 }> = ({ dashboardData, dashboardEmployees, dashboardDepartments, dashboardLoading, dashboardError, filters, onFilterChange, onClearFilters, onNewTask, tasks, onViewTask }) => {
-    const [searchQuery, setSearchQuery] = useState('');
     // Local filters for Workload Summary only — does NOT trigger full dashboard re-fetch
     const [wlFilters, setWlFilters] = useState({ employeeId: '', departmentId: '', assignmentScope: '', taskStatus: '', dateStart: '', dateEnd: '' });
     const hasAnyFilter = wlFilters.employeeId || wlFilters.departmentId || wlFilters.assignmentScope || wlFilters.taskStatus || wlFilters.dateStart || wlFilters.dateEnd;
@@ -1848,8 +1846,7 @@ const DashboardTab: React.FC<{
     const workloads = td?.employeeWorkload ?? [];
     const teamWorkloads = td?.teamWorkload ?? [];
     const deptWorkloads = td?.departmentWorkload ?? [];
-    const filteredWorkloads = (filteredWorkloadData ?? workloads)
-        .filter(w => !searchQuery || (w.employeeName ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
+    const filteredWorkloads = filteredWorkloadData ?? workloads;
     const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
     const lastUpdated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -1961,15 +1958,6 @@ const DashboardTab: React.FC<{
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    </div>
-
-                    {/* ── Employee Search ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16, gap: 12 }}>
-                        <div style={{ position: 'relative', width: 280 }}>
-                            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input type="text" placeholder="Search employee…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '100%', height: 38, borderRadius: 999, border: '1px solid var(--border)', background: 'var(--bg-primary)', padding: '0 16px 0 36px', fontSize: 13, outline: 'none', boxSizing: 'border-box', color: 'var(--text-primary)', fontFamily: 'inherit' }} />
                         </div>
                     </div>
 
