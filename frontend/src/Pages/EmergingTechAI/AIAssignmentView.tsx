@@ -396,7 +396,28 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
             newErrors.destination = 'Please select a department.';
         }
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+
+        if (Object.keys(newErrors).length > 0) {
+            // Surface a visible alert listing what is still missing so the
+            // user knows the review was blocked. Cleared on the next attempt
+            // or when validation passes.
+            const labelMap: Record<string, string> = {
+                taskTitle: 'Task Title',
+                taskDescription: 'Task Description',
+                dueAt: 'Deadline',
+                priority: 'Priority',
+                classification: 'Classification',
+                scope: 'Assignment Scope',
+                destination: 'Destination',
+            };
+            const missing = Object.keys(newErrors)
+                .map(key => labelMap[key] ?? key)
+                .join(', ');
+            setFormError(`Missing required information: ${missing}. Please complete the highlighted fields.`);
+            return false;
+        }
+
+        return true;
     };
 
     // ── Destination Validation (Step 8) ──
@@ -1464,10 +1485,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                                 <Shield size={14} />
                                 <span>The system will validate that the destination exists, is active, and that the employee is currently available.</span>
                             </div>
-        <button className="btn btn-primary" onClick={handleReview} disabled={!selectedEmployeeId && !selectedTeamId && !selectedDepartmentId}
-            style={{ background: 'var(--teal, #00A99D)', borderColor: 'var(--teal, #00A99D)', color: '#fff', boxShadow: '0 4px 14px rgba(0, 169, 157, 0.3)' }}>
-            <CheckCircle2 size={14} /> Review & Validate Assignment
-        </button>
+                            <button className="btn btn-primary" onClick={handleReview}
+                                style={{ background: 'var(--teal, #00A99D)', borderColor: 'var(--teal, #00A99D)', color: '#fff', boxShadow: '0 4px 14px rgba(0, 169, 157, 0.3)' }}>
+                                <CheckCircle2 size={14} /> Review & Validate Assignment
+                            </button>
                         </div>
                     )}
                 </div>
