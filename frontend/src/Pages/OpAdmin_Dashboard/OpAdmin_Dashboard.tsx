@@ -2036,41 +2036,10 @@ const DashboardTab: React.FC<{
                         </div>
                     </div>
 
-                    {/* ── Team + Department Workload Row ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <div className="card">
-                            <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
-                                <h3>Team Workload Distribution</h3>
-                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{teamWorkloads.length} teams</span>
-                            </div>
-                            {teamWorkloads.length === 0 ? (
-                                <EmptyState title="No team workload data." />
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {teamWorkloads.map(t => {
-                                        const total = t.totalActiveTasks + t.totalOverdueTasks;
-                                        const pct = total > 0 ? Math.round((1 - t.totalOverdueTasks / total) * 100) : 100;
-                                        const barColor = pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)';
-                                        return (
-                                            <div key={t.teamId} style={{ padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{t.teamName}</span>
-                                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.memberCount} members</span>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 6 }}>
-                                                    <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>{t.totalActiveTasks} active</span>
-                                                    <span style={{ color: t.totalOverdueTasks > 0 ? 'var(--status-failed)' : 'var(--text-muted)', fontWeight: 600 }}>{t.totalOverdueTasks} overdue</span>
-                                                </div>
-                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                                                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 3 }} />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
+                    {/* ── Department Workload Row ──
+                        Team Workload Distribution card hidden until the team
+                        management feature is planned and tested. */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 16 }}>
                         <div className="card">
                             <div className="card-header-layout" style={{ margin: 0, marginBottom: 12 }}>
                                 <h3>Department Workload</h3>
