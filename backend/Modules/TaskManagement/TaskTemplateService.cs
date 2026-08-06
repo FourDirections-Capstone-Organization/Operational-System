@@ -149,6 +149,18 @@ public class TaskTemplateService : ITaskTemplateService
         if (template is null)
             return ApiResponseDTO<TaskTemplateResponseDTO>.Failure("Template not found");
 
+        // Capture old values before mutation (AL-002 step 7)
+        var oldTemplateName = template.TemplateName;
+        var oldDefaultTitle = template.DefaultTitle;
+        var oldDefaultDescription = template.DefaultDescription;
+        var oldPriority = template.DefaultPriorityLevel.ToString();
+        var oldClassification = template.DefaultClassification.ToString();
+        var oldScope = template.DefaultAssignmentScope.ToString();
+        var oldAssignee = template.DefaultAssigneeId?.ToString() ?? string.Empty;
+        var oldDepartment = template.DefaultDepartmentId?.ToString() ?? string.Empty;
+        var oldRecurrence = template.RecurrenceRule.ToString();
+        var oldIsActive = template.IsActive.ToString();
+
         if (!string.IsNullOrWhiteSpace(dto.TemplateName))
             template.TemplateName = dto.TemplateName.Trim();
 
@@ -188,6 +200,28 @@ public class TaskTemplateService : ITaskTemplateService
         template.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        // AL-002 step 7: capture Old Value and New Value for changed template fields
+        var oldParts = new List<string>();
+        var newParts = new List<string>();
+        void Track(string field, string oldVal, string newVal)
+        {
+            if (oldVal != newVal)
+            {
+                oldParts.Add($"\"{field}\":\"{oldVal}\"");
+                newParts.Add($"\"{field}\":\"{newVal}\"");
+            }
+        }
+        Track("TemplateName", oldTemplateName, template.TemplateName);
+        Track("DefaultTitle", oldDefaultTitle ?? string.Empty, template.DefaultTitle ?? string.Empty);
+        Track("DefaultDescription", oldDefaultDescription ?? string.Empty, template.DefaultDescription ?? string.Empty);
+        Track("DefaultPriorityLevel", oldPriority, template.DefaultPriorityLevel.ToString());
+        Track("DefaultClassification", oldClassification, template.DefaultClassification.ToString());
+        Track("DefaultAssignmentScope", oldScope, template.DefaultAssignmentScope.ToString());
+        Track("DefaultAssigneeId", oldAssignee, template.DefaultAssigneeId?.ToString() ?? string.Empty);
+        Track("DefaultDepartmentId", oldDepartment, template.DefaultDepartmentId?.ToString() ?? string.Empty);
+        Track("RecurrenceRule", oldRecurrence, template.RecurrenceRule.ToString());
+        Track("IsActive", oldIsActive, template.IsActive.ToString());
+
         await _auditLogService.LogAsync(
             template.CreatedById,
             AuditActionType.Update,
@@ -195,7 +229,9 @@ public class TaskTemplateService : ITaskTemplateService
             template.Id,
             null,
             $"Task template '{template.TemplateName}' updated",
-            "TaskManagement");
+            "TaskManagement",
+            oldValue: oldParts.Count > 0 ? "{" + string.Join(",", oldParts) + "}" : null,
+            newValue: newParts.Count > 0 ? "{" + string.Join(",", newParts) + "}" : null);
 
         return ApiResponseDTO<TaskTemplateResponseDTO>.Success(
             await MapToResponseDTOAsync(template),

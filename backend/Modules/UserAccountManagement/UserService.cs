@@ -232,6 +232,14 @@ public class UserService : IUserService
         }
 
         // Check email uniqueness if changing
+        // Capture old values before mutation (AL-002 step 7)
+        var oldFirstName = user.FirstName;
+        var oldMiddleName = user.MiddleName ?? string.Empty;
+        var oldLastName = user.LastName;
+        var oldSuffix = user.Suffix ?? string.Empty;
+        var oldContact = user.ContactNumber ?? string.Empty;
+        var oldEmail = user.Email;
+
         if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email.ToLower() != user.Email.ToLower())
         {
             var emailExists = await _db.Users
@@ -266,6 +274,24 @@ public class UserService : IUserService
 
         var fullName = $"{user.FirstName} {user.MiddleName} {user.LastName} {user.Suffix}".Replace("  ", " ").Trim();
 
+        // AL-002 step 7: capture Old Value and New Value for the changed fields
+        var oldParts = new List<string>();
+        var newParts = new List<string>();
+        void Track(string field, string oldVal, string newVal)
+        {
+            if (oldVal != newVal)
+            {
+                oldParts.Add($"\"{field}\":\"{oldVal}\"");
+                newParts.Add($"\"{field}\":\"{newVal}\"");
+            }
+        }
+        Track("FirstName", oldFirstName, user.FirstName);
+        Track("MiddleName", oldMiddleName, user.MiddleName ?? string.Empty);
+        Track("LastName", oldLastName, user.LastName);
+        Track("Suffix", oldSuffix, user.Suffix ?? string.Empty);
+        Track("ContactNumber", oldContact, user.ContactNumber ?? string.Empty);
+        Track("Email", oldEmail, user.Email);
+
         await _auditLogService.LogAsync(
             requestUserId,
             AuditActionType.Update,
@@ -273,7 +299,9 @@ public class UserService : IUserService
             user.Id,
             null,
             $"User {fullName} ({user.EmployeeNumber}) profile updated",
-            "UserManagement");
+            "UserManagement",
+            oldValue: oldParts.Count > 0 ? "{" + string.Join(",", oldParts) + "}" : null,
+            newValue: newParts.Count > 0 ? "{" + string.Join(",", newParts) + "}" : null);
 
         var response = MapToResponseDTO(user);
         return ApiResponseDTO<UserResponseDTO>.Success(response, "User updated successfully");
@@ -310,7 +338,9 @@ public class UserService : IUserService
             user.Id,
             null,
             $"User {fullName} ({user.EmployeeNumber}) deactivated",
-            "UserManagement");
+            "UserManagement",
+            oldValue: "{\"IsDeactivated\":\"false\",\"IsActive\":\"true\"}",
+            newValue: "{\"IsDeactivated\":\"true\",\"IsActive\":\"false\"}");
 
         return ApiResponseDTO<bool>.Success(true, "User deactivated successfully. Historical data preserved.");
     }
@@ -347,7 +377,9 @@ public class UserService : IUserService
             user.Id,
             null,
             $"User {fullName} ({user.EmployeeNumber}) activated",
-            "UserManagement");
+            "UserManagement",
+            oldValue: "{\"IsDeactivated\":\"true\",\"IsActive\":\"false\"}",
+            newValue: "{\"IsDeactivated\":\"false\",\"IsActive\":\"true\"}");
 
         return ApiResponseDTO<bool>.Success(true, "User activated successfully");
 
