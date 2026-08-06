@@ -1000,7 +1000,8 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                 <p className="ai-card-desc">Select exactly one scope for this task assignment.</p>
 
                 <div className="ai-scope-selector">
-                    {(['SingleEmployee', 'Team', 'Department'] as const).map(s => (
+                    {/* Team scope hidden until the team management feature is planned and tested. */}
+                    {(['SingleEmployee', 'Department'] as const).map(s => (
                         <label
                             key={s}
                             className={`ai-scope-option${scope === s ? ' active' : ''}`}
@@ -1008,10 +1009,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                         >
                             <input type="radio" name="scope" value={s}
                                 checked={scope === s} onChange={() => { }} />
-                            {s === 'SingleEmployee' ? <UserCircle2 size={20} /> : s === 'Team' ? <Users size={20} /> : <Building size={20} />}
-                            <span className="ai-scope-label">{s === 'SingleEmployee' ? 'Single Employee' : s === 'Team' ? 'Team' : 'Department'}</span>
+                            {s === 'SingleEmployee' ? <UserCircle2 size={20} /> : <Building size={20} />}
+                            <span className="ai-scope-label">{s === 'SingleEmployee' ? 'Single Employee' : 'Department'}</span>
                             <span className="ai-scope-desc">
-                                {s === 'SingleEmployee' ? 'Assign to one specific employee' : s === 'Team' ? 'Assign to a group/team' : 'Assign to an entire department'}
+                                {s === 'SingleEmployee' ? 'Assign to one specific employee' : 'Assign to an entire department'}
                             </span>
                         </label>
                     ))}

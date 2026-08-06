@@ -3673,7 +3673,8 @@ export default function Dashboard() {
                         <div className="fm-field">
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                {['SingleEmployee', 'Team', 'Department'].map(scope => (
+                                {/* Team scope hidden until the team management feature is planned and tested. */}
+                                {['SingleEmployee', 'Department'].map(scope => (
                                     <label key={scope} onClick={() => setNewTaskForm(p => ({
                                         ...p, assignmentScope: scope, assignedDepartmentId: '',
                                         assignedTo: '', assignedUserIds: [],
@@ -3688,7 +3689,7 @@ export default function Dashboard() {
                                         <input type="radio" name="scope" value={scope}
                                             checked={newTaskForm.assignmentScope === scope}
                                             onChange={() => {}} style={{ display: 'none' }} />
-                                        {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                        {scope === 'SingleEmployee' ? 'Single' : 'Department'}
                                     </label>
                                 ))}
                             </div>
@@ -4045,7 +4046,8 @@ export default function Dashboard() {
                         <div className="fm-field">
                             <label className="fm-label">Scope <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                {['SingleEmployee', 'Team', 'Department'].map(scope => (
+                                {/* Team scope hidden until the team management feature is planned and tested. */}
+                                {['SingleEmployee', 'Department'].map(scope => (
                                     <label key={scope} onClick={() => setEditForm(p => ({
                                         ...p, assignmentScope: scope, assignedDepartmentId: '',
                                         assignedTo: '', assignedUserIds: [],
@@ -4060,7 +4062,7 @@ export default function Dashboard() {
                                         <input type="radio" name="editScope" value={scope}
                                             checked={editForm.assignmentScope === scope}
                                             onChange={() => {}} style={{ display: 'none' }} />
-                                        {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                        {scope === 'SingleEmployee' ? 'Single' : 'Department'}
                                     </label>
                                 ))}
                             </div>

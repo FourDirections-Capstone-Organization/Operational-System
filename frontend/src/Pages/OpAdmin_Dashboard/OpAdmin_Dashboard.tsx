@@ -1215,7 +1215,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         </div>
 
                         <div className="scope-selector">
-                            {(['SingleEmployee', 'Team', 'Department'] as const).map(scope => (
+                            {/* Team scope hidden until the team management feature is planned and tested. */}
+                            {(['SingleEmployee', 'Department'] as const).map(scope => (
                                 <label
                                     key={scope}
                                     className={`scope-option${form.assignmentScope === scope ? ' active' : ''}`}
@@ -1228,8 +1229,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                     <input type="radio" name="scope" value={scope}
                                         checked={form.assignmentScope === scope}
                                         onChange={() => { }} />
-                                    {scope === 'SingleEmployee' ? <UserCircle2 className="scope-icon" /> : scope === 'Team' ? <Users className="scope-icon" /> : <Building className="scope-icon" />}
-                                    {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
+                                    {scope === 'SingleEmployee' ? <UserCircle2 className="scope-icon" /> : <Building className="scope-icon" />}
+                                    {scope === 'SingleEmployee' ? 'Single' : 'Department'}
                                 </label>
                             ))}
                         </div>
@@ -5213,7 +5214,6 @@ export default function OpsAdminDashboard() {
                     subItems: [
                         { label: 'Dashboard', onClick: () => handleNavChange('dashboard'), active: activeTab === 'dashboard' },
                         { label: 'Tasks', onClick: () => handleNavChange('tasks'), active: activeTab === 'tasks' },
-                        { label: 'Team', onClick: () => handleNavChange('team'), active: activeTab === 'team' },
                         { label: 'Task Templates', onClick: () => handleNavChange('templates'), active: activeTab === 'templates' },
                         { label: 'Reports', onClick: () => handleNavChange('reports'), active: activeTab === 'reports' },
                         { label: 'Activity Logs', onClick: () => handleNavChange('activity_logs'), active: activeTab === 'activity_logs' },
