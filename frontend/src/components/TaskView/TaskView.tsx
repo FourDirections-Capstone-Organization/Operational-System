@@ -53,6 +53,8 @@ export interface TaskViewTask {
     assignmentScope?: number;
     assignedDepartmentId?: string;
     assignedDepartmentName?: string;
+    /** Non-primary-key display reference (e.g. "ABC12345"); falls back to a short id. */
+    taskReferenceNumber?: string;
     /** Each assignee plus the completion percentage the employee reported. */
     assignees?: TaskViewAssignee[];
 }
@@ -826,7 +828,7 @@ const TaskView: React.FC<TaskViewProps> = ({
                         </div>
                         {rightPanelTab === 'recommendations'
                             ? <TaskRecommendations taskId={task.taskId} />
-                            : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} taskReferenceNumber={task.taskId} />}
+                            : <TaskComments taskId={task.taskId} currentEmployeeId={task.assignedTo} taskReferenceNumber={task.taskReferenceNumber || task.taskId.slice(0, 8).toUpperCase()} />}
                     </div>
                 </div>
             </div>

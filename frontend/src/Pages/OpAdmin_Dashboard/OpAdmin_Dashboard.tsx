@@ -6023,6 +6023,7 @@ export default function OpsAdminDashboard() {
             assignedDepartmentId: dto.assignedDepartmentId ?? undefined,
             assignedDepartmentName: dto.assignedDepartmentName ?? undefined,
             assignmentScope: dto.assignmentScope ?? dto.AssignmentScope ?? 0,
+            taskReferenceNumber: dto.taskReferenceNumber ?? dto.referenceNumber ?? '',
         };
     };
 

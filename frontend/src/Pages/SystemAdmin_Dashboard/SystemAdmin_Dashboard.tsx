@@ -2368,6 +2368,7 @@ export default function Dashboard() {
             assignmentScope: t.assignmentScope ?? t.AssignmentScope ?? 0,
             assignedDepartmentId: t.assignedDepartmentId ?? t.AssignedDepartmentId ?? '',
             assignedDepartmentName: t.assignedDepartmentName ?? t.AssignedDepartmentName ?? '',
+            taskReferenceNumber: t.taskReferenceNumber ?? t.referenceNumber ?? '',
         };
     };
 
