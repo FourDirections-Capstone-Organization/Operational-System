@@ -860,7 +860,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
             <div className="dashboard-grid">
                 <div className="card">
                     <div className="card-header-layout">
-                        <h3>High Priority Tasks</h3>
+                        <h3>High Priority Tasks <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>({urgentFiltered.length})</span></h3>
                         <button className="link-btn" onClick={onGoTasks}>All tasks <ChevronRight size={13} /></button>
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -912,7 +912,9 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                 </div>
 
                 <div className="card">
-                    <div className="card-header-layout"><h3>My Progress</h3></div>
+                    <div className="card-header-layout">
+                        <h3>My Progress <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>({progressFiltered.length})</span></h3>
+                    </div>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                         <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
                             <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
