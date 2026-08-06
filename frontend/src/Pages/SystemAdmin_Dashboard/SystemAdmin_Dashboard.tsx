@@ -71,20 +71,6 @@ import api from '../../api';
 import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
 import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 
-const BIOMARKER_SCAN_LOGS: ActivityLog[] = [
-    { activityLogId: 'bio-scan-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Scan', description: 'Automated daily scan SCAN-20260723-001 finished. 10 violations detected.', createdAt: '2026-07-23T00:02:00' },
-    { activityLogId: 'bio-flag-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'RED FLAG generated for Jose Rizal (C-0388): Compound SLA + workload violation.', createdAt: '2026-07-23T00:01:00' },
-    { activityLogId: 'bio-flag-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Juan dela Cruz (C-0421): Recurring SLA breach pattern.', createdAt: '2026-07-23T00:01:05' },
-    { activityLogId: 'bio-flag-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'AMBER FLAG generated for Ana Gonzales (C-0612): Workload trending upward.', createdAt: '2026-07-23T00:01:10' },
-    { activityLogId: 'bio-flag-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Biomarker Flag', description: 'GREEN FLAG generated for Carlos Mendoza (C-0724): Workload normalized.', createdAt: '2026-07-23T00:01:15' },
-    { activityLogId: 'bio-viol-001', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88231 (Juan dela Cruz / Last Mile) breached SLA by 4h 32m. Flagged as Critical.', createdAt: '2026-07-23T00:00:12' },
-    { activityLogId: 'bio-viol-002', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88190 (Maria Santos / Dispatch) breached SLA by 1h 15m. Flagged as High.', createdAt: '2026-07-23T00:00:14' },
-    { activityLogId: 'bio-viol-003', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'SLA Breach', description: 'Task T-88012 (Pedro Reyes / Logistics) breached SLA by 45m. Flagged as Medium.', createdAt: '2026-07-23T00:00:16' },
-    { activityLogId: 'bio-viol-004', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0388 (Jose Rizal / Last Mile) has 12 active tasks (threshold: 8). Flagged as Critical.', createdAt: '2026-07-23T00:00:30' },
-    { activityLogId: 'bio-viol-005', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0612 (Ana Gonzales / Dispatch) has 10 active tasks (threshold: 8). Flagged as High.', createdAt: '2026-07-23T00:00:31' },
-    { activityLogId: 'bio-viol-006', accountId: '', firstName: 'Biomarker', lastName: 'Scan', activityType: 'Workload Overload', description: 'C-0724 (Carlos Mendoza / Logistics) has 9 active tasks (threshold: 8). Flagged as Low.', createdAt: '2026-07-23T00:00:32' },
-];
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type NavTab =
@@ -2733,6 +2719,7 @@ export default function Dashboard() {
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [activityLogPage, setActivityLogPage] = useState(1);
     const [activityLogTotalPages, setActivityLogTotalPages] = useState(1);
+    const [activityLogTotalCount, setActivityLogTotalCount] = useState(0);
     const [activityLogLoading, setActivityLogLoading] = useState(false);
     const ACTIVITY_LOG_PAGE_SIZE = 15;
     const [activityLogSearch, setActivityLogSearch] = useState('');
@@ -2986,8 +2973,11 @@ export default function Dashboard() {
                 })));
                 setActivityLogPage(d.pageNumber || page);
                 setActivityLogTotalPages(d.totalPages || 1);
+                setActivityLogTotalCount(d.totalCount ?? d.items.length);
             } else {
                 setActivityLogs([]);
+                setActivityLogTotalPages(1);
+                setActivityLogTotalCount(0);
             }
         } catch {
             setActivityLogs([]);
@@ -2996,13 +2986,12 @@ export default function Dashboard() {
         }
     };
 
+    // Real audit logs only — newest first (server already sorts by timestamp
+    // descending; this re-sort guarantees recency ordering regardless of source).
     const allActivityLogs = useMemo(() =>
-        [...BIOMARKER_SCAN_LOGS, ...activityLogs],
+        [...activityLogs].sort((a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [activityLogs]);
-
-    const combinedTotalPages = useMemo(() =>
-        Math.max(1, Math.ceil(allActivityLogs.length / 10)),
-    [allActivityLogs.length]);
 
     // Re-fetch activity logs when the tab becomes active or any filter changes
     useEffect(() => {
@@ -3381,9 +3370,9 @@ export default function Dashboard() {
                             loading={activityLogLoading}
                             emptyMessage="No activity logs found in the system."
                             emptyIcon={<Activity size={24} />}
-                            totalRecords={allActivityLogs.length}
+                            totalRecords={activityLogTotalCount}
                             currentPage={activityLogPage}
-                            totalPages={combinedTotalPages}
+                            totalPages={activityLogTotalPages}
                             onPageChange={p => fetchActivityLogs(p)}
                         >
                             {allActivityLogs.map(log => {
