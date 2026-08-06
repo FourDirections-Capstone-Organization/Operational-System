@@ -27,7 +27,7 @@ public class TaskCommentService : ITaskCommentService
     }
 
     public async Task<ApiResponseDTO<TaskCommentResponseDTO>> CreateAsync(
-        Guid taskId, string content, List<IFormFile>? attachments, Guid authorId)
+        Guid taskId, string? content, List<IFormFile>? attachments, Guid authorId)
     {
         var taskExists = await _db.Tasks.AnyAsync(t => t.Id == taskId);
         if (!taskExists)
@@ -44,7 +44,7 @@ public class TaskCommentService : ITaskCommentService
         {
             TaskId = taskId,
             AuthorId = authorId,
-            Content = content.Trim(),
+            Content = content?.Trim() ?? string.Empty,
             CreatedAt = DateTime.UtcNow
         };
 

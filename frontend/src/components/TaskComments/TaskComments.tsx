@@ -173,7 +173,7 @@ const TaskComments: React.FC<TaskCommentsProps> = ({
             success('Comment added successfully.');
             await fetchComments();
         } catch (err: any) {
-            setError(err.message);
+            setError(err.response?.data?.message || err.response?.data?.Message || err.message || 'Failed to send comment.');
         } finally {
             setSending(false);
         }

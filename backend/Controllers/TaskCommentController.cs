@@ -21,7 +21,7 @@ public class TaskCommentController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(
         Guid taskId,
-        [FromForm] string content,
+        [FromForm] string? content = null,
         [FromForm] List<IFormFile>? attachments = null)
     {
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
