@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Backend.Models;
@@ -27,10 +28,15 @@ public class NotificationSettingsController : ControllerBase
     }
 
     [HttpPut]
-    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorOnly)]
     public async Task<IActionResult> Update(NotificationSettingsDTO dto)
     {
-        var result = await _settingsService.UpdateSettingsAsync(dto);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid? parsedUserId = null;
+        if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var parsed))
+            parsedUserId = parsed;
+
+        var result = await _settingsService.UpdateSettingsAsync(dto, parsedUserId);
         if (!result.IsSuccess)
             return BadRequest(result);
 

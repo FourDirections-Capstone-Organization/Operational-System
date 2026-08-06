@@ -167,7 +167,8 @@ type NavTab =
     | 'approvals'
     | 'activity_logs'
     | 'announcements'
-    | 'notifications';
+    | 'notifications'
+    | 'notification_settings';
 
 interface TeamMember {
     accountId: string;
@@ -2943,6 +2944,148 @@ const ApprovalsWrapper: React.FC = () => {
     );
 };
 
+// --- Notification Settings Tab (TN-002: Configurable Deadline Alerts) ---------
+
+const NotificationSettingsTab: React.FC = () => {
+    const { success, error } = useToast();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [value, setValue] = useState('2');
+    const [unit, setUnit] = useState<'Hours' | 'Days'>('Days');
+    const [formError, setFormError] = useState('');
+
+    const fetchSettings = useCallback(async () => {
+        setLoading(true);
+        setFormError('');
+        try {
+            const res = await api.get('/api/NotificationSettings');
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d) {
+                setValue(String(d.deadlineWarningValue ?? 2));
+                const u = d.deadlineWarningUnit;
+                setUnit(u === 'Hours' || u === 0 ? 'Hours' : 'Days');
+            }
+        } catch {
+            // keep defaults (2 days)
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+    const handleSave = async () => {
+        const num = Number(value);
+        if (!Number.isFinite(num) || num <= 0 || !Number.isInteger(num)) {
+            setFormError('The threshold must be a positive whole number.');
+            return;
+        }
+        setFormError('');
+        setSaving(true);
+        try {
+            await api.put('/api/NotificationSettings', {
+                deadlineWarningValue: num,
+                deadlineWarningUnit: unit === 'Hours' ? 0 : 1,
+            });
+            success('Deadline warning threshold updated successfully.');
+        } catch (err: any) {
+            error(err.response?.data?.message || err.message || 'Failed to update settings.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="dashboard-content">
+                <div className="dashboard-grid">
+                    <div className="card">
+                        <div className="empty-state">
+                            <Loader2 size={22} className="spin" />
+                            <p>Loading notification settings…</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="dashboard-content">
+            <div className="dashboard-grid" style={{ maxWidth: 760, margin: '0 auto' }}>
+                <div className="card">
+                    <div className="card-header-layout">
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Bell size={15} /> Deadline Warning Settings
+                        </h3>
+                    </div>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
+                        Configure when the system warns assignees that a task deadline is approaching.
+                        The system's scheduled check compares each active task's remaining time against this
+                        threshold and triggers a <strong>Deadline Approaching</strong> notification (FR-033) to
+                        the assignee once the remaining time reaches it. The change applies to all future checks
+                        and is recorded in the Audit Log.
+                    </p>
+
+                    <div>
+                        <label style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                            Warning threshold (before due)
+                        </label>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={value}
+                                onChange={e => { setValue(e.target.value); setFormError(''); }}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+                                style={{
+                                    width: 140, padding: '8px 12px', fontSize: 13, borderRadius: 8,
+                                    border: `1px solid ${formError ? 'var(--status-failed, #ee5d50)' : 'var(--border-color, #e2e8f0)'}`,
+                                    background: 'var(--bg-primary, #fff)', color: 'var(--text-primary, #1e293b)',
+                                    outline: 'none',
+                                }}
+                            />
+                            <select
+                                value={unit}
+                                onChange={e => setUnit(e.target.value as 'Hours' | 'Days')}
+                                style={{
+                                    padding: '8px 12px', fontSize: 13, borderRadius: 8,
+                                    border: '1px solid var(--border-color, #e2e8f0)',
+                                    background: 'var(--bg-primary, #fff)', color: 'var(--text-primary, #1e293b)',
+                                    outline: 'none', cursor: 'pointer',
+                                }}
+                            >
+                                <option value="Hours">Hours</option>
+                                <option value="Days">Days</option>
+                            </select>
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+                            Default: <strong>2 days</strong>. For example, a value of 48 Hours warns exactly 48 hours
+                            before the task deadline.
+                        </p>
+                    </div>
+
+                    {formError && (
+                        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--status-failed, #ee5d50)' }}>
+                            <AlertCircle size={13} /> {formError}
+                        </div>
+                    )}
+
+                    <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {saving ? <><Loader2 size={13} className="spin" /> Saving…</> : <><Save size={13} /> Save Threshold</>}
+                        </button>
+                        <button className="btn" onClick={fetchSettings} disabled={saving}>Reset</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- Reports Tab --------------------------------------------------------------
 
 export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) => {
@@ -4976,6 +5119,7 @@ export default function OpsAdminDashboard() {
                     icon: 'ti ti-settings',
                     subItems: [
                         { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
+                        { label: 'Notification Settings', onClick: () => setActiveTab('notification_settings'), active: activeTab === 'notification_settings' },
                     ],
                 },
             ],
@@ -6006,6 +6150,7 @@ export default function OpsAdminDashboard() {
         activity_logs: 'Activity Logs',
         announcements: 'Announcements',
         notifications: 'Notifications',
+        notification_settings: 'Notification Settings',
     };
 
     // -- Fetch dashboard data on mount and when filters change --
@@ -6308,6 +6453,7 @@ export default function OpsAdminDashboard() {
                         </div>
                     </div>
                 )}
+                {activeTab === 'notification_settings' && <NotificationSettingsTab />}
             </main>
 
             {/* -- Modals -- */}

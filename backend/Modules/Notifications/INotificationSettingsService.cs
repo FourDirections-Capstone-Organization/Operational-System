@@ -7,7 +7,7 @@ namespace Backend.Modules.Notifications;
 public interface INotificationSettingsService
 {
     Task<ApiResponseDTO<NotificationSettingsDTO>> GetSettingsAsync();
-    Task<ApiResponseDTO<NotificationSettingsDTO>> UpdateSettingsAsync(NotificationSettingsDTO dto);
+    Task<ApiResponseDTO<NotificationSettingsDTO>> UpdateSettingsAsync(NotificationSettingsDTO dto, Guid? updatedByUserId = null);
     Task<NotificationSettings> GetSettingsEntityAsync();
     Task SeedDefaultSettingsAsync();
 }
