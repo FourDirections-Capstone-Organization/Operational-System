@@ -1261,7 +1261,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                                     className={`emp-picker-row${isSelected ? ' selected' : ''}${isRecommended && !isSelected ? ' recommended' : ''}${disabled ? ' disabled' : ''}`}
                                                     onClick={() => { if (disabled) return; setForm(prev => ({ ...prev, assignedTo: e.accountId })); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
                                                 >
-                                                    <input type="radio" name="singleEmp" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => {}} />
+                                                    <input type="radio" name="singleEmp" className="emp-picker-radio" checked={isSelected} disabled={disabled} onChange={() => { }} />
                                                     <div className="emp-picker-info">
                                                         <span className="emp-picker-name">{e.employeeName}</span>
                                                         <div className="emp-picker-meta">
@@ -1322,7 +1322,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                                                         setErrors(prev => ({ ...prev, assignedTo: '' }));
                                                     }}
                                                 >
-                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => {}} />
+                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => { }} />
                                                     <div className="emp-picker-info">
                                                         <span className="emp-picker-name">{e.employeeName}</span>
                                                         <div className="emp-picker-meta">
@@ -2011,51 +2011,51 @@ const DashboardTab: React.FC<{
                         title="Workload Summary per Employee"
                         filterElements={
                             <div className="dt-filter-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                 <select value={wlFilters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                     onChange={e => setWlFilters(p => ({ ...p, assignmentScope: e.target.value }))}>
-                                     <option value="">All Scopes</option>
-                                     <option value="0">Single Employee</option>
-                                     <option value="1">Team</option>
-                                     <option value="2">Department</option>
-                                 </select>
-                                 <select value={wlFilters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                     onChange={e => setWlFilters(p => ({ ...p, employeeId: e.target.value }))}>
-                                     <option value="">All Employees</option>
-                                     {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
-                                 </select>
-                                 <select value={wlFilters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                     onChange={e => setWlFilters(p => ({ ...p, departmentId: e.target.value }))}>
-                                     <option value="">All Departments</option>
-                                     {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
-                                 </select>
-                                 <select value={wlFilters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
-                                     onChange={e => setWlFilters(p => ({ ...p, taskStatus: e.target.value }))}>
-                                     <option value="">All Statuses</option>
-                                     <option value="Assigned">Assigned</option>
-                                     <option value="In Progress">In Progress</option>
-                                     <option value="Pending Admin Review">Pending Admin Review</option>
-                                     <option value="Completed">Completed</option>
-                                     <option value="Overdue">Overdue</option>
-                                 </select>
-                                 {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
-                                     const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
-                                     const from = start.toISOString().split('T')[0];
-                                     const isActive = wlFilters.dateStart === from;
-                                     return (
-                                         <button key={p.label}
-                                             className={`filter-pill${isActive ? ' active' : ''}`}
-                                             onClick={e => {
-                                                 e.stopPropagation();
-                                                 setWlFilters(prev => ({ ...prev, dateStart: from, dateEnd: end.toISOString().split('T')[0] }));
-                                             }}
-                                             style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                             {p.label}
-                                         </button>
-                                     );
-                                 })}
-                                 {hasAnyFilter && (
-                                     <button className="btn btn-sm" onClick={() => setWlFilters({ employeeId: '', departmentId: '', assignmentScope: '', taskStatus: '', dateStart: '', dateEnd: '' })} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
-                                 )}
+                                <select value={wlFilters.assignmentScope} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => setWlFilters(p => ({ ...p, assignmentScope: e.target.value }))}>
+                                    <option value="">All Scopes</option>
+                                    <option value="0">Single Employee</option>
+                                    <option value="1">Team</option>
+                                    <option value="2">Department</option>
+                                </select>
+                                <select value={wlFilters.employeeId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => setWlFilters(p => ({ ...p, employeeId: e.target.value }))}>
+                                    <option value="">All Employees</option>
+                                    {dashboardEmployees.map(m => (<option key={m.employeeId} value={m.employeeId}>{m.employeeName}</option>))}
+                                </select>
+                                <select value={wlFilters.departmentId} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => setWlFilters(p => ({ ...p, departmentId: e.target.value }))}>
+                                    <option value="">All Departments</option>
+                                    {dashboardDepartments.map(d => (<option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>))}
+                                </select>
+                                <select value={wlFilters.taskStatus} style={{ height: 36, borderRadius: 'var(--r-sm, 8px)', border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit' }}
+                                    onChange={e => setWlFilters(p => ({ ...p, taskStatus: e.target.value }))}>
+                                    <option value="">All Statuses</option>
+                                    <option value="Assigned">Assigned</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Pending Admin Review">Pending Admin Review</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Overdue">Overdue</option>
+                                </select>
+                                {[{ label: '1M', months: 1 }, { label: '3M', months: 3 }, { label: '6M', months: 6 }, { label: '12M', months: 12 }].map(p => {
+                                    const end = new Date(); const start = new Date(); start.setMonth(start.getMonth() - p.months);
+                                    const from = start.toISOString().split('T')[0];
+                                    const isActive = wlFilters.dateStart === from;
+                                    return (
+                                        <button key={p.label}
+                                            className={`filter-pill${isActive ? ' active' : ''}`}
+                                            onClick={e => {
+                                                e.stopPropagation();
+                                                setWlFilters(prev => ({ ...prev, dateStart: from, dateEnd: end.toISOString().split('T')[0] }));
+                                            }}
+                                            style={{ fontSize: 11, padding: '6px 10px', height: 36, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--r-sm, 8px)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                            {p.label}
+                                        </button>
+                                    );
+                                })}
+                                {hasAnyFilter && (
+                                    <button className="btn btn-sm" onClick={() => setWlFilters({ employeeId: '', departmentId: '', assignmentScope: '', taskStatus: '', dateStart: '', dateEnd: '' })} style={{ height: 36, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>
+                                )}
                             </div>
                         }
                         headers={['EMPLOYEE', 'TOTAL', 'ACTIVE', 'COMPLETED', 'OVERDUE', 'COMPLETION']}
@@ -2124,9 +2124,11 @@ const DashboardTab: React.FC<{
                                         </td>
                                         <td style={{ fontSize: 13 }}>{assignee}</td>
                                         <td>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                                                 background: prio === 'Urgent' ? '#fef2f2' : prio === 'High' ? '#fff7ed' : prio === 'Medium' ? '#fffbeb' : '#eff6ff',
-                                                color: prio === 'Urgent' ? '#dc2626' : prio === 'High' ? '#ea580c' : prio === 'Medium' ? '#d97706' : '#2563eb' }}>
+                                                color: prio === 'Urgent' ? '#dc2626' : prio === 'High' ? '#ea580c' : prio === 'Medium' ? '#d97706' : '#2563eb'
+                                            }}>
                                                 {prio}
                                             </span>
                                         </td>
@@ -2134,9 +2136,11 @@ const DashboardTab: React.FC<{
                                             {due ? new Date(due).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                         </td>
                                         <td>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                                                 background: status === 'Completed' || status === 'Done' ? 'rgba(5,150,105,0.1)' : isOverdue ? 'rgba(220,38,38,0.1)' : 'rgba(0,169,157,0.08)',
-                                                color: status === 'Completed' || status === 'Done' ? '#059669' : isOverdue ? '#dc2626' : 'var(--primary)' }}>
+                                                color: status === 'Completed' || status === 'Done' ? '#059669' : isOverdue ? '#dc2626' : 'var(--primary)'
+                                            }}>
                                                 {status || '—'}
                                             </span>
                                         </td>
@@ -4934,30 +4938,30 @@ export default function OpsAdminDashboard() {
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
     const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
         {
-        label: null,
-        items: [
-        {
-        label: 'Task Allocation and Review System',
-        icon: 'ti ti-clipboard-list',
-        subItems: [
-        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
-        { label: 'Tasks', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
-        { label: 'Team', onClick: () => setActiveTab('team'), active: activeTab === 'team' },
-        { label: 'Task Templates', onClick: () => setActiveTab('templates'), active: activeTab === 'templates' },
-        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
-        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
-        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
-        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
-        ],
-        },
-        {
-        label: 'General',
-        icon: 'ti ti-settings',
-        subItems: [
-        { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
-        ],
-        },
-        ],
+            label: null,
+            items: [
+                {
+                    label: 'Task Allocation and Review System',
+                    icon: 'ti ti-clipboard-list',
+                    subItems: [
+                        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
+                        { label: 'Tasks', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
+                        { label: 'Team', onClick: () => setActiveTab('team'), active: activeTab === 'team' },
+                        { label: 'Task Templates', onClick: () => setActiveTab('templates'), active: activeTab === 'templates' },
+                        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
+                        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
+                        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
+                        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
+                    ],
+                },
+                {
+                    label: 'General',
+                    icon: 'ti ti-settings',
+                    subItems: [
+                        { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
+                    ],
+                },
+            ],
         },
     ], [activeTab, setActiveTab]);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -4988,7 +4992,7 @@ export default function OpsAdminDashboard() {
             TaskAssigned: 'info', TaskUpdated: 'info', TaskOverdue: 'alert', DeadlineWarning: 'alert',
             TaskCancelled: 'system', TaskCompleted: 'success',
         };
-        const type = typeof n.type === 'number' ? ['TaskAssigned','TaskUpdated','TaskOverdue','DeadlineWarning','PushBack','TaskCancelled','TaskResumed','TaskOnHold','TaskCompleted','TemplateTaskUnassigned'][n.type] || 'Unknown' : n.type || '';
+        const type = typeof n.type === 'number' ? ['TaskAssigned', 'TaskUpdated', 'TaskOverdue', 'DeadlineWarning', 'PushBack', 'TaskCancelled', 'TaskResumed', 'TaskOnHold', 'TaskCompleted', 'TemplateTaskUnassigned'][n.type] || 'Unknown' : n.type || '';
         const createdAt = n.createdAt ?? '';
         const createdDate = new Date(createdAt);
         const now = new Date();
@@ -5216,6 +5220,7 @@ export default function OpsAdminDashboard() {
     const [taskTotalPages, setTaskTotalPages] = useState(1);
     const [taskTotalRecords, setTaskTotalRecords] = useState(0);
     const [taskPageSize, setTaskPageSize] = useState(8);
+    const [taskTab, setTaskTab] = useState<'active' | 'completed' | 'bin'>('active');
     const [taskSummary, setTaskSummary] = useState<{ active: number; inProgress: number; completed: number; overdue: number }>({ active: 0, inProgress: 0, completed: 0, overdue: 0 });
 
     // Reopen Requests state
@@ -5246,6 +5251,8 @@ export default function OpsAdminDashboard() {
     taskPageRef.current = taskPage;
     const taskPageSizeRef = useRef(taskPageSize);
     taskPageSizeRef.current = taskPageSize;
+    const taskTabRef = useRef(taskTab);
+    taskTabRef.current = taskTab;
     const deletedTaskIdsRef = useRef(deletedTaskIds);
     deletedTaskIdsRef.current = deletedTaskIds;
 
@@ -5396,7 +5403,8 @@ export default function OpsAdminDashboard() {
             setDashboardLoading(true);
         }
         try {
-            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}`);
+            const statusParam = taskTabRef.current === 'completed' ? `&status=3` : ``;
+            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}${statusParam}`);
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
@@ -5624,8 +5632,8 @@ export default function OpsAdminDashboard() {
             }
 
             setShowNew(false);
-            fetchTasks().catch(() => {});
-            doFetchDashboard().catch(() => {});
+            fetchTasks().catch(() => { });
+            doFetchDashboard().catch(() => { });
         } catch (err: any) {
             const status = err.response?.status;
             const respData = err.response?.data;
@@ -5970,8 +5978,8 @@ export default function OpsAdminDashboard() {
         return () => clearInterval(interval);
     }, [activeTab]);
 
-    // Re-fetch tasks when page or page size changes
-    useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize]);
+    // Re-fetch tasks when page, page size, or tab changes
+    useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize, taskTab]);
 
     // -- Auto-refresh dashboard data every 30 seconds (silent, no loading state) --
     useEffect(() => {
@@ -5985,18 +5993,18 @@ export default function OpsAdminDashboard() {
 
     return (
         <div className="dashboard-container">
-                <Sidebar
-                    logoUrl={SpeedexLogo}
-                    logoText="SPEEDEX"
-                    navGroups={SIDEBAR_NAV_GROUPS}
-                    profile={{
-                        name: employeeName || displayRole,
-                        role: displayRole,
-                        avatarInitials: getInitials(employeeName || displayRole),
-                    }}
-                    onProfileClick={() => setActiveTab('profile')}
-                    onLogout={handleLogout}
-                />
+            <Sidebar
+                logoUrl={SpeedexLogo}
+                logoText="SPEEDEX"
+                navGroups={SIDEBAR_NAV_GROUPS}
+                profile={{
+                    name: employeeName || displayRole,
+                    role: displayRole,
+                    avatarInitials: getInitials(employeeName || displayRole),
+                }}
+                onProfileClick={() => setActiveTab('profile')}
+                onLogout={handleLogout}
+            />
 
             {/* -- Main -- */}
             <main className="main-viewport">
@@ -6054,6 +6062,8 @@ export default function OpsAdminDashboard() {
                                 <TaskManager
                                     tasks={tmTasks}
                                     summary={taskSummary}
+                                    activeTab={taskTab}
+                                    onTabChange={tab => { setTaskTab(tab); setTaskPage(1); }}
                                     teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
                                     onNewTask={() => { setTaskSubTab('create'); setShowNew(false); }}
                                     onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
@@ -6077,8 +6087,8 @@ export default function OpsAdminDashboard() {
                             <div className="dashboard-content">
                                 <AIAssignmentView
                                     onTaskCreated={() => {
-                                        fetchTasks().catch(() => {});
-                                        doFetchDashboard().catch(() => {});
+                                        fetchTasks().catch(() => { });
+                                        doFetchDashboard().catch(() => { });
                                     }}
                                 />
                             </div>
@@ -6118,31 +6128,31 @@ export default function OpsAdminDashboard() {
                             {activityLogs.map((log: any) => {
                                 const badge = getAuditBadgeStyle(log.actionType ?? '');
                                 return (
-                                <tr key={log.id}>
-                                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                        {fmtDateTime(log.timestamp)}
-                                    </td>
-                                    <td>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
-                                            background: badge.background, color: badge.color,
-                                        }}>
-                                            {formatActionType(log.actionType)}
-                                        </span>
-                                    </td>
-                                    <td style={{ fontSize: 13 }}>
-                                        <div style={{ color: 'var(--text-primary)' }}>
-                                            {[log.actorName, log.actorRole].filter(Boolean).join(', ') || '—'}
-                                        </div>
-                                        {log.targetEntity && (
-                                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                                                Entity: {log.targetEntity}
+                                    <tr key={log.id}>
+                                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                            {fmtDateTime(log.timestamp)}
+                                        </td>
+                                        <td>
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 600,
+                                                background: badge.background, color: badge.color,
+                                            }}>
+                                                {formatActionType(log.actionType)}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontSize: 13 }}>
+                                            <div style={{ color: 'var(--text-primary)' }}>
+                                                {[log.actorName, log.actorRole].filter(Boolean).join(', ') || '—'}
                                             </div>
-                                        )}
-                                    </td>
-                                    <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
-                                    <td style={{ color: 'var(--text-primary)' }}>{renderChanges(log.oldValue, log.newValue)}</td>
-                                </tr>
+                                            {log.targetEntity && (
+                                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                                    Entity: {log.targetEntity}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>{log.description}</td>
+                                        <td style={{ color: 'var(--text-primary)' }}>{renderChanges(log.oldValue, log.newValue)}</td>
+                                    </tr>
                                 );
                             })}
                         </DataTable>

@@ -38,6 +38,8 @@ export interface TaskSummary {
     overdue: number;
 }
 
+export type TabType = 'active' | 'completed' | 'bin';
+
 interface TMProps {
     tasks: TMTask[];
     summary?: TaskSummary;
@@ -58,9 +60,11 @@ interface TMProps {
     filterAssignee?: string;
     onFilterAssigneeChange?: (val: string) => void;
     serverPagination?: ServerPagination;
+    /** Controlled active tab (optional — enables parent-managed tab state so the
+     *  parent can refetch server-paginated tasks with the right status filter). */
+    activeTab?: TabType;
+    onTabChange?: (tab: TabType) => void;
 }
-
-type TabType = 'active' | 'completed' | 'bin';
 
 const PRIORITIES: TMTask['priority'][] = ['Urgent', 'High', 'Medium', 'Low'];
 const PRIO_COLORS: Record<string, string> = { Urgent: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#2563eb' };
@@ -117,8 +121,11 @@ export default function TaskManager({
     filterAssignee: externalFilterAssignee,
     onFilterAssigneeChange,
     serverPagination,
+    activeTab: controlledTab,
+    onTabChange: controlledTabChange,
 }: TMProps) {
-    const [tab, setTab] = useState<TabType>('active');
+    const [internalTab, setInternalTab] = useState<TabType>('active');
+    const tab = controlledTab !== undefined ? controlledTab : internalTab;
     const [internalSearch, setInternalSearch] = useState('');
     const [internalFilterPrio, setInternalFilterPrio] = useState('');
     const [internalFilterClassification, setInternalFilterClassification] = useState('');
@@ -180,22 +187,27 @@ export default function TaskManager({
     const activeTotal = summary?.active ?? tabTasks.length;
     const completionRate = summary ? (activeTotal + totalDone > 0 ? Math.round(totalDone / (activeTotal + totalDone) * 100) : 0) : (tasks.length ? Math.round(totalDone / tasks.length * 100) : 0);
 
-    const handleTabChange = (key: string) => { setTab(key as TabType); setPage(1); };
+    const handleTabChange = (key: string) => {
+        const next = key as TabType;
+        setPage(1);
+        if (controlledTabChange) controlledTabChange(next);
+        else setInternalTab(next);
+    };
     const handlePageChange = (p: number) => { setPage(p); };
 
     const activeStats = tab === 'active' ? [
-        { label: 'Active', value: activeTotal, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: `${activeTotal} task${activeTotal !== 1 ? 's' : ''}` },
+        { label: 'Active', value: activeTotal, icon: <ClipboardList size={18} />, variant: 'teal' as const, subtext: `${activeTotal} task${activeTotal !== 1 ? 's' : ''}` },
         { label: 'In Progress', value: totalInProgress, icon: <Loader2 size={18} />, variant: 'warning' as const, subtext: 'Currently active' },
         { label: 'Completed', value: totalDone, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: `${completionRate}% completion rate` },
-        { label: 'Overdue', value: totalOverdue, icon: <AlertCircle size={18} />, variant: totalOverdue > 0 ? 'danger' as const : 'primary' as const, subtext: totalOverdue > 0 ? 'Needs attention' : 'No overdue tasks' },
+        { label: 'Overdue', value: totalOverdue, icon: <AlertCircle size={18} />, variant: totalOverdue > 0 ? 'danger' as const : 'teal' as const, subtext: totalOverdue > 0 ? 'Needs attention' : 'No overdue tasks' },
     ] : tab === 'completed' ? [
         { label: 'Completed', value: totalDone, icon: <CheckCircle2 size={18} />, variant: 'success' as const, subtext: 'Finished tasks' },
-        { label: 'On Time', value: tabTasks.filter(t => t.progress >= 100).length, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: 'Completed on schedule' },
+        { label: 'On Time', value: tabTasks.filter(t => t.progress >= 100).length, icon: <ClipboardList size={18} />, variant: 'teal' as const, subtext: 'Completed on schedule' },
         { label: 'Rate', value: `${completionRate}%`, icon: <BarChart3 size={18} />, variant: 'success' as const, subtext: 'Completion rate' },
     ] : [
         { label: 'Archived', value: tabTasks.filter(t => t.isArchived).length, icon: <Archive size={18} />, variant: 'warning' as const, subtext: 'Archived tasks' },
         { label: 'Deleted', value: tabTasks.filter(t => t.isDeleted).length, icon: <Trash2 size={18} />, variant: 'danger' as const, subtext: 'Deleted tasks' },
-        { label: 'Total', value: tabTasks.length, icon: <ClipboardList size={18} />, variant: 'primary' as const, subtext: 'In bin' },
+        { label: 'Total', value: tabTasks.length, icon: <ClipboardList size={18} />, variant: 'teal' as const, subtext: 'In bin' },
     ];
 
     return (

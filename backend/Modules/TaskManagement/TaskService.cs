@@ -192,6 +192,24 @@ public class TaskService : ITaskService
                 break;
         }
 
+        // Summary counts are computed from the visibility-filtered query BEFORE the
+        // optional status/priority/classification filters are applied. This keeps the
+        // tab badge counts accurate across ALL pages no matter which tab the caller
+        // is currently viewing (e.g., narrowing to status=Completed must not zero out
+        // the Active/Overdue badge counts).
+        var nowUtc = DateTime.UtcNow;
+        var activeCount = await query.CountAsync(t =>
+            t.Status != Models.Enums.TaskStatus.Completed &&
+            t.Status != Models.Enums.TaskStatus.Cancelled);
+        var inProgressCount = await query.CountAsync(t =>
+            t.Status == Models.Enums.TaskStatus.InProgress);
+        var completedCount = await query.CountAsync(t =>
+            t.Status == Models.Enums.TaskStatus.Completed);
+        var overdueCount = await query.CountAsync(t =>
+            t.Status != Models.Enums.TaskStatus.Completed &&
+            t.Status != Models.Enums.TaskStatus.Cancelled &&
+            (t.RevisedDeadline ?? t.Deadline) < nowUtc);
+
         if (status.HasValue)
             query = query.Where(t => t.Status == status.Value);
 
@@ -216,21 +234,6 @@ public class TaskService : ITaskService
         }
 
         var totalCount = await query.CountAsync();
-
-        // Summary counts across ALL pages (not just the current page).
-        // Active = not completed and not cancelled; Overdue = active with effective deadline in the past.
-        var nowUtc = DateTime.UtcNow;
-        var activeCount = await query.CountAsync(t =>
-            t.Status != Models.Enums.TaskStatus.Completed &&
-            t.Status != Models.Enums.TaskStatus.Cancelled);
-        var inProgressCount = await query.CountAsync(t =>
-            t.Status == Models.Enums.TaskStatus.InProgress);
-        var completedCount = await query.CountAsync(t =>
-            t.Status == Models.Enums.TaskStatus.Completed);
-        var overdueCount = await query.CountAsync(t =>
-            t.Status != Models.Enums.TaskStatus.Completed &&
-            t.Status != Models.Enums.TaskStatus.Cancelled &&
-            (t.RevisedDeadline ?? t.Deadline) < nowUtc);
 
         var tasks = await query
             .OrderByDescending(t => t.CreatedAt)
