@@ -61,24 +61,28 @@ const TimePicker: React.FC<TimePickerProps> = ({ value, onChange, disabled }) =>
     };
 
     return (
-        <ThemeProvider theme={theme}>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DesktopTimePicker
-                    value={dayjsValue}
-                    onChange={handleChange}
-                    disabled={disabled}
-                    ampm
-                    views={['hours', 'minutes']}
-                    slotProps={{
-                        textField: {
-                            size: 'small',
-                            sx: { width: '100%', minWidth: 118 },
-                        },
-                        openPickerButton: { size: 'small' },
-                    }}
-                />
-            </LocalizationProvider>
-        </ThemeProvider>
+        // Fixed compact width so the adjacent date picker keeps the remaining
+        // space instead of being squeezed by the time field.
+        <div style={{ flex: '0 0 auto', width: 142 }}>
+            <ThemeProvider theme={theme}>
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                    <DesktopTimePicker
+                        value={dayjsValue}
+                        onChange={handleChange}
+                        disabled={disabled}
+                        ampm
+                        views={['hours', 'minutes']}
+                        slotProps={{
+                            textField: {
+                                size: 'small',
+                                sx: { width: '100%' },
+                            },
+                            openPickerButton: { size: 'small' },
+                        }}
+                    />
+                </LocalizationProvider>
+            </ThemeProvider>
+        </div>
     );
 };
 
