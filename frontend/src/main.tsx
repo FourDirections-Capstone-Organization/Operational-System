@@ -39,12 +39,10 @@ axios.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        // Handle SESSION_TIMEOUT from backend
-        if (error.response?.data?.code === 'SESSION_TIMEOUT') {
-            localStorage.clear();
-            appNavigate('/');
-            return Promise.reject(error);
-        }
+        // Note: a backend SESSION_TIMEOUT (inactivity) is NOT fatal here — the
+        // refresh token is valid for 7 days and refresh resets LastActivityAt,
+        // so an active user is recovered by the normal refresh path below.
+        // True AFK timeout is enforced by the frontend inactivity timer.
 
         // Handle deactivated/locked account — only for 401 from SessionTimeoutMiddleware
         if (error.response?.status === 401) {
