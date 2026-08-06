@@ -5221,6 +5221,9 @@ export default function OpsAdminDashboard() {
     const [taskTotalRecords, setTaskTotalRecords] = useState(0);
     const [taskPageSize, setTaskPageSize] = useState(8);
     const [taskTab, setTaskTab] = useState<'active' | 'completed' | 'bin'>('active');
+    const [taskFilterPrio, setTaskFilterPrio] = useState('');
+    const [taskFilterClassification, setTaskFilterClassification] = useState('');
+    const [taskFilterAssignee, setTaskFilterAssignee] = useState('');
     const [taskSummary, setTaskSummary] = useState<{ active: number; inProgress: number; completed: number; overdue: number }>({ active: 0, inProgress: 0, completed: 0, overdue: 0 });
 
     // Reopen Requests state
@@ -5253,6 +5256,12 @@ export default function OpsAdminDashboard() {
     taskPageSizeRef.current = taskPageSize;
     const taskTabRef = useRef(taskTab);
     taskTabRef.current = taskTab;
+    const taskFilterPrioRef = useRef(taskFilterPrio);
+    taskFilterPrioRef.current = taskFilterPrio;
+    const taskFilterClassificationRef = useRef(taskFilterClassification);
+    taskFilterClassificationRef.current = taskFilterClassification;
+    const taskFilterAssigneeRef = useRef(taskFilterAssignee);
+    taskFilterAssigneeRef.current = taskFilterAssignee;
     const deletedTaskIdsRef = useRef(deletedTaskIds);
     deletedTaskIdsRef.current = deletedTaskIds;
 
@@ -5404,7 +5413,15 @@ export default function OpsAdminDashboard() {
         }
         try {
             const statusParam = taskTabRef.current === 'completed' ? `&status=3` : ``;
-            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}${statusParam}`);
+            // Dropdown filters are sent server-side so the server filters AND paginates
+            // consistently — each page then shows the same number of matching rows.
+            const prioParam = taskFilterPrioRef.current ? `&priority=${encodeURIComponent(taskFilterPrioRef.current)}` : ``;
+            const CLASSIFICATION_PARAM_MAP: Record<string, string> = { routine: '0', special: '1' };
+            const classificationParam = taskFilterClassificationRef.current
+                ? `&classification=${CLASSIFICATION_PARAM_MAP[taskFilterClassificationRef.current] ?? taskFilterClassificationRef.current}`
+                : ``;
+            const assigneeParam = taskFilterAssigneeRef.current ? `&assignedToUserId=${encodeURIComponent(taskFilterAssigneeRef.current)}` : ``;
+            const res = await api.get(`/api/Task?pageNumber=${taskPageRef.current}&pageSize=${taskPageSizeRef.current}${statusParam}${prioParam}${classificationParam}${assigneeParam}`);
             const jsonRes = res.data;
             const rawList: any[] = Array.isArray(jsonRes) ? jsonRes : (Array.isArray(jsonRes?.data?.items) ? jsonRes.data.items : (Array.isArray(jsonRes?.data) ? jsonRes.data : []));
 
@@ -5978,8 +5995,8 @@ export default function OpsAdminDashboard() {
         return () => clearInterval(interval);
     }, [activeTab]);
 
-    // Re-fetch tasks when page, page size, or tab changes
-    useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize, taskTab]);
+    // Re-fetch tasks when page, page size, tab, or a dropdown filter changes
+    useEffect(() => { fetchTasks(); }, [taskPage, taskPageSize, taskTab, taskFilterPrio, taskFilterClassification, taskFilterAssignee]);
 
     // -- Auto-refresh dashboard data every 30 seconds (silent, no loading state) --
     useEffect(() => {
@@ -6064,6 +6081,12 @@ export default function OpsAdminDashboard() {
                                     summary={taskSummary}
                                     activeTab={taskTab}
                                     onTabChange={tab => { setTaskTab(tab); setTaskPage(1); }}
+                                    filterPrio={taskFilterPrio}
+                                    onFilterPrioChange={val => { setTaskFilterPrio(val); setTaskPage(1); }}
+                                    filterClassification={taskFilterClassification}
+                                    onFilterClassificationChange={val => { setTaskFilterClassification(val); setTaskPage(1); }}
+                                    filterAssignee={taskFilterAssignee}
+                                    onFilterAssigneeChange={val => { setTaskFilterAssignee(val); setTaskPage(1); }}
                                     teamMembers={teamMembers.map(m => ({ accountId: m.accountId, employeeName: m.employeeName }))}
                                     onNewTask={() => { setTaskSubTab('create'); setShowNew(false); }}
                                     onEdit={id => setEditingTask(tasks.find(t => t.taskId === id) ?? null)}
