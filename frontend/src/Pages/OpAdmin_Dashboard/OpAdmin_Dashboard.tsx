@@ -1759,10 +1759,13 @@ const DashboardTab: React.FC<{
         setWlLoading(true);
         const params: Record<string, string> = {};
         if (wlFilters.employeeId) params.employeeId = wlFilters.employeeId;
-        if (wlFilters.departmentId) params.departmentId = wlFilters.departmentId;
         if (wlFilters.assignmentScope !== '') params.assignmentScope = wlFilters.assignmentScope;
         if (wlFilters.dateStart) params.dateRangeStart = new Date(`${wlFilters.dateStart}T00:00:00`).toISOString();
         if (wlFilters.dateEnd) params.dateRangeEnd = new Date(`${wlFilters.dateEnd}T23:59:59`).toISOString();
+        // The Workload Summary card can show any department (e.g. "Last Mile")
+        // even though a Coordinator's summary metrics are department-scoped.
+        // The department filter is applied below on the employee's department.
+        params.includeAllDepartments = 'true';
         if (wlFilters.taskStatus && wlFilters.taskStatus !== 'Overdue') {
             const statusMap: Record<string, string> = {
                 Assigned: '0', 'In Progress': '1', 'Pending Admin Review': '2', Completed: '3',
@@ -1778,6 +1781,13 @@ const DashboardTab: React.FC<{
                 let rows: any[] = d?.employeeWorkload ?? [];
                 if (wlFilters.taskStatus === 'Overdue') {
                     rows = rows.filter(w => (w.overdueTaskCount ?? 0) > 0);
+                }
+                // Department filter matches the EMPLOYEE's department (not the
+                // tasks' assigned department), so e.g. "Last Mile" shows its own
+                // employees' workload.
+                if (wlFilters.departmentId) {
+                    const deptName = dashboardDepartments.find(dd => dd.departmentId === wlFilters.departmentId)?.departmentName;
+                    if (deptName) rows = rows.filter(w => (w.department ?? '') === deptName);
                 }
                 if (!cancelled) setFilteredWorkloadData(rows);
             } catch {

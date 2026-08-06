@@ -32,7 +32,8 @@ public class DashboardController : ControllerBase
         [FromQuery] Guid? employeeId = null,
         [FromQuery] Guid? departmentId = null,
         [FromQuery] Models.Enums.TaskStatus? status = null,
-        [FromQuery] Models.Enums.AssignmentScope? assignmentScope = null)
+        [FromQuery] Models.Enums.AssignmentScope? assignmentScope = null,
+        [FromQuery] bool includeAllDepartments = false)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
@@ -44,7 +45,7 @@ public class DashboardController : ControllerBase
             return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
 
         Guid? requestUserDepartmentId = null;
-        if (requestUserRole == UserRole.Coordinator)
+        if (requestUserRole == UserRole.Coordinator && !includeAllDepartments)
         {
             var user = await _db.Users.FindAsync(requestUserId);
             requestUserDepartmentId = user?.DepartmentId;
