@@ -29,7 +29,7 @@ public class DuplicateDetectionService : IDuplicateDetectionService
     }
 
     public async Task<ApiResponseDTO<DuplicateCheckResultDTO>> CheckForDuplicatesAsync(
-        string title, string description, Guid? excludeTaskId = null)
+        string title, string? description, Guid? excludeTaskId = null)
     {
         var excludedStatuses = new[] { Models.Enums.TaskStatus.Cancelled };
 
@@ -42,7 +42,7 @@ public class DuplicateDetectionService : IDuplicateDetectionService
         var existingTasks = await query.ToListAsync();
 
         var inputTitleWords = TokenizeText(title);
-        var inputDescWords = TokenizeText(description);
+        var inputDescWords = TokenizeText(description ?? string.Empty);
 
         var matches = new List<DuplicateMatchDTO>();
 

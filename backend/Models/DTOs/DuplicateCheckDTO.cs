@@ -8,9 +8,8 @@ public class DuplicateCheckDTO
     [MaxLength(150)]
     public string Title { get; set; } = string.Empty;
 
-    [Required]
     [MaxLength(2000)]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 }
 
 public class DuplicateCheckResultDTO

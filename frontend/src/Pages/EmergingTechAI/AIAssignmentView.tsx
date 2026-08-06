@@ -8,6 +8,7 @@ import {
 import './AIAssignmentView.css';
 import api from '../../api';
 import { useToast } from '../../components/Toast/Toast';
+import FormModal from '../../components/FormModal/FormModal';
 import { aiService, SlaRiskResponseDTO } from '../../services/aiService';
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -26,6 +27,15 @@ interface AvailableEmployee {
     activeTaskCount: number;
     availabilityStatus: string;
     isAvailable: boolean;
+}
+
+// ─── Duplicate warning types (U-001) ───────────────────────────────────────
+
+interface DuplicateMatchDTO {
+    taskId: string;
+    title: string;
+    status: string;
+    similarityPercentage: number;
 }
 
 interface TeamInfo {
@@ -136,6 +146,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     const [loadingDepartments, setLoadingDepartments] = useState(false);
     const [employeeSearch, setEmployeeSearch] = useState('');
     const [submitting, setSubmitting] = useState(false);
+
+    // ── Duplicate task warning (U-001) ────────────────────────────────────────
+    const [duplicateWarnings, setDuplicateWarnings] = useState<DuplicateMatchDTO[]>([]);
+    const [pendingPayload, setPendingPayload] = useState<any>(null);
     const [aiEnabled, setAiEnabled] = useState(false);
 
     // ── Validation & Summary State ──
@@ -512,6 +526,76 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     };
 
     // ── Submit (Step 9) with pre-submit availability re-validation (Req #4) ──
+    // ── U-001: record the coordinator's duplicate-warning decision ──────────
+    const recordDupDecision = async (decision: 'continue' | 'cancel', payload: any) => {
+        try {
+            await api.post('/api/Duplicate/decision', {
+                title: payload.title,
+                description: payload.description,
+                decision,
+                matchCount: duplicateWarnings.length,
+                topSimilarity: duplicateWarnings[0]?.similarityPercentage ?? null,
+                matchedTaskIds: duplicateWarnings.map(d => d.taskId),
+            });
+        } catch {
+            // audit logging must never break the flow
+        }
+    };
+
+    const handleDupContinue = async () => {
+        const payload = pendingPayload;
+        setPendingPayload(null);
+        setDuplicateWarnings([]);
+        if (payload) {
+            await recordDupDecision('continue', payload);
+            await submitTask(payload);
+        }
+    };
+
+    const handleDupCancel = async () => {
+        const payload = pendingPayload;
+        setPendingPayload(null);
+        setDuplicateWarnings([]);
+        if (payload) await recordDupDecision('cancel', payload);
+        setSubmitting(false);
+    };
+
+    const submitTask = async (payload: any) => {
+        setSubmitting(true);
+        try {
+            const res = await api.post('/api/Task', payload);
+            const created = res.data;
+            const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
+
+            // Upload supporting documents (one or more files) if provided
+            if (taskId && supportingFiles.length > 0) {
+                const results = await Promise.allSettled(supportingFiles.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setSupportingFiles([]);
+                if (failed > 0) {
+                    error(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                }
+            }
+            setStep('submitted');
+            success('Task assigned successfully — Neo4j graph updated, notifications sent, audit log recorded.');
+            // Notify the parent dashboard so the Task List tab refreshes immediately
+            if (onTaskCreated) onTaskCreated();
+        } catch (err: any) {
+            const status = err.response?.status;
+            const serverMsg = err.response?.data?.message || err.response?.data?.Message || err.response?.data?.title || '';
+            const detail = err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join('. ') : '';
+            const fallback = status === 500 ? 'Server error. Please check task data and try again.' : 'Failed to create task assignment.';
+            setFormError(serverMsg || detail || fallback);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const handleSubmit = async () => {
         setFormError('');
 
@@ -546,37 +630,21 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
             isConfidential: form.isConfidential,
         };
 
+        // U-001 steps 3-5: analyze title/description for similarity against
+        // existing tasks and flag potential duplicates before creating.
         try {
-            const res = await api.post('/api/Task', payload);
-            const created = res.data;
-            const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
-
-            // Upload supporting documents (one or more files) if provided
-            if (taskId && supportingFiles.length > 0) {
-                const results = await Promise.allSettled(supportingFiles.map(async (file) => {
-                    const fileFormData = new FormData();
-                    fileFormData.append('file', file);
-                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
-                }));
-                const failed = results.filter(r => r.status === 'rejected').length;
-                const uploaded = results.length - failed;
-                setSupportingFiles([]);
-                if (failed > 0) {
-                    error(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
-                }
+            const checkRes = await api.post('/api/Duplicate/check', { title: payload.title, description: payload.description });
+            const checkJson = checkRes.data;
+            if (checkJson?.isSuccess && checkJson?.data?.hasDuplicates && checkJson.data.matches?.length > 0) {
+                setDuplicateWarnings(checkJson.data.matches);
+                setPendingPayload(payload);
+                return; // wait for the coordinator's decision (steps 6-9)
             }
-            setStep('submitted');
-            success('Task assigned successfully — Neo4j graph updated, notifications sent, audit log recorded.');
-            // Notify the parent dashboard so the Task List tab refreshes immediately
-            if (onTaskCreated) onTaskCreated();
-        } catch (err: any) {
-            const status = err.response?.status;
-            const serverMsg = err.response?.data?.message || err.response?.data?.Message || err.response?.data?.title || '';
-            const detail = err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join('. ') : '';
-            const fallback = status === 500 ? 'Server error. Please check task data and try again.' : 'Failed to create task assignment.';
-            setFormError(serverMsg || detail || fallback);
-            setSubmitting(false);
+        } catch {
+            // duplicate check failed — proceed with creation
         }
+
+        await submitTask(payload);
     };
 
     // ── Event Handlers ──
@@ -1377,6 +1445,52 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* ── U-001: Duplicate task warning ─────────────────────────────── */}
+            {duplicateWarnings.length > 0 && pendingPayload && (
+                <FormModal
+                    isOpen
+                    onClose={handleDupCancel}
+                    title="Potential duplicate task detected."
+                    subtitle={`The system found ${duplicateWarnings.length} similar task${duplicateWarnings.length !== 1 ? 's' : ''} in existing records. Review the matches below.`}
+                    size="lg"
+                    footer={
+                        <div className="modal-actions" style={{ width: '100%', justifyContent: 'flex-end' }}>
+                            <button className="btn" onClick={handleDupCancel}><X size={13} /> Cancel</button>
+                            <button className="btn btn-primary" onClick={handleDupContinue}>
+                                <CheckCircle2 size={13} /> Continue Anyway
+                            </button>
+                        </div>
+                    }
+                >
+                    <div style={{ margin: '4px 0 12px', padding: '10px 12px', background: 'rgba(2, 132, 199, 0.06)', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 8, fontSize: 13 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>New task: {pendingPayload.title}</div>
+                        <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{pendingPayload.description}</div>
+                    </div>
+                    <div style={{ overflowX: 'auto', margin: '8px 0 4px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
+                                    <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)', width: 110 }}>Similarity</th>
+                                    <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Existing Task</th>
+                                    <th style={{ padding: '8px 8px', fontWeight: 700, color: 'var(--text-secondary)' }}>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {duplicateWarnings.map(m => (
+                                    <tr key={m.taskId} style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                                        <td style={{ padding: '8px', fontWeight: 700, color: m.similarityPercentage >= 90 ? 'var(--status-failed)' : m.similarityPercentage >= 80 ? '#c05c00' : m.similarityPercentage >= 70 ? '#9a6e00' : 'var(--text-primary)' }}>
+                                            {m.similarityPercentage}%
+                                        </td>
+                                        <td style={{ padding: '8px', color: 'var(--text-primary)' }}>{m.title}</td>
+                                        <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{m.status}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </FormModal>
             )}
         </div>
     );
