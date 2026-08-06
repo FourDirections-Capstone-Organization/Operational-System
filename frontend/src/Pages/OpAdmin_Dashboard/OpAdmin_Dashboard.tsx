@@ -5429,7 +5429,6 @@ export default function OpsAdminDashboard() {
     const fetchTasks = useCallback(async (silent: boolean = false) => {
         if (!silent) {
             setLoadingTasks(true);
-            setDashboardLoading(true);
         }
         try {
             const statusParam = taskTabRef.current === 'completed' ? `&status=3` : ``;
