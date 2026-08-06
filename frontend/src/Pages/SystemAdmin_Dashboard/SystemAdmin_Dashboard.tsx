@@ -3009,6 +3009,17 @@ export default function Dashboard() {
         }
     }, [activeTab, activityLogSearch, activityLogEmployee, activityLogType, activityLogDateFrom, activityLogDateTo]);
 
+    // Poll activity logs while the Activity Logs tab is open so new entries
+    // appear without reloading the page (silent refresh keeps the filters)
+    useEffect(() => {
+        if (activeTab !== 'activity_logs' && activeTab !== 'dashboard') return;
+        const interval = setInterval(() => {
+            fetchActivityLogs(activityLogPage, true);
+        }, 15000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, activityLogPage]);
+
     const fetchBackendRoles = async () => {
         try {
             const res = await api.get('/api/Role');

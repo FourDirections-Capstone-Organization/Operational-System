@@ -1704,6 +1704,25 @@ export default function EmployeeDashboard() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Re-fetch activity logs whenever the Activity Logs tab becomes active
+    useEffect(() => {
+        if (activeTab === 'activity_logs') {
+            fetchActivityLogs(1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
+
+    // Poll activity logs while the Activity Logs tab is open so new entries
+    // appear without reloading the page
+    useEffect(() => {
+        if (activeTab !== 'activity_logs') return;
+        const interval = setInterval(() => {
+            fetchActivityLogs(activityLogPage);
+        }, 15000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, activityLogPage]);
+
     useEffect(() => {
         const interval = setInterval(() => {
             fetchHeaderNotifications();
