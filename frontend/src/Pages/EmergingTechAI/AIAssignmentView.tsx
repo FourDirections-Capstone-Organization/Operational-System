@@ -1378,6 +1378,12 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                                     <span className="ai-summary-label">Priority</span>
                                     <span className="ai-summary-value">{form.priority || '—'}</span>
                                 </div>
+                                <div className="ai-summary-item" style={{ gridColumn: '1 / -1' }}>
+                                    <span className="ai-summary-label">Description</span>
+                                    <span className="ai-summary-value" style={{ whiteSpace: 'pre-wrap', fontWeight: 500 }}>
+                                        {form.taskDescription || '—'}
+                                    </span>
+                                </div>
                             </div>
 
                             {/* Step 10: Notification Preview */}
