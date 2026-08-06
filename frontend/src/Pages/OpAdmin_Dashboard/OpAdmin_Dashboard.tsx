@@ -1740,6 +1740,57 @@ const DashboardTab: React.FC<{
     const hasAnyFilter = wlFilters.employeeId || wlFilters.departmentId || wlFilters.assignmentScope || wlFilters.taskStatus || wlFilters.dateStart || wlFilters.dateEnd;
     const td = dashboardData;
 
+    // ── Workload Summary filters ─────────────────────────────────────────────
+    // The card's filters (department, scope, status, date range) are applied
+    // server-side via /api/Dashboard/metrics so the employee workload reflects
+    // the selected criteria. "Overdue" is not a task status, so it is applied
+    // client-side to the fetched rows (overdueTaskCount > 0).
+    const [filteredWorkloadData, setFilteredWorkloadData] = useState<any[] | null>(null);
+    const [wlLoading, setWlLoading] = useState(false);
+
+    useEffect(() => {
+        if (!hasAnyFilter) {
+            setFilteredWorkloadData(null);
+            setWlLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setWlLoading(true);
+        const params: Record<string, string> = {};
+        if (wlFilters.employeeId) params.employeeId = wlFilters.employeeId;
+        if (wlFilters.departmentId) params.departmentId = wlFilters.departmentId;
+        if (wlFilters.assignmentScope !== '') params.assignmentScope = wlFilters.assignmentScope;
+        if (wlFilters.dateStart) params.dateRangeStart = new Date(`${wlFilters.dateStart}T00:00:00`).toISOString();
+        if (wlFilters.dateEnd) params.dateRangeEnd = new Date(`${wlFilters.dateEnd}T23:59:59`).toISOString();
+        if (wlFilters.taskStatus && wlFilters.taskStatus !== 'Overdue') {
+            const statusMap: Record<string, string> = {
+                Assigned: '0', 'In Progress': '1', 'Pending Admin Review': '2', Completed: '3',
+            };
+            const statusNum = statusMap[wlFilters.taskStatus];
+            if (statusNum !== undefined) params.status = statusNum;
+        }
+
+        (async () => {
+            try {
+                const res = await axios.get(`/api/Dashboard/metrics?${new URLSearchParams(params).toString()}`, { timeout: 6000 });
+                const d = res.data?.data;
+                let rows: any[] = d?.employeeWorkload ?? [];
+                if (wlFilters.taskStatus === 'Overdue') {
+                    rows = rows.filter(w => (w.overdueTaskCount ?? 0) > 0);
+                }
+                if (!cancelled) setFilteredWorkloadData(rows);
+            } catch {
+                if (!cancelled) setFilteredWorkloadData([]);
+            } finally {
+                if (!cancelled) setWlLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wlFilters]);
+
     const totalActive = td?.totalActiveTasks ?? 0;
     const notStarted = td?.notStartedCount ?? 0;
     const inProgress = td?.inProgressCount ?? 0;
@@ -1751,9 +1802,8 @@ const DashboardTab: React.FC<{
     const workloads = td?.employeeWorkload ?? [];
     const teamWorkloads = td?.teamWorkload ?? [];
     const deptWorkloads = td?.departmentWorkload ?? [];
-    const filteredWorkloads = workloads
-        .filter(w => !wlFilters.employeeId || w.employeeId === wlFilters.employeeId)
-        .filter(w => !searchQuery || w.employeeName.toLowerCase().includes(searchQuery.toLowerCase()));
+    const filteredWorkloads = (filteredWorkloadData ?? workloads)
+        .filter(w => !searchQuery || (w.employeeName ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
     const avgPerEmployee = workloads.length > 0 ? (total / workloads.length).toFixed(1) : '0';
     const lastUpdated = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -2061,7 +2111,7 @@ const DashboardTab: React.FC<{
                             </div>
                         }
                         headers={['EMPLOYEE', 'TOTAL', 'ACTIVE', 'COMPLETED', 'OVERDUE', 'COMPLETION']}
-                        loading={false}
+                        loading={hasAnyFilter ? wlLoading : false}
                         emptyMessage="No workload data available."
                         totalRecords={filteredWorkloads.length}
                     >

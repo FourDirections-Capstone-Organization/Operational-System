@@ -31,7 +31,8 @@ public class DashboardController : ControllerBase
         [FromQuery] DateTime? dateRangeEnd = null,
         [FromQuery] Guid? employeeId = null,
         [FromQuery] Guid? departmentId = null,
-        [FromQuery] Models.Enums.TaskStatus? status = null)
+        [FromQuery] Models.Enums.TaskStatus? status = null,
+        [FromQuery] Models.Enums.AssignmentScope? assignmentScope = null)
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
@@ -55,7 +56,8 @@ public class DashboardController : ControllerBase
             DateRangeEnd = dateRangeEnd,
             EmployeeId = employeeId,
             DepartmentId = departmentId,
-            Status = status
+            Status = status,
+            AssignmentScope = assignmentScope
         };
 
         var result = await _dashboardService.GetDashboardMetricsAsync(

@@ -7,4 +7,5 @@ public class DashboardFilterDTO
     public Guid? EmployeeId { get; set; }
     public Guid? DepartmentId { get; set; }
     public Backend.Models.Enums.TaskStatus? Status { get; set; }
+    public Backend.Models.Enums.AssignmentScope? AssignmentScope { get; set; }
 }

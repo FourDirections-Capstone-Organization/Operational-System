@@ -53,6 +53,9 @@ public class DashboardService : IDashboardService
 
             if (filters.EmployeeId.HasValue)
                 query = query.Where(t => t.Assignments.Any(a => a.AssignedUserId == filters.EmployeeId.Value));
+
+            if (filters.AssignmentScope.HasValue)
+                query = query.Where(t => t.AssignmentScope == filters.AssignmentScope.Value);
         }
 
         var allTasks = await query.ToListAsync();
