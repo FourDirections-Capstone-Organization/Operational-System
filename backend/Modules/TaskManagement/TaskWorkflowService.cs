@@ -79,6 +79,54 @@ public class TaskWorkflowService : ITaskWorkflowService
             "Task status updated successfully");
     }
 
+    public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateProgressAsync(
+        Guid taskId, TaskProgressUpdateDTO dto, Guid userId, string? ipAddress = null)
+    {
+        var task = await _db.Tasks
+            .Include(t => t.Assignments)
+            .Include(t => t.CreatedBy)
+            .Include(t => t.AssignedDepartment)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+
+        if (task is null)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("Task not found");
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("User not found");
+
+        var assignment = task.Assignments.FirstOrDefault(a => a.AssignedUserId == userId);
+        if (assignment is null)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("You are not assigned to this task");
+
+        var newPercentage = Math.Clamp(dto.CompletionPercentage, 0, 100);
+        var oldPercentage = assignment.CompletionPercentage;
+        if (oldPercentage == newPercentage)
+            return ApiResponseDTO<TaskResponseDTO>.Success(
+                await MapToResponseDTOAsync(task, userId),
+                "Progress updated successfully");
+
+        assignment.CompletionPercentage = newPercentage;
+        task.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            userId,
+            AuditActionType.Update,
+            "Task",
+            taskId,
+            ipAddress,
+            $"Task progress percentage changed from {oldPercentage}% to {newPercentage}%",
+            "TaskManagement",
+            oldValue: $"{oldPercentage}%",
+            newValue: $"{newPercentage}%");
+
+        return ApiResponseDTO<TaskResponseDTO>.Success(
+            await MapToResponseDTOAsync(task, userId),
+            "Progress updated successfully");
+    }
+
     public async Task<ApiResponseDTO<TaskResponseDTO>> PushBackAsync(
         Guid taskId, PushBackDTO dto, Guid coordinatorId, string? ipAddress = null)
     {
@@ -498,7 +546,7 @@ public class TaskWorkflowService : ITaskWorkflowService
         return (true, null);
     }
 
-    private async Task<TaskResponseDTO> MapToResponseDTOAsync(Models.Task task)
+    private async Task<TaskResponseDTO> MapToResponseDTOAsync(Models.Task task, Guid? currentUserId = null)
     {
         await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
         await _db.Entry(task).Reference(t => t.AssignedDepartment).LoadAsync();
@@ -508,6 +556,10 @@ public class TaskWorkflowService : ITaskWorkflowService
         {
             await _db.Entry(assignment).Reference(a => a.AssignedUser).LoadAsync();
         }
+
+        var myAssignment = currentUserId.HasValue
+            ? task.Assignments.FirstOrDefault(a => a.AssignedUserId == currentUserId.Value)
+            : null;
 
         return new TaskResponseDTO
         {
@@ -544,8 +596,10 @@ public class TaskWorkflowService : ITaskWorkflowService
                         .Replace("  ", " ").Trim()
                     : "Unknown",
                 EmployeeNumber = a.AssignedUser?.EmployeeNumber ?? "",
-                Role = a.AssignedUser?.Role.ToString()
+                Role = a.AssignedUser?.Role.ToString(),
+                CompletionPercentage = a.CompletionPercentage,
             }).ToList(),
+            MyCompletionPercentage = myAssignment?.CompletionPercentage,
             AttachmentCount = task.Attachments?.Count ?? 0,
             CreatedAt = task.CreatedAt,
             UpdatedAt = task.UpdatedAt

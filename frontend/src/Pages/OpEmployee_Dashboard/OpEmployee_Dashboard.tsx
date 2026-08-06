@@ -111,6 +111,7 @@ interface TaskResponseDTO {
     taskStatus?: string;
     assignees?: { userId?: string; fullName?: string; employeeNumber?: string; role?: string }[];
     assignedEmployee?: string;
+    myCompletionPercentage?: number;
     createdByName?: string;
     createdByEmployee?: string;
     createdAt?: string;
@@ -170,7 +171,11 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
         deadline: dueAt ? dueAt.split('T')[0] : '',
         priority: priorityMap[priorityStr] ?? 'medium',
         status,
-        progress: defaultProgress[status],
+        // Use the employee's own reported completion percentage when the
+        // backend provides it; fall back to the status-derived default.
+        progress: dto.myCompletionPercentage !== undefined && dto.myCompletionPercentage !== null
+            ? dto.myCompletionPercentage
+            : defaultProgress[status],
         assignedBy: createdByEmployee,
         category: '',
         supportingEvidenceUrl: dto.supportingEvidenceUrl,
@@ -2041,6 +2046,10 @@ export default function EmployeeDashboard() {
         const newStatus = STATUS_TO_BACKEND[status] ?? 1;
         try {
             await api.patch(`/api/Task/${id}/status`, { newStatus, progressNotes: remarks.trim() || undefined });
+            // Persist the employee's reported completion percentage so
+            // Coordinators and Managers can see it in the Task Details.
+            const finalProgress = status === 'done' || status === 'completed' ? 100 : progress;
+            await api.patch(`/api/Task/${id}/progress`, { completionPercentage: finalProgress });
         } catch (err: any) {
             const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to update task progress.';
             throw new Error(msg);

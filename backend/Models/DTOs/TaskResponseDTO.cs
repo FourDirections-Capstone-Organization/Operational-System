@@ -29,6 +29,12 @@ public class TaskResponseDTO
     public DateTime? RevisedDeadline { get; set; }
     public DateTime? HeldAt { get; set; }
     public List<TaskAssigneeDTO> Assignees { get; set; } = new();
+    /// <summary>
+    /// The requesting user's own reported completion percentage for this task
+    /// (0 when not assigned). Lets an employee's own progress round-trip back
+    /// to their task list.
+    /// </summary>
+    public int? MyCompletionPercentage { get; set; }
     public int AttachmentCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -45,4 +51,8 @@ public class TaskAssigneeDTO
     public string? Department { get; set; }
     public Guid? DepartmentId { get; set; }
     public int Workload { get; set; }
+    /// <summary>
+    /// Percentage of the task completed as reported by this assignee (0-100).
+    /// </summary>
+    public int CompletionPercentage { get; set; }
 }

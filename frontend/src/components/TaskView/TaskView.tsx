@@ -29,6 +29,11 @@ export interface TaskAttachment {
     createdAt: string;
 }
 
+export interface TaskViewAssignee {
+    fullName: string;
+    completionPercentage?: number;
+}
+
 export interface TaskViewTask {
     taskId: string;
     taskTitle: string;
@@ -48,6 +53,8 @@ export interface TaskViewTask {
     assignmentScope?: number;
     assignedDepartmentId?: string;
     assignedDepartmentName?: string;
+    /** Each assignee plus the completion percentage the employee reported. */
+    assignees?: TaskViewAssignee[];
 }
 
 export interface Comment {
@@ -589,11 +596,46 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 {task.assignmentScope === 2 ? 'Department' : 'Assigned To'}
                             </span>
                             <div className="tv-assignee">
-                                {task.assignmentScope === 2 ? (
-                                    <span className="tv-assignee-name">
+                                {task.assignmentScope === 2 && (
+                                    <span className="tv-assignee-name" style={{ marginBottom: 4 }}>
                                         {task.assignedDepartmentName || '—'}
                                     </span>
-                                ) : (
+                                )}
+                                {task.assignees && task.assignees.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                                        {task.assignees.map((a, i) => {
+                                            const pct = a.completionPercentage ?? 0;
+                                            return (
+                                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <div className="tv-avatar tv-avatar-blue">
+                                                        {(a.fullName || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="tv-assignee-name" style={{ flex: 1 }}>
+                                                        {a.fullName || 'Unassigned'}
+                                                    </span>
+                                                    <span
+                                                        title="Completion percentage set by the employee"
+                                                        style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 700,
+                                                            padding: '1px 7px',
+                                                            borderRadius: 4,
+                                                            background: pct >= 100
+                                                                ? 'rgba(5,150,105,0.12)'
+                                                                : pct >= 50
+                                                                    ? 'rgba(0,169,157,0.12)'
+                                                                    : 'rgba(148,163,184,0.15)',
+                                                            color: pct >= 100 ? '#059669' : pct >= 50 ? '#00A99D' : 'var(--text-secondary)',
+                                                            whiteSpace: 'nowrap',
+                                                        }}
+                                                    >
+                                                        {pct}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : task.assignmentScope === 2 ? null : (
                                     <>
                                         <div className="tv-avatar tv-avatar-blue">
                                             {(task.assignedEmployee || '?').charAt(0).toUpperCase()}

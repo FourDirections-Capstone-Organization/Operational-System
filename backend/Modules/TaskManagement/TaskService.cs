@@ -139,7 +139,7 @@ public class TaskService : ITaskService
         }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
-            await MapToResponseDTOAsync(task),
+            await MapToResponseDTOAsync(task, creatorId),
             "Task created and assigned successfully");
         }
         catch (Exception ex)
@@ -253,7 +253,7 @@ public class TaskService : ITaskService
         var response = new List<TaskResponseDTO>();
         foreach (var task in tasks)
         {
-            response.Add(await MapToResponseDTOAsync(task));
+            response.Add(await MapToResponseDTOAsync(task, requestUserId));
         }
 
         var paginatedResult = new TaskListResponseDTO
@@ -299,7 +299,7 @@ public class TaskService : ITaskService
                 return ApiResponseDTO<TaskResponseDTO>.Failure("Access denied: task is not assigned to you");
         }
 
-        return ApiResponseDTO<TaskResponseDTO>.Success(await MapToResponseDTOAsync(task));
+        return ApiResponseDTO<TaskResponseDTO>.Success(await MapToResponseDTOAsync(task, requestUserId));
     }
 
     public async Task<ApiResponseDTO<TaskResponseDTO>> UpdateAsync(Guid id, UpdateTaskDTO dto, Guid requestUserId, string? ipAddress = null)
@@ -434,7 +434,7 @@ public class TaskService : ITaskService
         }
 
         return ApiResponseDTO<TaskResponseDTO>.Success(
-            await MapToResponseDTOAsync(task),
+            await MapToResponseDTOAsync(task, requestUserId),
             "Task updated successfully");
     }
 
@@ -592,7 +592,7 @@ public class TaskService : ITaskService
         }
     }
 
-    private async Task<TaskResponseDTO> MapToResponseDTOAsync(Models.Task task)
+    private async Task<TaskResponseDTO> MapToResponseDTOAsync(Models.Task task, Guid? currentUserId = null)
     {
         // Explicit Loading to Task
         await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
@@ -603,6 +603,10 @@ public class TaskService : ITaskService
         {
             await _db.Entry(assignment).Reference(a => a.AssignedUser).LoadAsync();
         }
+
+        var myAssignment = currentUserId.HasValue
+            ? task.Assignments.FirstOrDefault(a => a.AssignedUserId == currentUserId.Value)
+            : null;
 
         return new TaskResponseDTO
         {
@@ -632,20 +636,22 @@ public class TaskService : ITaskService
             PreviousStatus = task.PreviousStatus,
             RevisedDeadline = task.RevisedDeadline,
             HeldAt = task.HeldAt,
-            Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
-            {
-                UserId = a.AssignedUserId,
-                FullName = a.AssignedUser is not null
-                    ? $"{a.AssignedUser.FirstName} {a.AssignedUser.MiddleName} {a.AssignedUser.LastName} {a.AssignedUser.Suffix}"
-                        .Replace("  ", " ").Trim()
-                    : "Unknown",
-                EmployeeNumber = a.AssignedUser?.EmployeeNumber ?? "",
-                Role = a.AssignedUser?.Role.ToString(),
-                AvailabilityStatus = a.AssignedUser?.AvailabilityStatus.ToString(),
-                IsAvailable = a.AssignedUser?.AvailabilityStatus == AvailabilityStatus.Active,
-                Department = a.AssignedUser?.Department?.Name ?? ""
-            }).ToList(),
-            AttachmentCount = task.Attachments?.Count ?? 0,
+                Assignees = task.Assignments.Select(a => new TaskAssigneeDTO
+                {
+                    UserId = a.AssignedUserId,
+                    FullName = a.AssignedUser is not null
+                        ? $"{a.AssignedUser.FirstName} {a.AssignedUser.MiddleName} {a.AssignedUser.LastName} {a.AssignedUser.Suffix}"
+                            .Replace("  ", " ").Trim()
+                        : "Unknown",
+                    EmployeeNumber = a.AssignedUser?.EmployeeNumber ?? "",
+                    Role = a.AssignedUser?.Role.ToString(),
+                    AvailabilityStatus = a.AssignedUser?.AvailabilityStatus.ToString(),
+                    IsAvailable = a.AssignedUser?.AvailabilityStatus == AvailabilityStatus.Active,
+                    Department = a.AssignedUser?.Department?.Name ?? "",
+                    CompletionPercentage = a.CompletionPercentage,
+                }).ToList(),
+                MyCompletionPercentage = myAssignment?.CompletionPercentage,
+                AttachmentCount = task.Attachments?.Count ?? 0,
             CreatedAt = task.CreatedAt,
             UpdatedAt = task.UpdatedAt
         };

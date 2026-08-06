@@ -5973,6 +5973,10 @@ export default function OpsAdminDashboard() {
             assignedEmployee: dto.assignees?.length > 0 ? (dto.assignees[0].fullName ?? '') : '',
             createdByEmployee: dto.createdByName ?? '',
             assignedTo: dto.assignees?.length > 0 ? (dto.assignees[0].userId ?? '') : '',
+            assignees: (dto.assignees ?? []).map((a: any) => ({
+                fullName: a.fullName ?? a.FullName ?? '',
+                completionPercentage: a.completionPercentage ?? a.CompletionPercentage ?? 0,
+            })),
             createdAt: dto.createdAt ?? '',
             isConfidential: dto.isConfidential ?? false,
             isSLALocked: dto.isSLALocked ?? false,

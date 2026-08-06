@@ -146,6 +146,21 @@ public class TaskController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPatch("{id:guid}/progress")]
+    public async Task<IActionResult> UpdateProgress(Guid id, TaskProgressUpdateDTO dto)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var parsedUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        var ipAddress = GetIpAddress();
+        var result = await _workflowService.UpdateProgressAsync(id, dto, parsedUserId, ipAddress);
+        if (!result.IsSuccess)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
     [HttpPatch("{id:guid}/push-back")]
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> PushBack(Guid id, PushBackDTO dto)

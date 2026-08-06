@@ -2357,6 +2357,10 @@ export default function Dashboard() {
             assignedEmployee: firstAssignee?.fullName ?? t.assignedEmployee ?? 'Unassigned',
             createdByEmployee: t.createdByName ?? t.createdByEmployee ?? localStorage.getItem('employeeName') ?? 'Manager',
             assignedTo: firstAssignee?.userId ?? t.assignedTo ?? '',
+            assignees: assignees.map((a: any) => ({
+                fullName: a.fullName ?? a.FullName ?? '',
+                completionPercentage: a.completionPercentage ?? a.CompletionPercentage ?? 0,
+            })),
             createdAt: t.createdAt ?? new Date().toISOString(),
             isConfidential: t.isConfidential ?? false,
             classification: t.classification === 1 ? 'special' : 'routine',
