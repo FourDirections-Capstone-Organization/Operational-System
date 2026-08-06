@@ -109,6 +109,21 @@ const formatDateForInput = (d: Date): string => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+// User-friendly time picker options (every 30 minutes), displayed as "hh:mm AM/PM"
+// but stored as 24h "HH:mm" to match the deadline value format.
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+    const opts: { value: string; label: string }[] = [];
+    for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            const label = new Date(2000, 0, 1, h, m)
+                .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            opts.push({ value, label });
+        }
+    }
+    return opts;
+})();
+
 // ─── Component ────────────────────────────────────────────────────────────
 
 interface AIAssignmentViewProps {
@@ -874,15 +889,51 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
 
                         <div className="ai-field">
                             <label>Deadline <span className="ai-required">*</span></label>
-                            <input
-                                type="datetime-local"
-                                value={form.dueAt}
-                                onChange={slaLocked ? undefined : setFormField('dueAt')}
-                                min={minDateTime}
-                                readOnly={slaLocked}
-                                className={`${errors.dueAt ? 'ai-input-error' : ''}${slaLocked ? 'ai-sla-locked' : ''}`}
-                                style={slaLocked ? { background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 } : {}}
-                            />
+                            {slaLocked ? (
+                                <input
+                                    type="text"
+                                    value={form.dueAt ? new Date(form.dueAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                    readOnly
+                                    className="ai-input-sla-locked"
+                                    style={{ background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 }}
+                                />
+                            ) : (
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        type="date"
+                                        value={form.dueAt ? form.dueAt.slice(0, 10) : ''}
+                                        onChange={e => {
+                                            const d = e.target.value;
+                                            const time = form.dueAt ? form.dueAt.slice(11, 16) : '08:00';
+                                            setForm(prev => ({ ...prev, dueAt: d ? `${d}T${time}` : '' }));
+                                            setErrors(prev => ({ ...prev, dueAt: '' }));
+                                        }}
+                                        min={minDateTime.slice(0, 10)}
+                                        className={errors.dueAt ? 'ai-input-error' : ''}
+                                        style={{ flex: 1, minWidth: 0 }}
+                                    />
+                                    <select
+                                        value={form.dueAt ? form.dueAt.slice(11, 16) : ''}
+                                        onChange={e => {
+                                            const t = e.target.value;
+                                            const date = form.dueAt ? form.dueAt.slice(0, 10) : '';
+                                            setForm(prev => ({ ...prev, dueAt: date && t ? `${date}T${t}` : prev.dueAt }));
+                                            setErrors(prev => ({ ...prev, dueAt: '' }));
+                                        }}
+                                        className={errors.dueAt ? 'ai-input-error' : ''}
+                                        style={{
+                                            padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
+                                            fontSize: 13, background: 'var(--bg-card)', color: 'var(--text-primary)',
+                                            fontFamily: 'inherit', outline: 'none', cursor: 'pointer', minWidth: 118,
+                                        }}
+                                    >
+                                        <option value="">Select time</option>
+                                        {TIME_OPTIONS.map(o => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <FieldErr name="dueAt" />
                             {slaLocked && (
                                 <span className="ai-sla-badge">

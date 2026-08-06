@@ -982,15 +982,51 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             <label>
                                 Due Date <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span>
                             </label>
-                            <input
-                                type="datetime-local"
-                                value={form.dueAt}
-                                onChange={slaLocked ? undefined : set('dueAt')}
-                                min={minDateTime}
-                                readOnly={slaLocked}
-                                className={`${errors.dueAt ? 'input-error' : form.dueAt ? 'input-success' : ''}${slaLocked ? ' input-sla-locked' : ''}`}
-                                style={slaLocked ? { background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 } : {}}
-                            />
+                            {slaLocked ? (
+                                <input
+                                    type="text"
+                                    value={form.dueAt ? new Date(form.dueAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
+                                    readOnly
+                                    className="input-sla-locked"
+                                    style={{ background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 }}
+                                />
+                            ) : (
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        type="date"
+                                        value={form.dueAt ? form.dueAt.slice(0, 10) : ''}
+                                        onChange={e => {
+                                            const d = e.target.value;
+                                            const time = form.dueAt ? form.dueAt.slice(11, 16) : '08:00';
+                                            setForm(prev => ({ ...prev, dueAt: d ? `${d}T${time}` : '' }));
+                                            setErrors(prev => ({ ...prev, dueAt: '' }));
+                                        }}
+                                        min={minDateTime.slice(0, 10)}
+                                        className={`${errors.dueAt ? 'input-error' : form.dueAt ? 'input-success' : ''}`}
+                                        style={{ flex: 1, minWidth: 0 }}
+                                    />
+                                    <select
+                                        value={form.dueAt ? form.dueAt.slice(11, 16) : ''}
+                                        onChange={e => {
+                                            const t = e.target.value;
+                                            const date = form.dueAt ? form.dueAt.slice(0, 10) : '';
+                                            setForm(prev => ({ ...prev, dueAt: date && t ? `${date}T${t}` : prev.dueAt }));
+                                            setErrors(prev => ({ ...prev, dueAt: '' }));
+                                        }}
+                                        className={`${errors.dueAt ? 'input-error' : ''}`}
+                                        style={{
+                                            padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
+                                            fontSize: 13, background: 'var(--bg-card)', color: 'var(--text-primary)',
+                                            fontFamily: 'inherit', outline: 'none', cursor: 'pointer', minWidth: 118,
+                                        }}
+                                    >
+                                        <option value="">Select time</option>
+                                        {TIME_OPTIONS.map(o => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <FieldErr name="dueAt" />
                             {slaLocked && (
                                 <span style={{ fontSize: 11, color: '#7c1d1d', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -5068,6 +5104,21 @@ const snippet = (s?: string): string => {
     if (!s) return '';
     return s.length > 120 ? s.slice(0, 120) + '…' : s;
 };
+
+// User-friendly time picker options (every 30 minutes) — displayed as "hh:mm AM/PM",
+// stored as 24h "HH:mm" to match the deadline value format (YYYY-MM-DDTHH:mm).
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+    const opts: { value: string; label: string }[] = [];
+    for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            const label = new Date(2000, 0, 1, h, m)
+                .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            opts.push({ value, label });
+        }
+    }
+    return opts;
+})();
 
 const DuplicateWarningModal: React.FC<DuplicateWarningModalProps> = ({
     duplicates, details, newTaskTitle, newTaskDescription, onViewTask, onContinue, onCancel,
