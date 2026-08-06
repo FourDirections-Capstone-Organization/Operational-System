@@ -771,7 +771,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
     const [urgentPage, setUrgentPage] = useState(1);
 
     const URGENT_PAGE_SIZE = 6;
-    const PROGRESS_PAGE_SIZE = 9;
+    const PROGRESS_PAGE_SIZE = 8;
 
     const total = tasks.length;
     const done = tasks.filter(t => t.status === 'completed').length;
