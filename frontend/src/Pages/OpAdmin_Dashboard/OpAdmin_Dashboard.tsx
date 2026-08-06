@@ -3023,7 +3023,7 @@ const NotificationSettingsTab: React.FC = () => {
                     <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
                         Configure when the system warns assignees that a task deadline is approaching.
                         The system's scheduled check compares each active task's remaining time against this
-                        threshold and triggers a <strong>Deadline Approaching</strong> notification (FR-033) to
+                        threshold and triggers a <strong>Deadline Approaching</strong> notification to
                         the assignee once the remaining time reaches it. The change applies to all future checks
                         and is recorded in the Audit Log.
                     </p>
