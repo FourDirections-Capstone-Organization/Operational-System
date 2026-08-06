@@ -3049,6 +3049,7 @@ export default function Dashboard() {
                     accountStatus: e.isDeactivated ? 'Deactivated' : (e.isActive !== false ? 'Active' : 'Inactive'),
                     presenceStatus: e.presenceStatus ?? 'Offline',
                     email: e.email ?? '',
+                    departmentName: e.departmentName ?? e.DepartmentName ?? '',
                     attachments: e.attachments ?? [],
                 })).filter((e: RecentEmployee) => e.accountStatus !== 'Deleted' && e.employeeNumber !== currentEmployeeId);
                 setEmployees(list);

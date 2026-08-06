@@ -26,6 +26,7 @@ import {
     Truck,
     Activity,
     Lightbulb,
+    Building,
 } from 'lucide-react';
 import './EmployeeDetailPanel.css';
 import { useToast } from '../../../components/Toast/Toast';
@@ -69,6 +70,7 @@ interface RecentEmployee {
     role: string;
     accountStatus: string;
     email?: string;
+    departmentName?: string;
     attachments?: Array<{
         employeeAttachmentId: string;
         fileName: string;
@@ -834,6 +836,7 @@ export default function EmployeeDetailPanel({
                                     { label: 'Email', value: profile.email || '—', icon: Mail },
                                     { label: 'Contact Number', value: profile.contactNumber || '—', icon: Phone },
                                     { label: 'Role', value: toDisplayRole(profile.role), icon: Shield },
+                                    { label: 'Department', value: profile.departmentName || '—', icon: Building },
                                     { label: 'Account Status', value: profile.accountStatus, icon: CheckCircle2 },
                                 ].map(({ label, value, icon: Icon }) => (
                                     <div key={label} className="ed-info-row">
