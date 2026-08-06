@@ -864,6 +864,10 @@ interface MyTasksTabProps {
 
 const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, onUpdate, onRetry }) => {
     const [filter, setFilter] = useState<'all' | TaskStatus>('all');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState<string>('all');
+    const [page, setPage] = useState(1);
+    const PAGE_SIZE = 9;
 
     const filters: { key: 'all' | TaskStatus; label: string; count: number }[] = [
         { key: 'all', label: 'All', count: tasks.length },
@@ -873,11 +877,21 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
         { key: 'overdue', label: 'Overdue', count: tasks.filter(t => effectiveStatus(t) === 'overdue').length },
     ];
 
-    const filtered = filter === 'all'
+    const baseFiltered = filter === 'all'
         ? tasks
         : filter === 'overdue'
             ? tasks.filter(t => effectiveStatus(t) === 'overdue')
             : tasks.filter(t => t.status === filter);
+
+    const filtered = baseFiltered
+        .filter(t => priorityFilter === 'all' || t.priority === priorityFilter)
+        .filter(t => !searchQuery.trim() || t.name.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+
+    // Reset to the first page whenever any filter or the search changes
+    useEffect(() => { setPage(1); }, [filter, searchQuery, priorityFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     if (loading) {
         return (
@@ -921,14 +935,57 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
                     </button>
                 ))}
             </div>
+
+            {/* Search by title + urgency filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 340 }}>
+                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                    <input
+                        type="text"
+                        placeholder="Search by task title…"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        style={{
+                            width: '100%', height: 36, borderRadius: 8,
+                            border: '1px solid var(--border)', padding: '0 10px 0 32px',
+                            fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)',
+                            fontFamily: 'inherit', outline: 'none',
+                        }}
+                    />
+                </div>
+                <select
+                    value={priorityFilter}
+                    onChange={e => setPriorityFilter(e.target.value)}
+                    style={{
+                        height: 36, borderRadius: 8, border: '1px solid var(--border)',
+                        padding: '0 10px', fontSize: 12, background: 'var(--bg-card)',
+                        color: 'var(--text-primary)', fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
+                    }}
+                >
+                    <option value="all">All Urgency</option>
+                    <option value="Urgent">Urgent</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filtered.length} task{filtered.length === 1 ? '' : 's'}</span>
+            </div>
+
             {filtered.length === 0 ? (
                 <div className="card">
-                    <div className="empty-state"><ClipboardList size={22} /><p>No tasks in this category</p></div>
+                    <div className="empty-state"><ClipboardList size={22} /><p>No tasks match your filters</p></div>
                 </div>
             ) : (
-                <div className="task-grid">
-                    {filtered.map(t => <TaskCard key={t.id} task={t} onView={onView} onUpdate={onUpdate} />)}
-                </div>
+                <>
+                    <div className="task-grid">
+                        {paged.map(t => <TaskCard key={t.id} task={t} onView={onView} onUpdate={onUpdate} />)}
+                    </div>
+                    {totalPages > 1 && (
+                        <div style={{ marginTop: 16 }}>
+                            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
