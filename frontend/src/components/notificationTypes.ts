@@ -18,6 +18,8 @@ export interface NotificationItem {
   description: string;
   /** Human-readable relative or absolute time, e.g. "2m ago" or "10:32 AM" */
   timestamp: string;
+  /** Raw sortable timestamp (ISO string) for ordering the panel newest-first. */
+  createdAt?: string;
   /** Group header this item belongs to, e.g. "Today", "Yesterday", "March 3, 2025" */
   date: string;
   read: boolean;

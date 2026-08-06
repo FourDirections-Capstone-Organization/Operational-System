@@ -211,12 +211,17 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     return result;
   }, [roleRelevantNotifications, filter]);
 
-  // Priority severity sorting: unread critical alerts first
+  // Order: newest first, so recent notifications appear at the top. Items that
+  // have no sortable timestamp keep their incoming order; unread critical
+  // alerts break ties (same timestamp) so they still surface first.
   const sortedFiltered = useMemo(() => {
     return [...filtered].sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime; // newest first
       const aCriticalUnread = a.type === 'alert' && !a.read ? 1 : 0;
       const bCriticalUnread = b.type === 'alert' && !b.read ? 1 : 0;
-      return bCriticalUnread - aCriticalUnread; // sorts unread criticals first
+      return bCriticalUnread - aCriticalUnread; // unread criticals first on ties
     });
   }, [filtered]);
 
