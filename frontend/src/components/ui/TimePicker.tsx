@@ -2,7 +2,6 @@ import React from 'react';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DesktopTimePicker } from '@mui/x-date-pickers/DesktopTimePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import dayjs, { Dayjs } from 'dayjs';
 
@@ -20,9 +19,6 @@ const theme = createTheme({
         primary: { main: '#00A99D' },
     },
     shape: { borderRadius: 8 },
-    // Use the page's font (inherited from the app) instead of MUI's default
-    // Roboto so the picker text matches the rest of the form.
-    typography: { fontFamily: 'inherit', fontSize: 13 },
     components: {
         MuiOutlinedInput: {
             styleOverrides: {
@@ -35,8 +31,6 @@ const theme = createTheme({
                 input: {
                     padding: '0 12px',
                     height: 'auto',
-                    fontFamily: 'inherit',
-                    fontSize: '0.85rem',
                 },
                 notchedOutline: {
                     borderColor: '#E2E8F0',
@@ -45,18 +39,9 @@ const theme = createTheme({
         },
         MuiInputBase: {
             styleOverrides: {
-                root: { fontFamily: 'inherit', fontSize: '0.85rem' },
-                input: { fontFamily: 'inherit', fontSize: '0.85rem' },
-            },
-        },
-        MuiTypography: {
-            styleOverrides: {
-                root: { fontFamily: 'inherit' },
-            },
-        },
-        MuiButton: {
-            styleOverrides: {
-                root: { fontFamily: 'inherit', fontSize: '0.85rem', textTransform: 'none' },
+                input: {
+                    fontFamily: 'inherit',
+                },
             },
         },
     },
@@ -76,43 +61,24 @@ const TimePicker: React.FC<TimePickerProps> = ({ value, onChange, disabled }) =>
     };
 
     return (
-        // Fixed compact width so the adjacent date picker keeps the remaining
-        // space instead of being squeezed by the time field.
-        <div style={{ flex: '0 0 auto', width: 142 }}>
-            <ThemeProvider theme={theme}>
-                <LocalizationProvider dateAdapter={AdapterDayjs}>
-                    <DesktopTimePicker
-                        value={dayjsValue}
-                        onChange={handleChange}
-                        disabled={disabled}
-                        ampm
-                        views={['hours', 'minutes']}
-                        // Force the analog clock dial. v9's DesktopTimePicker
-                        // defaults to a digital multi-column list, not the
-                        // analog dial this component was built around.
-                        viewRenderers={{
-                            hours: renderTimeViewClock,
-                            minutes: renderTimeViewClock,
-                        }}
-                        // Commit and close as soon as the time is picked so the
-                        // selection is visibly applied instead of the popup
-                        // lingering open (desktop pickers default to false).
-                        closeOnSelect
-                        slotProps={{
-                            textField: {
-                                size: 'small',
-                                sx: { width: '100%' },
-                            },
-                            openPickerButton: { size: 'small' },
-                            // Keep the popup above the app's fixed overlays
-                            // (confirmation modals, dropdown menus) so clicks
-                            // always land on the picker.
-                            popper: { sx: { zIndex: 9999 } },
-                        }}
-                    />
-                </LocalizationProvider>
-            </ThemeProvider>
-        </div>
+        <ThemeProvider theme={theme}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DesktopTimePicker
+                    value={dayjsValue}
+                    onChange={handleChange}
+                    disabled={disabled}
+                    ampm
+                    views={['hours', 'minutes']}
+                    slotProps={{
+                        textField: {
+                            size: 'small',
+                            sx: { width: '100%', minWidth: 118 },
+                        },
+                        openPickerButton: { size: 'small' },
+                    }}
+                />
+            </LocalizationProvider>
+        </ThemeProvider>
     );
 };
 
