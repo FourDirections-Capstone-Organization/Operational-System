@@ -460,9 +460,6 @@ namespace Backend.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -476,8 +473,6 @@ namespace Backend.Migrations
                     b.HasIndex("AssignedDepartmentId");
 
                     b.HasIndex("CreatedById");
-
-                    b.HasIndex("TeamId");
 
                     b.ToTable("Tasks");
                 });
@@ -706,73 +701,6 @@ namespace Backend.Migrations
                     b.HasIndex("DefaultDepartmentId");
 
                     b.ToTable("TaskTemplates");
-                });
-
-            modelBuilder.Entity("Backend.Models.Team", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedById")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("DepartmentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("Teams");
-                });
-
-            modelBuilder.Entity("Backend.Models.TeamMember", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("JoinedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TeamId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TeamId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("TeamMembers");
                 });
 
             modelBuilder.Entity("Backend.Models.User", b =>
@@ -1018,16 +946,9 @@ namespace Backend.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Backend.Models.Team", "Team")
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("AssignedDepartment");
 
                     b.Navigation("CreatedBy");
-
-                    b.Navigation("Team");
                 });
 
             modelBuilder.Entity("Backend.Models.TaskAssignment", b =>
@@ -1123,43 +1044,6 @@ namespace Backend.Migrations
                     b.Navigation("DefaultDepartment");
                 });
 
-            modelBuilder.Entity("Backend.Models.Team", b =>
-                {
-                    b.HasOne("Backend.Models.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Models.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("Department");
-                });
-
-            modelBuilder.Entity("Backend.Models.TeamMember", b =>
-                {
-                    b.HasOne("Backend.Models.Team", "Team")
-                        .WithMany("Members")
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Team");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("Backend.Models.User", b =>
                 {
                     b.HasOne("Backend.Models.Department", "Department")
@@ -1199,11 +1083,6 @@ namespace Backend.Migrations
             modelBuilder.Entity("Backend.Models.TaskComment", b =>
                 {
                     b.Navigation("Attachments");
-                });
-
-            modelBuilder.Entity("Backend.Models.Team", b =>
-                {
-                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

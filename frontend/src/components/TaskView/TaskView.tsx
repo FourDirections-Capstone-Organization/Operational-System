@@ -55,8 +55,6 @@ export interface TaskViewTask {
     assignedDepartmentName?: string;
     /** Non-primary-key display reference (e.g. "ABC12345"); falls back to a short id. */
     taskReferenceNumber?: string;
-    /** Team name when the task was assigned to a Team scope. */
-    teamName?: string;
     /** Each assignee plus the completion percentage the employee reported. */
     assignees?: TaskViewAssignee[];
 }
@@ -594,11 +592,6 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 {task.assignmentScope === 2 && (
                                     <span className="tv-assignee-name" style={{ marginBottom: 4 }}>
                                         {task.assignedDepartmentName || '—'}
-                                    </span>
-                                )}
-                                {task.assignmentScope === 1 && task.teamName && (
-                                    <span className="tv-assignee-name" style={{ marginBottom: 4 }}>
-                                        Team: {task.teamName}
                                     </span>
                                 )}
                                 {task.assignees && task.assignees.length > 0 ? (

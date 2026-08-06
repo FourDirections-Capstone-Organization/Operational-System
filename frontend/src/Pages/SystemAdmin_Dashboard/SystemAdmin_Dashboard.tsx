@@ -2376,7 +2376,6 @@ export default function Dashboard() {
             assignedDepartmentId: t.assignedDepartmentId ?? t.AssignedDepartmentId ?? '',
             assignedDepartmentName: t.assignedDepartmentName ?? t.AssignedDepartmentName ?? '',
             taskReferenceNumber: t.taskReferenceNumber ?? t.referenceNumber ?? '',
-            teamName: t.teamName ?? t.TeamName ?? '',
         };
     };
 

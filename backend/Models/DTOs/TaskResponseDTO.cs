@@ -19,8 +19,6 @@ public class TaskResponseDTO
     public string? CreatedByName { get; set; }
     public Guid? AssignedDepartmentId { get; set; }
     public string? AssignedDepartmentName { get; set; }
-    public Guid? TeamId { get; set; }
-    public string? TeamName { get; set; }
     public string? ProgressNotes { get; set; }
     public string? ReviewRemarks { get; set; }
     public string? PushBackComment { get; set; }

@@ -493,7 +493,6 @@ public class TaskWorkflowService : ITaskWorkflowService
     {
         await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
         await _db.Entry(task).Reference(t => t.AssignedDepartment).LoadAsync();
-        await _db.Entry(task).Reference(t => t.Team).LoadAsync();
         await _db.Entry(task).Collection(t => t.Assignments).LoadAsync();
 
         foreach (var assignment in task.Assignments)
@@ -523,8 +522,6 @@ public class TaskWorkflowService : ITaskWorkflowService
                 : null,
             AssignedDepartmentId = task.AssignedDepartmentId,
             AssignedDepartmentName = task.AssignedDepartment?.Name,
-            TeamId = task.TeamId,
-            TeamName = task.Team?.Name,
             ProgressNotes = task.ProgressNotes,
             ReviewRemarks = task.ReviewRemarks,
             PushBackComment = task.PushBackComment,

@@ -38,12 +38,6 @@ public class Task
     public Guid? AssignedDepartmentId { get; set; }
     public Department? AssignedDepartment { get; set; }
 
-    /// <summary>
-    /// When a task is assigned to a Team scope, the team it belongs to.
-    /// </summary>
-    public Guid? TeamId { get; set; }
-    public Team? Team { get; set; }
-
     public string? HoldReason { get; set; }
     public string? CancellationReason { get; set; }
     public string? ProgressNotes { get; set; }
