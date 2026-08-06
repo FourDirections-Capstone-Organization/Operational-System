@@ -95,6 +95,10 @@ public class TaskWorkflowService : ITaskWorkflowService
         if (user is null)
             return ApiResponseDTO<TaskResponseDTO>.Failure("User not found");
 
+        // Tasks on hold are read-only for the assignee until resumed.
+        if (task.Status == Models.Enums.TaskStatus.OnHold)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("On Hold tasks cannot be updated until they are resumed");
+
         var assignment = task.Assignments.FirstOrDefault(a => a.AssignedUserId == userId);
         if (assignment is null)
             return ApiResponseDTO<TaskResponseDTO>.Failure("You are not assigned to this task");
@@ -307,8 +311,8 @@ public class TaskWorkflowService : ITaskWorkflowService
         if (coordinator is null)
             return ApiResponseDTO<TaskResponseDTO>.Failure("User not found");
 
-        if (coordinator.Role != UserRole.Coordinator)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators can place tasks on hold");
+        if (coordinator.Role != UserRole.Coordinator && coordinator.Role != UserRole.Manager)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators and Managers can place tasks on hold");
 
         if (task.Status != Models.Enums.TaskStatus.NotStarted && task.Status != Models.Enums.TaskStatus.InProgress)
             return ApiResponseDTO<TaskResponseDTO>.Failure(
@@ -369,8 +373,8 @@ public class TaskWorkflowService : ITaskWorkflowService
         if (coordinator is null)
             return ApiResponseDTO<TaskResponseDTO>.Failure("User not found");
 
-        if (coordinator.Role != UserRole.Coordinator)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators can resume tasks");
+        if (coordinator.Role != UserRole.Coordinator && coordinator.Role != UserRole.Manager)
+            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators and Managers can resume tasks");
 
         if (task.Status != Models.Enums.TaskStatus.OnHold)
             return ApiResponseDTO<TaskResponseDTO>.Failure(

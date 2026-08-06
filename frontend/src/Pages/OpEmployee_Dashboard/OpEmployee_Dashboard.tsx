@@ -36,6 +36,7 @@ import {
     Paperclip,
     Download,
     Lightbulb,
+    PauseCircle,
 } from 'lucide-react';
 import './OpEmployee_Dashboard.css';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
@@ -72,7 +73,7 @@ const getAccountIdFromToken = (): string => {
 // --- Types --------------------------------------------------------------------
 
 type Priority = 'high' | 'medium' | 'low';
-type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'overdue';
+type TaskStatus = 'pending' | 'assigned' | 'in-progress' | 'pending-review' | 'done' | 'completed' | 'on-hold' | 'overdue';
 type NavTab = 'dashboard' | 'my-tasks' | 'task-progress-review' | 'profile' | 'activity_logs' | 'announcements' | 'notifications';
 
 interface Task {
@@ -91,6 +92,7 @@ interface Task {
     isConfidential?: boolean;
     pushBackComment?: string;
     reviewRemarks?: string;
+    holdReason?: string;
     isApproved?: boolean;
 }
 
@@ -120,6 +122,7 @@ interface TaskResponseDTO {
     isConfidential?: boolean;
     pushBackComment?: string;
     reviewRemarks?: string;
+    holdReason?: string;
     isApproved?: boolean;
 }
 
@@ -159,6 +162,7 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
     const statusMap: Record<string, TaskStatus> = {
         Draft: 'pending', Pending: 'pending', Assigned: 'assigned',
         'In Progress': 'in-progress', 'Pending Admin Review': 'pending-review', Done: 'done', Completed: 'completed',
+        'On Hold': 'on-hold',
     };
     const status: TaskStatus = statusMap[statusStr] ?? 'pending';
     const defaultProgress: Record<TaskStatus, number> = {
@@ -183,6 +187,7 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
         isConfidential: dto.isConfidential ?? false,
         pushBackComment: dto.pushBackComment,
         reviewRemarks: dto.reviewRemarks,
+        holdReason: dto.holdReason,
         isApproved: dto.isApproved,
     };
 };
@@ -240,7 +245,7 @@ const renderChanges = (oldValue?: string | null, newValue?: string | null) => {
 };
 
 const isEffectivelyOverdue = (t: Task): boolean =>
-    t.status !== 'completed' && t.status !== 'done' && t.status !== 'pending-review' && t.status !== 'assigned' && !!t.deadline && new Date(t.deadline + 'T00:00:00') < new Date();
+    t.status !== 'completed' && t.status !== 'done' && t.status !== 'pending-review' && t.status !== 'assigned' && t.status !== 'on-hold' && !!t.deadline && new Date(t.deadline + 'T00:00:00') < new Date();
 
 const effectiveStatus = (t: Task): TaskStatus =>
     isEffectivelyOverdue(t) ? 'overdue' : t.status;
@@ -275,6 +280,7 @@ const statusMeta: Record<string, { label: string; cls: string; icon: React.React
     'pending-review': { label: 'Pending Review', cls: 'badge-purple', icon: <Eye size={11} /> },
     done: { label: 'Done', cls: 'badge-blue', icon: <CheckCircle2 size={11} /> },
     completed: { label: 'Completed', cls: 'badge-green', icon: <CheckCircle2 size={11} /> },
+    'on-hold': { label: 'On Hold', cls: 'badge-gray', icon: <PauseCircle size={11} /> },
     overdue: { label: 'Overdue', cls: 'badge-red', icon: <AlertCircle size={11} /> },
 };
 
@@ -282,6 +288,7 @@ const FSM_EMPLOYEE_TRANSITIONS: Record<string, TaskStatus[]> = {
     pending: ['in-progress'],
     assigned: ['in-progress'],
     'in-progress': ['pending-review'],
+    'on-hold': [],
     done: [],
     completed: [],
 };
@@ -399,7 +406,7 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
             footer={
                 <div style={{ display: 'flex', gap: 8, width: '100%', justifyContent: 'flex-end' }}>
                     <button className="btn" onClick={onClose}>Close</button>
-                    {task.status !== 'completed' && task.status !== 'done' && (
+                    {task.status !== 'completed' && task.status !== 'done' && task.status !== 'on-hold' && (
                         <button className="btn btn-primary" onClick={onUpdate}>
                             <Pencil size={13} /> Update Progress
                         </button>
@@ -439,6 +446,26 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
             <div className="tc-bar" style={{ height: 8, marginBottom: 12 }}>
                 <div className={`tc-fill ${pm.bar}`} style={{ width: `${task.progress}%` }} />
             </div>
+
+            {task.status === 'on-hold' && (
+                <div style={{
+                    marginBottom: 12, padding: '10px 12px', borderRadius: 8,
+                    background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)',
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                }}>
+                    <PauseCircle size={14} style={{ color: '#D97706', marginTop: 1, flexShrink: 0 }} />
+                    <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#D97706', marginBottom: 2 }}>
+                            Task On Hold — read-only
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            {task.holdReason
+                                ? <>Reason: {task.holdReason}</>
+                                : 'This task has been paused by the assigner and cannot be updated until it is resumed.'}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Task Attachments (view-only for employees) */}
             <div style={{ marginBottom: 12 }}>
@@ -820,7 +847,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                                 <span className={`badge ${statusMeta[effectiveStatus(t)].cls}`}>
                                     {statusMeta[effectiveStatus(t)].label}
                                 </span>
-                                {t.status !== 'completed' && (
+                                {t.status !== 'completed' && t.status !== 'on-hold' && (
                                     <button
                                         className="btn btn-xs btn-primary"
                                         onClick={e => { e.stopPropagation(); onUpdate(t.id); }}
@@ -1667,7 +1694,7 @@ const TaskProgressReviewTab: React.FC<{
                     <span className={`badge ${sm.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                         {sm.icon}{sm.label}
                     </span>
-                    {t.status !== 'completed' && (
+                    {t.status !== 'completed' && t.status !== 'on-hold' && (
                         <button
                             className="btn btn-xs btn-primary"
                             onClick={e => { e.stopPropagation(); onUpdate(t.id); }}

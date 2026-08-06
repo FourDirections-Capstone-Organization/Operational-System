@@ -499,7 +499,7 @@ const TaskView: React.FC<TaskViewProps> = ({
                                 <RotateCcw size={13} /> Push Back
                             </button>
                         )}
-                        {isCoordinator && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
+                        {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
                             <button className="tv-btn tv-btn-outline" onClick={() => setShowHold(true)}>
                                 <Clock size={13} /> Hold
                             </button>
@@ -917,6 +917,9 @@ const TaskView: React.FC<TaskViewProps> = ({
                                         setLocalStatus('On Hold');
                                         setShowHold(false);
                                         setHoldReason('');
+                                        // Propagate to the parent so the task list
+                                        // reflects On Hold right away.
+                                        onUpdate?.({ ...task, taskStatus: 'On Hold' });
                                     } catch (err: any) {
                                         console.error(err);
                                     } finally { setHolding(false); }
@@ -959,8 +962,11 @@ const TaskView: React.FC<TaskViewProps> = ({
                                     setResuming(true);
                                     try {
                                         await api.patch(`/api/Task/${task.taskId}/resume`, { revisedDeadline: new Date(revisedDeadline).toISOString() });
-                                        setLocalStatus(task.taskStatus === 'On Hold' ? task.taskStatus : 'In Progress');
+                                        // The backend restores the status held before the hold
+                                        // (Not Started or In Progress); In Progress is the common case.
+                                        setLocalStatus('In Progress');
                                         setShowResume(false);
+                                        onUpdate?.({ ...task, taskStatus: 'In Progress' });
                                     } catch (err: any) {
                                         console.error(err);
                                     } finally { setResuming(false); }
@@ -1004,6 +1010,7 @@ const TaskView: React.FC<TaskViewProps> = ({
                                                                 setLocalStatus('Cancelled');
                                                                 setShowCancel(false);
                                                                 setCancelReason('');
+                                                                onUpdate?.({ ...task, taskStatus: 'Cancelled' });
                                                             } catch (err: any) {
                                                                 const msg = err?.response?.data?.message || err?.response?.data?.Message || 'Failed to cancel task.';
                                                                 alert(msg);
