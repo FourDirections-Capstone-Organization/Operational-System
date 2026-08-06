@@ -19,6 +19,9 @@ const theme = createTheme({
         primary: { main: '#00A99D' },
     },
     shape: { borderRadius: 8 },
+    // Use the page's font (inherited from the app) instead of MUI's default
+    // Roboto so the picker text matches the rest of the form.
+    typography: { fontFamily: 'inherit', fontSize: 13 },
     components: {
         MuiOutlinedInput: {
             styleOverrides: {
@@ -31,6 +34,8 @@ const theme = createTheme({
                 input: {
                     padding: '0 12px',
                     height: 'auto',
+                    fontFamily: 'inherit',
+                    fontSize: '0.85rem',
                 },
                 notchedOutline: {
                     borderColor: '#E2E8F0',
@@ -39,9 +44,18 @@ const theme = createTheme({
         },
         MuiInputBase: {
             styleOverrides: {
-                input: {
-                    fontFamily: 'inherit',
-                },
+                root: { fontFamily: 'inherit', fontSize: '0.85rem' },
+                input: { fontFamily: 'inherit', fontSize: '0.85rem' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: { fontFamily: 'inherit' },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { fontFamily: 'inherit', fontSize: '0.85rem', textTransform: 'none' },
             },
         },
     },
