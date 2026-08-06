@@ -318,7 +318,12 @@ public class AuthService : IAuthService
             IsEmailVerified = user.IsEmailVerified,
             IsPasswordChanged = user.IsPasswordChanged,
             CreatedAt = user.CreatedAt,
-            FullName = GetFullName(user)
+            FullName = GetFullName(user),
+            // Online while the session is active (kept fresh by requests/heartbeat)
+            PresenceStatus = user.LastActivityAt.HasValue
+                && (DateTime.UtcNow - user.LastActivityAt.Value).TotalMinutes <= 15
+                ? "Online"
+                : "Offline"
         };
 
         return ApiResponseDTO<UserResponseDTO>.Success(response);
