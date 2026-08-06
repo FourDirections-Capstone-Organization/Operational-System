@@ -963,10 +963,9 @@ const MyTasksTab: React.FC<MyTasksTabProps> = ({ tasks, loading, error, onView, 
                     }}
                 >
                     <option value="all">All Urgency</option>
-                    <option value="Urgent">Urgent</option>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
                 </select>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filtered.length} task{filtered.length === 1 ? '' : 's'}</span>
             </div>
