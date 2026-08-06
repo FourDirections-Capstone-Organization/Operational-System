@@ -9,7 +9,6 @@ import './AIAssignmentView.css';
 import api from '../../api';
 import { useToast } from '../../components/Toast/Toast';
 import FormModal from '../../components/FormModal/FormModal';
-import TimePicker from '../../components/ui/TimePicker';
 import { aiService, SlaRiskResponseDTO } from '../../services/aiService';
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -875,40 +874,15 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
 
                         <div className="ai-field">
                             <label>Deadline <span className="ai-required">*</span></label>
-                            {slaLocked ? (
-                                <input
-                                    type="text"
-                                    value={form.dueAt ? new Date(form.dueAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : ''}
-                                    readOnly
-                                    className="ai-input-sla-locked"
-                                    style={{ background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 }}
-                                />
-                            ) : (
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input
-                                        type="date"
-                                        value={form.dueAt ? form.dueAt.slice(0, 10) : ''}
-                                        onChange={e => {
-                                            const d = e.target.value;
-                                            const time = form.dueAt ? form.dueAt.slice(11, 16) : '08:00';
-                                            setForm(prev => ({ ...prev, dueAt: d ? `${d}T${time}` : '' }));
-                                            setErrors(prev => ({ ...prev, dueAt: '' }));
-                                        }}
-                                        min={minDateTime.slice(0, 10)}
-                                        className={errors.dueAt ? 'ai-input-error' : ''}
-                                        style={{ flex: 1, minWidth: 0 }}
-                                    />
-                                    <TimePicker
-                                        value={form.dueAt ? form.dueAt.slice(11, 16) : ''}
-                                        onChange={t => {
-                                            const date = form.dueAt ? form.dueAt.slice(0, 10) : '';
-                                            setForm(prev => ({ ...prev, dueAt: date && t ? `${date}T${t}` : prev.dueAt }));
-                                            setErrors(prev => ({ ...prev, dueAt: '' }));
-                                        }}
-                                        disabled={slaLocked}
-                                    />
-                                </div>
-                            )}
+                            <input
+                                type="datetime-local"
+                                value={form.dueAt}
+                                onChange={slaLocked ? undefined : setFormField('dueAt')}
+                                min={minDateTime}
+                                readOnly={slaLocked}
+                                className={`${errors.dueAt ? 'ai-input-error' : ''}${slaLocked ? 'ai-sla-locked' : ''}`}
+                                style={slaLocked ? { background: '#fef2f2', cursor: 'not-allowed', opacity: 0.85 } : {}}
+                            />
                             <FieldErr name="dueAt" />
                             {slaLocked && (
                                 <span className="ai-sla-badge">

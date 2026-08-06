@@ -68,7 +68,6 @@ import TaskManager from '../../components/TaskManager/TaskManager';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 import TaskView, { TaskViewTask } from '../../components/TaskView/TaskView';
 import api from '../../api';
-import TimePicker from '../../components/ui/TimePicker';
 import BiomarkerDashboard from '../EmergingTechAI/BiomarkerDashboard';
 import AIAssignmentView from '../EmergingTechAI/AIAssignmentView';
 
@@ -3640,29 +3639,15 @@ export default function Dashboard() {
                                         </span>
                                     )}
                                 </label>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input
-                                        type="date"
-                                        className="fm-input"
-                                        value={newTaskForm.deadline ? newTaskForm.deadline.slice(0, 10) : ''}
-                                        onChange={e => {
-                                            const d = e.target.value;
-                                            const time = newTaskForm.deadline ? newTaskForm.deadline.slice(11, 16) : '08:00';
-                                            setNewTaskForm(p => ({ ...p, deadline: d ? `${d}T${time}` : '' }));
-                                        }}
-                                        disabled={newTaskForm.priority === 'Urgent'}
-                                        min={new Date().toISOString().slice(0, 10)}
-                                        style={{ flex: 1, minWidth: 0, ...(newTaskForm.priority === 'Urgent' ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
-                                    />
-                                    <TimePicker
-                                        value={newTaskForm.deadline ? newTaskForm.deadline.slice(11, 16) : ''}
-                                        onChange={t => {
-                                            const date = newTaskForm.deadline ? newTaskForm.deadline.slice(0, 10) : '';
-                                            setNewTaskForm(p => ({ ...p, deadline: date && t ? `${date}T${t}` : p.deadline }));
-                                        }}
-                                        disabled={newTaskForm.priority === 'Urgent'}
-                                    />
-                                </div>
+                                <input
+                                    type="datetime-local"
+                                    className="fm-input"
+                                    value={newTaskForm.deadline}
+                                    onChange={e => setNewTaskForm(p => ({ ...p, deadline: e.target.value }))}
+                                    disabled={newTaskForm.priority === 'Urgent'}
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    style={newTaskForm.priority === 'Urgent' ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}}
+                                />
                                 {newTaskErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <AlertCircle size={11} />{newTaskErrors.deadline}
@@ -4026,29 +4011,15 @@ export default function Dashboard() {
                                         </span>
                                     )}
                                 </label>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input
-                                        type="date"
-                                        className="fm-input"
-                                        value={editForm.deadline ? editForm.deadline.slice(0, 10) : ''}
-                                        onChange={e => {
-                                            const d = e.target.value;
-                                            const time = editForm.deadline ? editForm.deadline.slice(11, 16) : '08:00';
-                                            setEditForm(p => ({ ...p, deadline: d ? `${d}T${time}` : '' }));
-                                        }}
-                                        disabled={editForm.priority === 'Urgent' || (tmEditingTask?.isSLALocked ?? false)}
-                                        min={new Date().toISOString().slice(0, 10)}
-                                        style={{ flex: 1, minWidth: 0, ...((editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}) }}
-                                    />
-                                    <TimePicker
-                                        value={editForm.deadline ? editForm.deadline.slice(11, 16) : ''}
-                                        onChange={t => {
-                                            const date = editForm.deadline ? editForm.deadline.slice(0, 10) : '';
-                                            setEditForm(p => ({ ...p, deadline: date && t ? `${date}T${t}` : p.deadline }));
-                                        }}
-                                        disabled={editForm.priority === 'Urgent' || (tmEditingTask?.isSLALocked ?? false)}
-                                    />
-                                </div>
+                                <input
+                                    type="datetime-local"
+                                    className="fm-input"
+                                    value={editForm.deadline}
+                                    onChange={e => setEditForm(p => ({ ...p, deadline: e.target.value }))}
+                                    disabled={editForm.priority === 'Urgent' || (tmEditingTask?.isSLALocked ?? false)}
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    style={(editForm.priority === 'Urgent' || tmEditingTask?.isSLALocked) ? { background: '#f1f5f9', cursor: 'not-allowed', opacity: 0.7 } : {}}
+                                />
                                 {editErrors.deadline && (
                                     <span style={{ fontSize: 11, color: 'var(--status-failed, #ee5d50)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                         <AlertCircle size={11} />{editErrors.deadline}
