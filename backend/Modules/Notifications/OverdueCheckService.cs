@@ -28,14 +28,24 @@ public class OverdueCheckService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Run the checks independently so a failure in one never blocks the
+            // other (e.g. an overdue-check error must not stop deadline warnings).
             try
             {
                 await CheckOverdueTasksAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during overdue check");
+            }
+
+            try
+            {
                 await CheckDeadlineWarningsAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during overdue/deadline check");
+                _logger.LogError(ex, "Error during deadline warning check");
             }
 
             await Task.Delay(_checkInterval, stoppingToken);
@@ -148,31 +158,48 @@ public class OverdueCheckService : BackgroundService
             ? TimeSpan.FromDays(settings.DeadlineWarningValue)
             : TimeSpan.FromHours(settings.DeadlineWarningValue);
 
+        _logger.LogInformation("Deadline warning check: threshold = {Value} {Unit} ({Threshold:g})",
+            settings.DeadlineWarningValue,
+            settings.DeadlineWarningUnit,
+            warningThreshold);
+
+        // Use the effective deadline (revised if present), matching the overdue check
         var activeTasks = await db.Tasks
             .Include(t => t.Assignments)
             .Where(t => t.Status != TaskStatus.Completed
                 && t.Status != TaskStatus.Cancelled
-                && t.Deadline > now)
+                && (t.RevisedDeadline ?? t.Deadline) > now)
             .ToListAsync(stoppingToken);
 
         foreach (var task in activeTasks)
         {
-            var remainingTime = task.Deadline - now;
+            var effectiveDeadline = task.RevisedDeadline ?? task.Deadline;
+            var remainingTime = effectiveDeadline - now;
 
             if (remainingTime > warningThreshold)
+            {
+                _logger.LogDebug("Deadline warning skipped for task {TaskId}: due in {Remaining:g}, threshold {Threshold:g}",
+                    task.Id, remainingTime, warningThreshold);
                 continue;
+            }
 
             var alreadyWarned = await db.Notifications
                 .AnyAsync(n => n.RelatedTaskId == task.Id
                     && n.Type == NotificationType.DeadlineWarning, stoppingToken);
 
             if (alreadyWarned)
+            {
+                _logger.LogDebug("Deadline warning skipped for task {TaskId}: warning already sent", task.Id);
                 continue;
+            }
 
             var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
 
             if (assigneeIds.Count == 0)
+            {
+                _logger.LogDebug("Deadline warning skipped for task {TaskId}: no assignees", task.Id);
                 continue;
+            }
 
             var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
             var remainingFormatted = remainingTime.TotalDays >= 1
@@ -183,11 +210,11 @@ public class OverdueCheckService : BackgroundService
                 assigneeIds,
                 NotificationType.DeadlineWarning,
                 "Deadline Approaching",
-                $"Task '{taskTitle}' is due in {remainingFormatted} ({task.Deadline:MMM dd, yyyy h:mm tt}).",
+                $"Task '{taskTitle}' is due in {remainingFormatted} ({effectiveDeadline:MMM dd, yyyy h:mm tt}).",
                 task.Id);
 
-            _logger.LogInformation("Deadline warning sent for task {TaskId}: due in {Remaining}",
-                task.Id, remainingFormatted);
+            _logger.LogInformation("Deadline warning sent for task {TaskId}: due in {Remaining} (threshold {Threshold:g})",
+                task.Id, remainingFormatted, warningThreshold);
         }
     }
 }

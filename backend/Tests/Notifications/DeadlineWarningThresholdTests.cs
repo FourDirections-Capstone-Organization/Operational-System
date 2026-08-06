@@ -90,4 +90,22 @@ public class DeadlineWarningThresholdTests
 
         Assert.Equal("1.5 hours", formatted);
     }
+
+    private DateTime EffectiveDeadline(DateTime deadline, DateTime? revisedDeadline)
+        => revisedDeadline ?? deadline;
+
+    [Fact]
+    public void EffectiveDeadline_UsesRevisedWhenPresent()
+    {
+        var original = new DateTime(2026, 8, 7, 2, 0, 0, DateTimeKind.Utc);
+        var revised = original.AddDays(2);
+        Assert.Equal(revised, EffectiveDeadline(original, revised));
+    }
+
+    [Fact]
+    public void EffectiveDeadline_FallsBackToOriginalWhenNoRevision()
+    {
+        var original = new DateTime(2026, 8, 7, 2, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(original, EffectiveDeadline(original, null));
+    }
 }
