@@ -2335,11 +2335,11 @@ export default function Dashboard() {
     const [editTaskRecommendation, setEditTaskRecommendation] = useState<{ employeeName: string; accountId: string; availabilityStatus: string; workload: number; reason: string } | null>(null);
     const [newTaskSingleSearch, setNewTaskSingleSearch] = useState('');
     const [newTaskTeamSearch, setNewTaskTeamSearch] = useState('');
-    const [newTaskSupportingEvidence, setNewTaskSupportingEvidence] = useState<File | null>(null);
+    const [newTaskSupportingEvidence, setNewTaskSupportingEvidence] = useState<File[]>([]);
     const newTaskFileRef = useRef<HTMLInputElement>(null);
     const [editTaskSingleSearch, setEditTaskSingleSearch] = useState('');
     const [editTaskTeamSearch, setEditTaskTeamSearch] = useState('');
-    const [editTaskSupportingEvidence, setEditTaskSupportingEvidence] = useState<File | null>(null);
+    const [editTaskSupportingEvidence, setEditTaskSupportingEvidence] = useState<File[]>([]);
     const editTaskFileRef = useRef<HTMLInputElement>(null);
     const PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
     const PRIORITY_NUM_FROM_LABEL: Record<string, number> = { Low: 0, Medium: 1, High: 2, Urgent: 3 };
@@ -2619,7 +2619,24 @@ export default function Dashboard() {
             if (newTaskForm.priority !== 'Urgent') {
                 createPayload.deadline = new Date(newTaskForm.deadline).toISOString();
             }
-            await api.post('/api/Task', createPayload);
+            const res = await api.post('/api/Task', createPayload);
+            const created = res.data;
+            const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
+
+            // Upload supporting documents (one or more files) if provided
+            if (taskId && newTaskSupportingEvidence.length > 0) {
+                const results = await Promise.allSettled(newTaskSupportingEvidence.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setNewTaskSupportingEvidence([]);
+                if (failed > 0) {
+                    setNewTaskApiError(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                }
+            }
             success('Task created successfully.');
             setShowNewTask(false);
             fetchManagerTasks();
@@ -2672,6 +2689,21 @@ export default function Dashboard() {
                 updatePayload.deadline = new Date(editForm.deadline).toISOString();
             }
             await api.put(`/api/Task/${tmEditingTask.taskId}`, updatePayload);
+
+            // Upload supporting documents (one or more files) if provided
+            if (editTaskSupportingEvidence.length > 0) {
+                const results = await Promise.allSettled(editTaskSupportingEvidence.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${tmEditingTask.taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setEditTaskSupportingEvidence([]);
+                if (failed > 0) {
+                    setEditApiError(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                }
+            }
             success(editForm.isConfidential !== (tmEditingTask.isConfidential ?? false)
                 ? 'Confidentiality updated successfully.'
                 : 'Task updated successfully.');
@@ -3758,8 +3790,8 @@ export default function Dashboard() {
                     <div className="fm-section">
                         <h5 className="fm-section-title">Attachment</h5>
                         <div className="fm-field">
-                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
-                            {newTaskForm.supportingEvidenceUrl && !newTaskSupportingEvidence && (
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional) — select one or more files</span></label>
+                            {newTaskForm.supportingEvidenceUrl && newTaskSupportingEvidence.length === 0 && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
                                     <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {(newTaskForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
@@ -3767,30 +3799,52 @@ export default function Dashboard() {
                                 </div>
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                                <input ref={newTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                <input ref={newTaskFileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
                                     onChange={e => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
+                                        const files = Array.from(e.target.files ?? []);
+                                        if (newTaskFileRef.current) newTaskFileRef.current.value = '';
+                                        if (files.length === 0) return;
+                                        const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                        for (const file of files) {
                                             const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
                                             if (!allowed.includes(ext)) { setNewTaskApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
                                             if (file.size > 20 * 1024 * 1024) { setNewTaskApiError('File size must not exceed 20MB.'); return; }
-                                            setNewTaskApiError('');
-                                            setNewTaskSupportingEvidence(file);
                                         }
+                                        setNewTaskApiError('');
+                                        setNewTaskSupportingEvidence(files);
                                     }}
                                     style={{ flex: 1, fontSize: 13 }} />
-                                {newTaskSupportingEvidence && (
-                                    <button type="button" onClick={() => { setNewTaskSupportingEvidence(null); if (newTaskFileRef.current) newTaskFileRef.current.value = ''; }}
+                                {newTaskSupportingEvidence.length > 0 && (
+                                    <button type="button" onClick={() => { setNewTaskSupportingEvidence([]); if (newTaskFileRef.current) newTaskFileRef.current.value = ''; }}
                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
                                         <X size={14} />
                                     </button>
                                 )}
                             </div>
-                            {newTaskSupportingEvidence && (
-                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
-                                    ✓ {newTaskSupportingEvidence.name} ({(newTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
-                                </span>
+                            {newTaskSupportingEvidence.length > 0 && (
+                                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {newTaskSupportingEvidence.map((file, idx) => (
+                                        <div key={`${file.name}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(0,169,157,0.05)', border: '1px solid rgba(0,169,157,0.18)', borderRadius: 6 }}>
+                                            <span style={{ fontSize: 11, color: 'var(--status-active)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const next = newTaskSupportingEvidence.filter((_, i) => i !== idx);
+                                                    setNewTaskSupportingEvidence(next);
+                                                }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 2 }}
+                                                aria-label={`Remove ${file.name}`}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                        {newTaskSupportingEvidence.length} file{newTaskSupportingEvidence.length === 1 ? '' : 's'} selected — uploaded after the task is saved.
+                                    </span>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -4082,8 +4136,8 @@ export default function Dashboard() {
                     <div className="fm-section">
                         <h5 className="fm-section-title">Attachment</h5>
                         <div className="fm-field">
-                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
-                            {editForm.supportingEvidenceUrl && !editTaskSupportingEvidence && (
+                            <label className="fm-label">Supporting Document <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional) — select one or more files</span></label>
+                            {editForm.supportingEvidenceUrl && editTaskSupportingEvidence.length === 0 && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '8px 12px', background: 'rgba(0,169,157,0.04)', border: '1px solid rgba(0,169,157,0.15)', borderRadius: 8, marginBottom: 8 }}>
                                     <span style={{ fontSize: 12, color: 'var(--primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {(editForm.supportingEvidenceUrl.split('/').pop() || '').replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')}
@@ -4091,30 +4145,52 @@ export default function Dashboard() {
                                 </div>
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                                <input ref={editTaskFileRef} type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                                <input ref={editTaskFileRef} type="file" multiple accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
                                     onChange={e => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
+                                        const files = Array.from(e.target.files ?? []);
+                                        if (editTaskFileRef.current) editTaskFileRef.current.value = '';
+                                        if (files.length === 0) return;
+                                        const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+                                        for (const file of files) {
                                             const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-                                            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
                                             if (!allowed.includes(ext)) { setEditApiError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.'); return; }
                                             if (file.size > 20 * 1024 * 1024) { setEditApiError('File size must not exceed 20MB.'); return; }
-                                            setEditApiError('');
-                                            setEditTaskSupportingEvidence(file);
                                         }
+                                        setEditApiError('');
+                                        setEditTaskSupportingEvidence(files);
                                     }}
                                     style={{ flex: 1, fontSize: 13 }} />
-                                {editTaskSupportingEvidence && (
-                                    <button type="button" onClick={() => { setEditTaskSupportingEvidence(null); if (editTaskFileRef.current) editTaskFileRef.current.value = ''; }}
+                                {editTaskSupportingEvidence.length > 0 && (
+                                    <button type="button" onClick={() => { setEditTaskSupportingEvidence([]); if (editTaskFileRef.current) editTaskFileRef.current.value = ''; }}
                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 4 }}>
                                         <X size={14} />
                                     </button>
                                 )}
                             </div>
-                            {editTaskSupportingEvidence && (
-                                <span style={{ fontSize: 11, color: 'var(--status-active)', marginTop: 3, display: 'block' }}>
-                                    ✓ {editTaskSupportingEvidence.name} ({(editTaskSupportingEvidence.size / 1024 / 1024).toFixed(1)} MB)
-                                </span>
+                            {editTaskSupportingEvidence.length > 0 && (
+                                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {editTaskSupportingEvidence.map((file, idx) => (
+                                        <div key={`${file.name}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(0,169,157,0.05)', border: '1px solid rgba(0,169,157,0.18)', borderRadius: 6 }}>
+                                            <span style={{ fontSize: 11, color: 'var(--status-active)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const next = editTaskSupportingEvidence.filter((_, i) => i !== idx);
+                                                    setEditTaskSupportingEvidence(next);
+                                                }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ee5d50', padding: 2 }}
+                                                aria-label={`Remove ${file.name}`}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                        {editTaskSupportingEvidence.length} file{editTaskSupportingEvidence.length === 1 ? '' : 's'} selected — uploaded after the task is saved.
+                                    </span>
+                                </div>
                             )}
                         </div>
                     </div>

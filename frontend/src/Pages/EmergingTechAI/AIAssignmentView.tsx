@@ -124,7 +124,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [selectedTeamId, setSelectedTeamId] = useState('');
     const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
-    const [supportingFile, setSupportingFile] = useState<File | null>(null);
+    const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [formError, setFormError] = useState('');
 
@@ -547,7 +547,24 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
         };
 
         try {
-            await api.post('/api/Task', payload);
+            const res = await api.post('/api/Task', payload);
+            const created = res.data;
+            const taskId = created?.data?.id ?? created?.id ?? created?.data?.Id;
+
+            // Upload supporting documents (one or more files) if provided
+            if (taskId && supportingFiles.length > 0) {
+                const results = await Promise.allSettled(supportingFiles.map(async (file) => {
+                    const fileFormData = new FormData();
+                    fileFormData.append('file', file);
+                    await api.upload(`/api/tasks/${taskId}/attachments`, fileFormData);
+                }));
+                const failed = results.filter(r => r.status === 'rejected').length;
+                const uploaded = results.length - failed;
+                setSupportingFiles([]);
+                if (failed > 0) {
+                    error(`${uploaded} attachment(s) uploaded, ${failed} failed.`);
+                }
+            }
             setStep('submitted');
             success('Task assigned successfully — Neo4j graph updated, notifications sent, audit log recorded.');
             // Notify the parent dashboard so the Task List tab refreshes immediately
@@ -585,10 +602,12 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
+        const files = Array.from(e.target.files ?? []);
+        if (e.target.value) e.target.value = '';
+        if (files.length === 0) return;
+        const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
+        for (const file of files) {
             const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-            const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png'];
             if (!allowed.includes(ext)) {
                 setFormError('Invalid file format. Allowed: PDF, DOCX, XLSX, JPG, PNG.');
                 return;
@@ -597,9 +616,9 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                 setFormError('File size must not exceed 20MB.');
                 return;
             }
-            setFormError('');
-            setSupportingFile(file);
         }
+        setFormError('');
+        setSupportingFiles(files);
     };
 
     const todayStart = new Date();
@@ -857,15 +876,28 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
 
                     {/* Supporting Document */}
                     <div className="ai-field ai-field-full">
-                        <label>Supporting Document <span className="ai-opt">(optional)</span></label>
-                        <input type="file" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+                        <label>Supporting Document <span className="ai-opt">(optional) — select one or more files</span></label>
+                        <input type="file" multiple accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
                             onChange={handleFileChange}
                             className="ai-file-input" />
-                        {supportingFile && (
-                            <span className="ai-file-badge">
-                                ✓ {supportingFile.name} ({(supportingFile.size / 1024 / 1024).toFixed(1)} MB)
-                                <button onClick={() => setSupportingFile(null)} className="ai-file-remove"><X size={12} /></button>
-                            </span>
+                        {supportingFiles.length > 0 && (
+                            <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {supportingFiles.map((file, idx) => (
+                                    <span key={`${file.name}-${idx}`} className="ai-file-badge">
+                                        ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)
+                                        <button
+                                            onClick={() => setSupportingFiles(supportingFiles.filter((_, i) => i !== idx))}
+                                            className="ai-file-remove"
+                                            aria-label={`Remove ${file.name}`}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                                <span className="ai-opt" style={{ fontSize: 11 }}>
+                                    {supportingFiles.length} file{supportingFiles.length === 1 ? '' : 's'} selected — uploaded after the task is created.
+                                </span>
+                            </div>
                         )}
                     </div>
                 </div>
