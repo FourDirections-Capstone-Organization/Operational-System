@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
@@ -85,6 +85,7 @@ interface Task {
     status: TaskStatus;
     progress: number;
     assignedBy: string;
+    createdAt?: string;
     remarks?: string;
     category?: string;
     supportingEvidenceUrl?: string;
@@ -181,6 +182,7 @@ const dtoToTask = (dto: TaskResponseDTO): Task => {
             ? dto.myCompletionPercentage
             : defaultProgress[status],
         assignedBy: createdByEmployee,
+        createdAt: dto.createdAt ?? '',
         category: '',
         supportingEvidenceUrl: dto.supportingEvidenceUrl,
         referenceNumber: dto.taskReferenceNumber,
@@ -759,18 +761,57 @@ interface DashboardTabProps {
 }
 
 const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpdate, onGoTasks }) => {
-    const [searchQuery, setSearchQuery] = useState('');
+    // My Progress card - paginated, newest first
+    const [progressSearch, setProgressSearch] = useState('');
+    const [progressStatus, setProgressStatus] = useState('');
+    const [progressPage, setProgressPage] = useState(1);
+    // High Priority Tasks card - paginated
+    const [urgentSearch, setUrgentSearch] = useState('');
+    const [urgentStatus, setUrgentStatus] = useState('');
+    const [urgentPage, setUrgentPage] = useState(1);
+
+    const PAGE_SIZE = 6;
+
     const total = tasks.length;
     const done = tasks.filter(t => t.status === 'completed').length;
     const inProg = tasks.filter(t => t.status === 'in-progress').length;
     const overdue = tasks.filter(t => effectiveStatus(t) === 'overdue').length;
     const pct = total ? Math.round(done / total * 100) : 0;
-    const filteredTasks = searchQuery
-        ? tasks.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : tasks;
-    const urgent = filteredTasks.filter(t => t.priority === 'high' && t.status !== 'completed');
     const firstName = user.fullName ? user.fullName.split(' ')[0] : 'Employee';
     const initials = getInitials(user.fullName);
+
+    // My Progress - always newest first, searchable + status filter, paginated.
+    const progressSource = [...tasks].sort((a, b) =>
+        (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const progressFiltered = progressSource
+        .filter(t => !progressSearch || t.name.toLowerCase().includes(progressSearch.toLowerCase()))
+        .filter(t => !progressStatus || effectiveStatus(t) === progressStatus);
+    const progressTotalPages = Math.max(1, Math.ceil(progressFiltered.length / PAGE_SIZE));
+    const safeProgressPage = Math.min(progressPage, progressTotalPages);
+    const progressItems = progressFiltered.slice((safeProgressPage - 1) * PAGE_SIZE, safeProgressPage * PAGE_SIZE);
+
+    // High Priority - not completed, searchable + status filter, paginated.
+    const urgentFiltered = tasks
+        .filter(t => t.priority === 'high' && t.status !== 'completed')
+        .filter(t => !urgentSearch || t.name.toLowerCase().includes(urgentSearch.toLowerCase()))
+        .filter(t => !urgentStatus || effectiveStatus(t) === urgentStatus);
+    const urgentTotalPages = Math.max(1, Math.ceil(urgentFiltered.length / PAGE_SIZE));
+    const safeUrgentPage = Math.min(urgentPage, urgentTotalPages);
+    const urgentItems = urgentFiltered.slice((safeUrgentPage - 1) * PAGE_SIZE, safeUrgentPage * PAGE_SIZE);
+
+    const statusFilterOptions = Object.entries(statusMeta).filter(([key]) => key !== 'done');
+
+    const cardSearchInputStyle: React.CSSProperties = {
+        width: '100%', height: 32, borderRadius: 8, border: '1px solid #dbe3f0',
+        padding: '0 10px 0 30px', fontSize: 12, outline: 'none', boxSizing: 'border-box',
+        background: '#f8fafc', color: 'var(--text-primary)', fontFamily: 'inherit',
+    };
+    const cardSelectStyle: React.CSSProperties = {
+        height: 32, borderRadius: 8, border: '1px solid #dbe3f0', padding: '0 6px',
+        fontSize: 12, outline: 'none', cursor: 'pointer', background: '#fff',
+        color: 'var(--text-primary)', fontFamily: 'inherit',
+    };
+
     return (
         <div className="tab-content">
             <div className="welcome-banner">
@@ -805,16 +846,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                 </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
-                <div style={{ position: 'relative', width: 300 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input type="text" placeholder="Search task…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                        style={{ width: '100%', height: 46, borderRadius: 999, border: '1px solid #dbe3f0', background: '#f8fafc', padding: '0 20px 0 42px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                        onFocus={e => { e.target.style.background = '#ffffff'; e.target.style.borderColor = '#14b8a6'; e.target.style.boxShadow = '0 0 0 4px rgba(20,184,166,0.08)'; }}
-                        onBlur={e => { e.target.style.background = '#f8fafc'; e.target.style.borderColor = '#dbe3f0'; e.target.style.boxShadow = 'none'; }} />
-                </div>
-            </div>
-
             <div className="stats-row">
                 {[
                     { label: 'My Tasks', value: total, icon: <ClipboardList size={20} strokeWidth={2.3} />, variant: 'teal', subtext: 'Assigned to me' },
@@ -832,9 +863,23 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                         <h3>High Priority Tasks</h3>
                         <button className="link-btn" onClick={onGoTasks}>All tasks <ChevronRight size={13} /></button>
                     </div>
-                    {urgent.length === 0 ? (
-                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks — great work!</p></div>
-                    ) : urgent.map(t => (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+                            <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input type="text" placeholder="Search tasks..." value={urgentSearch}
+                                onChange={e => { setUrgentSearch(e.target.value); setUrgentPage(1); }}
+                                style={cardSearchInputStyle} />
+                        </div>
+                        <select value={urgentStatus} onChange={e => { setUrgentStatus(e.target.value); setUrgentPage(1); }} style={cardSelectStyle}>
+                            <option value="">All Status</option>
+                            {statusFilterOptions.map(([key, meta]) => (
+                                <option key={key} value={key}>{meta.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {urgentItems.length === 0 ? (
+                        <div className="empty-state"><CheckCircle2 size={22} /><p>No urgent tasks - great work!</p></div>
+                    ) : urgentItems.map(t => (
                         <div key={t.id} className="dash-task-row" onClick={() => onView(t.id)}>
                             <div className="dtr-left">
                                 <span className={`prio-dot ${priorityMeta[t.priority].cls}`} />
@@ -858,12 +903,34 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                             </div>
                         </div>
                     ))}
+                    {urgentTotalPages > 1 && (
+                        <div style={{ marginTop: 10 }}>
+                            <Pagination currentPage={safeUrgentPage} totalPages={urgentTotalPages}
+                                onPageChange={setUrgentPage} />
+                        </div>
+                    )}
                 </div>
 
                 <div className="card">
                     <div className="card-header-layout"><h3>My Progress</h3></div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+                            <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input type="text" placeholder="Search tasks..." value={progressSearch}
+                                onChange={e => { setProgressSearch(e.target.value); setProgressPage(1); }}
+                                style={cardSearchInputStyle} />
+                        </div>
+                        <select value={progressStatus} onChange={e => { setProgressStatus(e.target.value); setProgressPage(1); }} style={cardSelectStyle}>
+                            <option value="">All Status</option>
+                            {statusFilterOptions.map(([key, meta]) => (
+                                <option key={key} value={key}>{meta.label}</option>
+                            ))}
+                        </select>
+                    </div>
                     <div className="progress-summary">
-                        {filteredTasks.map(t => (
+                        {progressItems.length === 0 ? (
+                            <div className="empty-state"><ClipboardList size={22} /><p>No tasks to show.</p></div>
+                        ) : progressItems.map(t => (
                             <div key={t.id} className="ps-item" onClick={() => onView(t.id)}>
                                 <div className="ps-info">
                                     <span className="ps-name">{t.name}</span>
@@ -875,9 +942,13 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ tasks, user, onView, onUpda
                             </div>
                         ))}
                     </div>
+                    {progressTotalPages > 1 && (
+                        <div style={{ marginTop: 10 }}>
+                            <Pagination currentPage={safeProgressPage} totalPages={progressTotalPages}
+                                onPageChange={setProgressPage} />
+                        </div>
+                    )}
                 </div>
-
-
             </div>
         </div>
     );
