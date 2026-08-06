@@ -2,6 +2,7 @@ import React from 'react';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DesktopTimePicker } from '@mui/x-date-pickers/DesktopTimePicker';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import dayjs, { Dayjs } from 'dayjs';
 
@@ -86,12 +87,27 @@ const TimePicker: React.FC<TimePickerProps> = ({ value, onChange, disabled }) =>
                         disabled={disabled}
                         ampm
                         views={['hours', 'minutes']}
+                        // Force the analog clock dial. v9's DesktopTimePicker
+                        // defaults to a digital multi-column list, not the
+                        // analog dial this component was built around.
+                        viewRenderers={{
+                            hours: renderTimeViewClock,
+                            minutes: renderTimeViewClock,
+                        }}
+                        // Commit and close as soon as the time is picked so the
+                        // selection is visibly applied instead of the popup
+                        // lingering open (desktop pickers default to false).
+                        closeOnSelect
                         slotProps={{
                             textField: {
                                 size: 'small',
                                 sx: { width: '100%' },
                             },
                             openPickerButton: { size: 'small' },
+                            // Keep the popup above the app's fixed overlays
+                            // (confirmation modals, dropdown menus) so clicks
+                            // always land on the picker.
+                            popper: { sx: { zIndex: 9999 } },
                         }}
                     />
                 </LocalizationProvider>
