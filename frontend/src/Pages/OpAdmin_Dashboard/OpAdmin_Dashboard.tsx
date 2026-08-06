@@ -5191,6 +5191,18 @@ export default function OpsAdminDashboard() {
 
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    // Close any open task detail/edit/review panels when navigating via the
+    // sidebar so they don't linger over a different page.
+    const handleNavChange = useCallback((tab: NavTab) => {
+        setActiveTab(tab);
+        setEditingTask(null);
+        setViewingTask(null);
+        setDetailTask(null);
+        setOverrideTask(null);
+        setReviewTask(null);
+        setViewingDuplicateTask(null);
+        setReviewingRequest(null);
+    }, []);
     const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
         {
             label: null,
@@ -5199,27 +5211,27 @@ export default function OpsAdminDashboard() {
                     label: 'Task Allocation and Review System',
                     icon: 'ti ti-clipboard-list',
                     subItems: [
-                        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
-                        { label: 'Tasks', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
-                        { label: 'Team', onClick: () => setActiveTab('team'), active: activeTab === 'team' },
-                        { label: 'Task Templates', onClick: () => setActiveTab('templates'), active: activeTab === 'templates' },
-                        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
-                        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
-                        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
-                        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
+                        { label: 'Dashboard', onClick: () => handleNavChange('dashboard'), active: activeTab === 'dashboard' },
+                        { label: 'Tasks', onClick: () => handleNavChange('tasks'), active: activeTab === 'tasks' },
+                        { label: 'Team', onClick: () => handleNavChange('team'), active: activeTab === 'team' },
+                        { label: 'Task Templates', onClick: () => handleNavChange('templates'), active: activeTab === 'templates' },
+                        { label: 'Reports', onClick: () => handleNavChange('reports'), active: activeTab === 'reports' },
+                        { label: 'Activity Logs', onClick: () => handleNavChange('activity_logs'), active: activeTab === 'activity_logs' },
+                        { label: 'Announcements', onClick: () => handleNavChange('announcements'), active: activeTab === 'announcements' },
+                        { label: 'Notifications', onClick: () => handleNavChange('notifications'), active: activeTab === 'notifications' },
                     ],
                 },
                 {
                     label: 'General',
                     icon: 'ti ti-settings',
                     subItems: [
-                        { label: 'Profile', onClick: () => setActiveTab('profile'), active: activeTab === 'profile' },
-                        { label: 'Notification Settings', onClick: () => setActiveTab('notification_settings'), active: activeTab === 'notification_settings' },
+                        { label: 'Profile', onClick: () => handleNavChange('profile'), active: activeTab === 'profile' },
+                        { label: 'Notification Settings', onClick: () => handleNavChange('notification_settings'), active: activeTab === 'notification_settings' },
                     ],
                 },
             ],
         },
-    ], [activeTab, setActiveTab]);
+    ], [activeTab, handleNavChange]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const CLASSIFICATION_MAP: Record<number, string> = { 0: 'routine', 1: 'special' };
     const tmTasks = useMemo(() => tasks.map(t => ({
@@ -6329,7 +6341,7 @@ export default function OpsAdminDashboard() {
                     role: displayRole,
                     avatarInitials: getInitials(employeeName || displayRole),
                 }}
-                onProfileClick={() => setActiveTab('profile')}
+                onProfileClick={() => handleNavChange('profile')}
                 onLogout={handleLogout}
             />
 
@@ -6344,9 +6356,9 @@ export default function OpsAdminDashboard() {
                         role: displayRole,
                         avatarInitials: getInitials(employeeName || displayRole),
                     }}
-                    onSettings={() => setActiveTab('profile')}
+                    onSettings={() => handleNavChange('profile')}
                     onLogout={handleLogout}
-                    onViewAllNotifications={() => setActiveTab('notifications')}
+                    onViewAllNotifications={() => handleNavChange('notifications')}
                     onNotificationsUpdate={(items) => {
                         // GlobalHeader pushes back the full merged list (derived
                         // pins + real notifications). Keep only the real rows to
@@ -6361,7 +6373,7 @@ export default function OpsAdminDashboard() {
                             const found = tasks.find(t => t.taskId === n.relatedEntityId!) || allTasks.find(t => t.taskId === n.relatedEntityId!);
                             if (found) { setViewingTask(found); return; }
                         }
-                        if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
+                        if (n.relatedEntityType === 'announcement') handleNavChange('announcements');
                     }}
                 />
 
@@ -6375,7 +6387,7 @@ export default function OpsAdminDashboard() {
                         filters={dashboardFilters}
                         onFilterChange={setDashboardFilters}
                         onClearFilters={handleDashboardClearFilters}
-                        onNewTask={() => { setActiveTab('tasks'); setTaskSubTab('create'); }}
+                        onNewTask={() => { handleNavChange('tasks'); setTaskSubTab('create'); }}
                         tasks={tasks}
                         onViewTask={task => setDetailTask(task)}
                     />

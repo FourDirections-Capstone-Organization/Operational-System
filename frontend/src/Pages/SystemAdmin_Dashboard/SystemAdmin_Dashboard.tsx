@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     Users,
@@ -2224,6 +2224,13 @@ export default function Dashboard() {
     usePreventBackNav();
 
     const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+    // Close any open task detail/edit panels when navigating via the sidebar
+    // so they don't linger over a different page.
+    const handleNavChange = useCallback((tab: NavTab) => {
+        setActiveTab(tab);
+        setTmDetailTask(null);
+        setTmEditingTask(null);
+    }, []);
     const SIDEBAR_NAV_GROUPS = React.useMemo(() => [
         {
         label: null,
@@ -2232,42 +2239,42 @@ export default function Dashboard() {
         label: 'Task Allocation and Review System',
         icon: 'ti ti-clipboard-list',
         subItems: [
-        { label: 'Dashboard', onClick: () => setActiveTab('dashboard'), active: activeTab === 'dashboard' },
-        { label: 'Manage Employee', onClick: () => setActiveTab('employees'), active: activeTab === 'employees' },
-        { label: 'Task Management', onClick: () => setActiveTab('tasks'), active: activeTab === 'tasks' },
-        { label: 'Reports', onClick: () => setActiveTab('reports'), active: activeTab === 'reports' },
-        { label: 'Role Management', onClick: () => setActiveTab('roles'), active: activeTab === 'roles' },
-        { label: 'Org Structure', onClick: () => setActiveTab('org-structure'), active: activeTab === 'org-structure' },
-        { label: 'Activity Logs', onClick: () => setActiveTab('activity_logs'), active: activeTab === 'activity_logs' },
-        { label: 'Biomarker Scan', onClick: () => setActiveTab('biomarker'), active: activeTab === 'biomarker' },
+        { label: 'Dashboard', onClick: () => handleNavChange('dashboard'), active: activeTab === 'dashboard' },
+        { label: 'Manage Employee', onClick: () => handleNavChange('employees'), active: activeTab === 'employees' },
+        { label: 'Task Management', onClick: () => handleNavChange('tasks'), active: activeTab === 'tasks' },
+        { label: 'Reports', onClick: () => handleNavChange('reports'), active: activeTab === 'reports' },
+        { label: 'Role Management', onClick: () => handleNavChange('roles'), active: activeTab === 'roles' },
+        { label: 'Org Structure', onClick: () => handleNavChange('org-structure'), active: activeTab === 'org-structure' },
+        { label: 'Activity Logs', onClick: () => handleNavChange('activity_logs'), active: activeTab === 'activity_logs' },
+        { label: 'Biomarker Scan', onClick: () => handleNavChange('biomarker'), active: activeTab === 'biomarker' },
         ],
         },
         {
         label: 'Delivery Management System',
         icon: 'ti ti-truck-delivery',
         subItems: [
-        { label: 'Delivery Summary', onClick: () => setActiveTab('delivery'), active: activeTab === 'delivery' },
+        { label: 'Delivery Summary', onClick: () => handleNavChange('delivery'), active: activeTab === 'delivery' },
         ],
         },
         {
         label: 'Financial Management System',
         icon: 'ti ti-currency-dollar',
         subItems: [
-        { label: 'Finance', onClick: () => setActiveTab('finance'), active: activeTab === 'finance' },
+        { label: 'Finance', onClick: () => handleNavChange('finance'), active: activeTab === 'finance' },
         ],
         },
         {
         label: 'General',
         icon: 'ti ti-settings',
         subItems: [
-        { label: 'Announcements', onClick: () => setActiveTab('announcements'), active: activeTab === 'announcements' },
-        { label: 'Settings', onClick: () => setActiveTab('settings'), active: activeTab === 'settings' },
-        { label: 'Notifications', onClick: () => setActiveTab('notifications'), active: activeTab === 'notifications' },
+        { label: 'Announcements', onClick: () => handleNavChange('announcements'), active: activeTab === 'announcements' },
+        { label: 'Settings', onClick: () => handleNavChange('settings'), active: activeTab === 'settings' },
+        { label: 'Notifications', onClick: () => handleNavChange('notifications'), active: activeTab === 'notifications' },
         ],
         },
         ],
         },
-    ], [activeTab, setActiveTab]);
+    ], [activeTab, handleNavChange]);
     const [rolesList, setRolesList] = useState<string[]>(['Manager', 'Coordinator', 'Dispatcher', 'Encoder', 'Courier', 'Accountant']);
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<RecentEmployee | null>(null);
@@ -3151,7 +3158,7 @@ export default function Dashboard() {
                     role: 'MANAGER',
                     avatarInitials: getInitials(employeeName || 'Manager'),
                 }}
-                onProfileClick={() => setActiveTab('profile')}
+                onProfileClick={() => handleNavChange('profile')}
                 onLogout={handleLogout}
             />
 
@@ -3166,9 +3173,9 @@ export default function Dashboard() {
                             role: 'MANAGER',
                             avatarInitials: getInitials(employeeName || 'Manager'),
                         }}
-                        onSettings={() => setActiveTab('settings')}
+                        onSettings={() => handleNavChange('settings')}
                         onLogout={handleLogout}
-                        onViewAllNotifications={() => setActiveTab('notifications')}
+                        onViewAllNotifications={() => handleNavChange('notifications')}
                         onNotificationsUpdate={(items) => {
                             // GlobalHeader pushes back the full merged list (derived
                             // pins + real notifications). Keep only the real rows to
@@ -3181,8 +3188,8 @@ export default function Dashboard() {
                         onNotificationAction={n => {
                             if (n.relatedEntityId && n.relatedEntityType === 'task') {
                                 openManagerTaskById(n.relatedEntityId);
-                            } else if (n.relatedEntityType === 'announcement') setActiveTab('announcements');
-                            else setActiveTab('notifications');
+                            } else if (n.relatedEntityType === 'announcement') handleNavChange('announcements');
+                            else handleNavChange('notifications');
                         }}
                     />
                 )}
@@ -3195,7 +3202,7 @@ export default function Dashboard() {
                         loading={empLoading}
                         onSelectEmployee={emp => { setEmpModalEditMode(false); setSelectedEmployee(emp); }}
                         onEditEmployee={emp => { setEmpModalEditMode(true); setSelectedEmployee(emp); }}
-                        onViewAll={() => { setActiveTab('employees'); setSelectedPanelEmployee(null); }}
+                        onViewAll={() => { handleNavChange('employees'); setSelectedPanelEmployee(null); }}
                         onAddEmployee={() => setShowAddModal(true)}
                         rolesCount={rolesList.length}
                         activityLogPage={activityLogPage}
