@@ -52,7 +52,6 @@ public class RecommendationController : ControllerBase
     }
 
     [HttpGet("users/{userId:guid}/recommendations")]
-    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
     public async Task<IActionResult> GetByAssignee(
         Guid userId,
         [FromQuery] int pageNumber = 1,
@@ -60,17 +59,26 @@ public class RecommendationController : ControllerBase
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null)
     {
+        // Employees may view their own recommendation history; Coordinators and
+        // Managers may view any employee's history (ahead of a monthly review).
+        var currentUserId = GetUserIdFromClaims();
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        var isCoordOrManager = roleClaim == Models.Enums.UserRole.Coordinator.ToString()
+            || roleClaim == Models.Enums.UserRole.Manager.ToString();
+        if (!isCoordOrManager && currentUserId != userId)
+            return StatusCode(403, ApiResponseDTO<object>.Failure("Access denied"));
+
         var result = await _recommendationService.GetByAssigneeIdAsync(userId, pageNumber, pageSize, dateFrom, dateTo);
 
         try
         {
             await _auditLogService.LogAsync(
-                GetUserIdFromClaims(),
+                currentUserId,
                 AuditActionType.Read,
                 "Recommendation",
                 userId,
                 GetIpAddress(),
-                "Recommendation history accessed for employee",
+                "Recommendation history accessed",
                 "Recommendations");
         }
         catch

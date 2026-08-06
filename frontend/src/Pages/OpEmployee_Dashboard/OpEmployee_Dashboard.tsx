@@ -33,6 +33,9 @@ import {
     Activity,
     Search,
     Bell,
+    Paperclip,
+    Download,
+    Lightbulb,
 } from 'lucide-react';
 import './OpEmployee_Dashboard.css';
 import { usePreventBackNav } from '../../components/Auth/usePreventBackNav';
@@ -45,7 +48,9 @@ import FormModal from '../../components/FormModal/FormModal';
 import EmptyState from '../../components/ui/EmptyState';
 import DataTable from '../../components/ui/DataTable';
 import TaskComments from '../../components/TaskComments/TaskComments';
+import TaskRecommendations from '../../components/TaskRecommendations/TaskRecommendations';
 import api from '../../api';
+import axios from 'axios';
 import AnnouncementsTab from '../../components/AnnouncementsTab/AnnouncementsTab';
 
 // --- Helpers ------------------------------------------------------------------
@@ -55,7 +60,11 @@ const getAccountIdFromToken = (): string => {
         const token = localStorage.getItem('authToken');
         if (!token) return '';
         const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '')));
-        return payload?.nameidentifier || payload?.sub || '';
+        return payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
+            ?? payload.nameid
+            ?? payload.sub
+            ?? payload.nameidentifier
+            ?? '';
     } catch { return ''; }
 };
 
@@ -315,7 +324,69 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
     const sm = statusMeta[es];
     const pm = priorityMeta[task.priority];
     const [showComments, setShowComments] = useState(false);
+    const [showRecommendations, setShowRecommendations] = useState(false);
     const accountId = getAccountIdFromToken();
+
+    // ── Task attachments (view-only for employees) ──
+    const [attachments, setAttachments] = useState<{ id: string; fileName: string; fileSize: number; uploadedByName?: string }[]>([]);
+    const [attachmentsLoading, setAttachmentsLoading] = useState(true);
+    const [downloadError, setDownloadError] = useState('');
+    const token = localStorage.getItem('authToken') ?? '';
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            setAttachmentsLoading(true);
+            setDownloadError('');
+            try {
+                const res = await api.get(`/api/tasks/${task.id}/attachments`, { pageNumber: 1, pageSize: 100 });
+                const json = res.data;
+                const d = json?.data;
+                const items: any[] = Array.isArray(json) ? json : (Array.isArray(d?.items) ? d.items : (Array.isArray(d) ? d : []));
+                if (!cancelled) {
+                    setAttachments(items.map((a: any) => ({
+                        id: a.id ?? '',
+                        fileName: a.fileName ?? '',
+                        fileSize: a.fileSize ?? 0,
+                        uploadedByName: a.uploadedByName ?? '',
+                    })));
+                }
+            } catch {
+                if (!cancelled) setAttachments([]);
+            } finally {
+                if (!cancelled) setAttachmentsLoading(false);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [task.id]);
+
+    const formatFileSize = (bytes: number): string => {
+        if (!bytes) return '';
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const handleDownloadAttachment = async (attachmentId: string, fileName: string) => {
+        setDownloadError('');
+        try {
+            const res = await axios.get(`/api/attachments/${attachmentId}/download`, {
+                responseType: 'blob',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const blob = res.data;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch {
+            setDownloadError('Unable to download attachment. The file may no longer be available.');
+        }
+    };
 
     return (
         <FormModal isOpen onClose={onClose} title={task.isConfidential ? `[CONFIDENTIAL] ${task.name}` : task.name} subtitle={sm.label} size="md"
@@ -344,19 +415,15 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
                     { label: 'Progress', value: `${task.progress}%` },
                     ...(task.referenceNumber ? [{ label: 'Ref #', value: task.referenceNumber }] : []),
                     ...(task.category ? [{ label: 'Category', value: task.category }] : []),
-                    { label: 'Document', value: task.supportingEvidenceUrl ?? '' },
+                    ...(task.supportingEvidenceUrl ? [{ label: 'Document', value: task.supportingEvidenceUrl ?? '' }] : []),
                 ].map(({ label, value, style }: { label: string; value: string; style?: any }) => (
                     <div key={label}>
                         <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</label>
                         {label === 'Document' ? (
-                            value ? (
-                                <a href={value} target="_blank" rel="noopener noreferrer"
-                                    style={{ marginTop: 4, fontSize: 13, color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                    <FileText size={13} /> {value.split('/').pop() || 'View'}
-                                </a>
-                            ) : (
-                                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No document</p>
-                            )
+                            <a href={value} target="_blank" rel="noopener noreferrer"
+                                style={{ marginTop: 4, fontSize: 13, color: 'var(--primary)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <FileText size={13} /> {value.split('/').pop() || 'View'}
+                            </a>
                         ) : (
                             <p style={{ margin: '4px 0 0', fontSize: 14, ...(style || {}) }}>{value}</p>
                         )}
@@ -365,6 +432,47 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
             </div>
             <div className="tc-bar" style={{ height: 8, marginBottom: 12 }}>
                 <div className={`tc-fill ${pm.bar}`} style={{ width: `${task.progress}%` }} />
+            </div>
+
+            {/* Task Attachments (view-only for employees) */}
+            <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Paperclip size={13} /> Attachments
+                    {attachments.length > 0 && (
+                        <span className="tv-attach-count">{attachments.length}</span>
+                    )}
+                </label>
+                {attachmentsLoading ? (
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>Loading attachments…</p>
+                ) : attachments.length === 0 ? (
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No attachments.</p>
+                ) : (
+                    <div className="tv-attach-list">
+                        {attachments.map(a => (
+                            <div key={a.id} className="tv-attach-item">
+                                <FileText size={15} className="tv-attach-icon" />
+                                <div className="tv-attach-info">
+                                    <span className="tv-attach-name" title={a.fileName}>{a.fileName}</span>
+                                    <span className="tv-attach-meta">
+                                        {formatFileSize(a.fileSize)}
+                                        {a.uploadedByName && <> · by {a.uploadedByName}</>}
+                                    </span>
+                                </div>
+                                <div className="tv-attach-actions">
+                                    <button className="tv-icon-btn tv-attach-btn" title="Download"
+                                        onClick={() => handleDownloadAttachment(a.id, a.fileName)}>
+                                        <Download size={13} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {downloadError && (
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--status-failed)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <AlertCircle size={12} /> {downloadError}
+                    </p>
+                )}
             </div>
             {task.remarks && (
                 <div style={{ marginBottom: 12 }}>
@@ -401,6 +509,20 @@ const TaskDetail: React.FC<TaskDetailProps> = ({ task, onUpdate, onClose }) => {
                 {showComments && (
                     <div style={{ marginTop: 12, maxHeight: 320, overflowY: 'auto' }}>
                         <TaskComments taskId={task.id} currentEmployeeId={accountId} taskReferenceNumber={task.referenceNumber} />
+                    </div>
+                )}
+
+                <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', marginTop: 12 }}
+                    onClick={() => setShowRecommendations(v => !v)}
+                >
+                    <Lightbulb size={16} />
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>Recommendations</span>
+                    {showRecommendations ? <ChevronUp size={14} style={{ marginLeft: 'auto' }} /> : <ChevronDown size={14} style={{ marginLeft: 'auto' }} />}
+                </div>
+                {showRecommendations && (
+                    <div style={{ marginTop: 12, maxHeight: 320, overflowY: 'auto' }}>
+                        <TaskRecommendations taskId={task.id} />
                     </div>
                 )}
             </div>
@@ -1257,6 +1379,103 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ user, onUpdateUser }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Recommendation History — archived recommendations from the assignee's tasks */}
+            <RecommendationHistoryCard />
+        </div>
+    );
+};
+
+// --- Recommendation History (Employee side) ----------------------------------
+
+const REC_CATEGORY_LABELS: Record<number, string> = {
+    0: 'Timeliness',
+    1: 'Work Quality',
+    2: 'Communication',
+    3: 'Other',
+};
+
+const fmtRecDateTime = (d: string): string => {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' · ' + new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+interface RecommendationRecord {
+    recommendationId: string;
+    category: string;
+    notes: string;
+    recommendedByName: string;
+    taskTitle: string;
+    createdAt: string;
+}
+
+const RecommendationHistoryCard: React.FC = () => {
+    const accountId = getAccountIdFromToken();
+    const [records, setRecords] = useState<RecommendationRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const fetchHistory = useCallback(async () => {
+        if (!accountId) { setLoading(false); return; }
+        setLoading(true);
+        setError('');
+        try {
+            const res = await api.get(`/api/users/${accountId}/recommendations`, { pageNumber: 1, pageSize: 100 });
+            const json = res.data;
+            const list: any[] = json.isSuccess && Array.isArray(json.data?.items) ? json.data.items : (json.isSuccess && Array.isArray(json.data) ? json.data : []);
+            setRecords(list.map((r: any) => ({
+                recommendationId: r.id ?? r.recommendationId,
+                category: REC_CATEGORY_LABELS[r.category as number] ?? String(r.category ?? ''),
+                notes: r.notes ?? '',
+                recommendedByName: r.coordinatorName ?? '',
+                taskTitle: r.taskTitle ?? '',
+                createdAt: r.createdAt ?? '',
+            })));
+        } catch (err: any) {
+            setError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
+            setRecords([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [accountId]);
+
+    useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+    return (
+        <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-header-layout">
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Lightbulb size={15} /> Recommendation History</h3>
+                {records.length > 0 && <span className="badge badge-blue">{records.length} entries</span>}
+            </div>
+            {loading ? (
+                <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading recommendations…</p></div>
+            ) : error ? (
+                <div className="empty-state"><AlertCircle size={22} style={{ color: 'var(--danger)' }} /><p>{error}</p></div>
+            ) : records.length === 0 ? (
+                <div className="empty-state"><Lightbulb size={22} /><p>No recommendations yet. Recommendations from your Coordinator or Manager will appear here after task review.</p></div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 8 }}>
+                    {records.map(r => (
+                        <div key={r.recommendationId} style={{ padding: '12px 14px', background: 'var(--bg-main)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: 'rgba(67, 24, 255, 0.08)', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                    {r.category}
+                                </span>
+                                <span style={{ fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                    {r.createdAt ? fmtRecDateTime(r.createdAt) : ''}
+                                </span>
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{r.notes}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <span><User size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{r.recommendedByName || '—'}</span>
+                                <span>·</span>
+                                <span>Task: {r.taskTitle || '—'}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
