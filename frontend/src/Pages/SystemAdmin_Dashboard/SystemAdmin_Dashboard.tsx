@@ -2387,6 +2387,7 @@ export default function Dashboard() {
                 isArchived: false,
                 isConfidential: t.isConfidential ?? false,
                 isSLALocked: t.isSLALocked ?? false,
+                assignmentScope: t.assignmentScope ?? t.AssignmentScope ?? 0,
             })));
         } catch { setTmTasks([]); }
         if (!silent) setTmLoading(false);
@@ -2512,6 +2513,7 @@ export default function Dashboard() {
                         createdByEmployee: localStorage.getItem('employeeName') ?? 'Manager',
                         assignedTo: found.assignee?.id ?? '',
                         createdAt: new Date().toISOString(),
+                        assignmentScope: found.assignmentScope ?? found.AssignmentScope ?? 0,
                     });
                 }
             })

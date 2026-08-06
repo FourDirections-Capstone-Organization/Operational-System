@@ -5693,6 +5693,7 @@ export default function OpsAdminDashboard() {
                 isConfidential: t.isConfidential ?? false,
                 isSLALocked: t.isSLALocked ?? false,
                 attachmentCount: t.attachmentCount ?? 0,
+                assignmentScope: t.assignmentScope ?? t.AssignmentScope ?? 0,
             }));
 
             setAllTasks(normalized);
@@ -5978,6 +5979,7 @@ export default function OpsAdminDashboard() {
             attachmentCount: dto.attachmentCount ?? 0,
             assignedDepartmentId: dto.assignedDepartmentId ?? undefined,
             assignedDepartmentName: dto.assignedDepartmentName ?? undefined,
+            assignmentScope: dto.assignmentScope ?? dto.AssignmentScope ?? 0,
         };
     };
 
