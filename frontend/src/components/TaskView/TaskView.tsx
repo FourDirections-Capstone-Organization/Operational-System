@@ -81,7 +81,6 @@ interface TaskViewProps {
     onApprove?: (taskId: string) => void;
     onReject?: (taskId: string, reason: string) => void;
     onDeleteAttachment?: (attachmentId: string) => void | Promise<void>;
-    onPushBack?: (taskId: string, comment: string) => void;
     onUpdate?: (updatedTask: TaskViewTask) => void;
 }
 
@@ -157,15 +156,12 @@ const RejectModal: React.FC<{
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TaskView: React.FC<TaskViewProps> = ({
-    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment, onPushBack, onUpdate,
+    task, onEdit, onReopen, onClose, onApprove, onReject, onDeleteAttachment, onUpdate,
 }) => {
     const [reopening, setReopening] = useState(false);
     const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
     const [attachmentsLoading, setAttachmentsLoading] = useState(false);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-    const [showPushBack, setShowPushBack] = useState(false);
-    const [pushBackComment, setPushBackComment] = useState('');
-    const [pushingBack, setPushingBack] = useState(false);
     const [showHold, setShowHold] = useState(false);
     const [holdReason, setHoldReason] = useState('');
     const [holding, setHolding] = useState(false);
@@ -494,11 +490,6 @@ const TaskView: React.FC<TaskViewProps> = ({
                         <button className="tv-btn tv-btn-primary" onClick={onEdit}>
                             <Pencil size={13} /> Edit
                         </button>
-                        {(task.taskStatus === 'Done/Pending Review' || task.taskStatus === 'Pending Admin Review') && onPushBack && (
-                            <button className="tv-btn tv-btn-outline" onClick={() => setShowPushBack(true)}>
-                                <RotateCcw size={13} /> Push Back
-                            </button>
-                        )}
                         {isCoordOrManager && effectiveStatus !== 'Completed' && effectiveStatus !== 'Cancelled' && effectiveStatus !== 'On Hold' && (
                             <button className="tv-btn tv-btn-outline" onClick={() => setShowHold(true)}>
                                 <Clock size={13} /> Hold
@@ -845,45 +836,6 @@ const TaskView: React.FC<TaskViewProps> = ({
                     onConfirm={handleReject}
                     onCancel={() => setShowRejectModal(false)}
                 />
-            )}
-
-            {showPushBack && (
-                <div className="tv-modal-overlay" onClick={() => !pushingBack && setShowPushBack(false)}>
-                    <div className="tv-modal" onClick={e => e.stopPropagation()}>
-                        <div className="tv-modal-header">
-                            <div className="tv-modal-icon tv-modal-icon-danger">
-                                <RotateCcw size={20} />
-                            </div>
-                            <div>
-                                <h4 className="tv-modal-title">Push Back Task</h4>
-                                <p className="tv-modal-sub">Return this task to In Progress with a mandatory reason.</p>
-                            </div>
-                        </div>
-                        <textarea
-                            className="tv-modal-textarea"
-                            placeholder="Explain why this task needs to be revised..."
-                            value={pushBackComment}
-                            onChange={e => setPushBackComment(e.target.value)}
-                            rows={3}
-                            autoFocus
-                        />
-                        <div className="tv-modal-actions">
-                            <button className="tv-btn tv-btn-outline" onClick={() => { setShowPushBack(false); setPushBackComment(''); }} disabled={pushingBack}>Cancel</button>
-                            <button className="tv-btn tv-btn-danger"
-                                onClick={async () => {
-                                    if (!pushBackComment.trim()) return;
-                                    setPushingBack(true);
-                                    try { await onPushBack?.(task.taskId, pushBackComment.trim()); } catch {}
-                                    setPushingBack(false);
-                                    setShowPushBack(false);
-                                    setPushBackComment('');
-                                }}
-                                disabled={!pushBackComment.trim() || pushingBack}>
-                                {pushingBack ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />} Push Back
-                            </button>
-                        </div>
-                    </div>
-                </div>
             )}
 
             {showHold && (

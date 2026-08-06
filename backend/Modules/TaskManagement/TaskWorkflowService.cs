@@ -131,67 +131,6 @@ public class TaskWorkflowService : ITaskWorkflowService
             "Progress updated successfully");
     }
 
-    public async Task<ApiResponseDTO<TaskResponseDTO>> PushBackAsync(
-        Guid taskId, PushBackDTO dto, Guid coordinatorId, string? ipAddress = null)
-    {
-        var task = await _db.Tasks
-            .Include(t => t.Assignments)
-            .Include(t => t.CreatedBy)
-            .Include(t => t.AssignedDepartment)
-            .FirstOrDefaultAsync(t => t.Id == taskId);
-
-        if (task is null)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Task not found");
-
-        var coordinator = await _db.Users.FindAsync(coordinatorId);
-        if (coordinator is null)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("User not found");
-
-        if (coordinator.Role != UserRole.Coordinator)
-            return ApiResponseDTO<TaskResponseDTO>.Failure("Only Coordinators can push back tasks");
-
-        if (task.Status != Models.Enums.TaskStatus.DonePendingReview)
-            return ApiResponseDTO<TaskResponseDTO>.Failure(
-                "Only tasks in Done/Pending Review status may be pushed back");
-
-        if (string.IsNullOrWhiteSpace(dto.Comment))
-            return ApiResponseDTO<TaskResponseDTO>.Failure(
-                "A comment is required to push back a task");
-
-        task.Status = Models.Enums.TaskStatus.InProgress;
-        task.PushBackComment = dto.Comment.Trim();
-        task.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-
-        await _auditLogService.LogAsync(
-            coordinatorId,
-            AuditActionType.StatusChange,
-            "Task",
-            taskId,
-            ipAddress,
-            $"Task status changed from DonePendingReview to InProgress (pushed back)",
-            "TaskManagement",
-            oldValue: "DonePendingReview",
-            newValue: "InProgress");
-
-        var assigneeIds = task.Assignments.Select(a => a.AssignedUserId).ToList();
-        if (assigneeIds.Count > 0)
-        {
-            var taskTitle = task.Title.Length > 50 ? task.Title[..50] + "..." : task.Title;
-            await _notificationService.SendBulkNotificationAsync(
-                assigneeIds,
-                NotificationType.PushBack,
-                "Task Pushed Back",
-                $"Task '{taskTitle}' has been pushed back. Comment: {dto.Comment}.",
-                task.Id);
-        }
-
-        return ApiResponseDTO<TaskResponseDTO>.Success(
-            await MapToResponseDTOAsync(task),
-            "Task pushed back to In Progress successfully");
-    }
-
     public async Task<ApiResponseDTO<TaskResponseDTO>> ReviewTaskAsync(
         Guid taskId, ReviewTaskDTO dto, Guid reviewerId, string? ipAddress = null)
     {

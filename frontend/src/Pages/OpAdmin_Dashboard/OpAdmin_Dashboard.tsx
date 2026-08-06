@@ -6608,17 +6608,6 @@ export default function OpsAdminDashboard() {
                     onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via TaskView.')}
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
                     onDeleteAttachment={handleDeleteAttachment}
-                    onPushBack={async (id, comment) => {
-                        try {
-                            await api.patch(`/api/Task/${id}/push-back`, { comment });
-                            await fetchTasks();
-                            await doFetchDashboard();
-                            setDetailTask(null);
-                            success('Task pushed back to In Progress.');
-                        } catch (err: any) {
-                            error(err.message ?? 'Push back failed.');
-                        }
-                    }}
                     onUpdate={(updated) => {
                         setDetailTask(updated);
                         fetchTasks();
@@ -6682,17 +6671,6 @@ export default function OpsAdminDashboard() {
                     onApprove={(id) => handleReviewTask(id, 'Approve & Close', 'Approved via duplicate review.')}
                     onReject={(id, reason) => handleReviewTask(id, 'Return for Rework', reason)}
                     onDeleteAttachment={handleDeleteAttachment}
-                    onPushBack={async (id, comment) => {
-                        try {
-                            await api.patch(`/api/Task/${id}/push-back`, { comment });
-                            await fetchTasks();
-                            await doFetchDashboard();
-                            setViewingDuplicateTask(null);
-                            success('Task pushed back to In Progress.');
-                        } catch (err: any) {
-                            error(err.message ?? 'Push back failed.');
-                        }
-                    }}
                     onUpdate={(updated) => {
                         setViewingDuplicateTask(updated);
                         fetchTasks();
