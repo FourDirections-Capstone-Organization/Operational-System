@@ -23,5 +23,7 @@ public class UpdateTaskDTO
 
     public Guid? AssignedDepartmentId { get; set; }
 
+    public Guid? TeamId { get; set; }
+
     public bool? IsConfidential { get; set; }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import SpeedexLogo from '../../assets/SpeedexLogo.jpg';
 import {
     ClipboardList,
@@ -44,6 +44,7 @@ import {
     Clock,
     Play,
     Bell,
+    UserPlus,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import './OpAdmin_Dashboard.css';
@@ -193,6 +194,7 @@ interface Task {
     assignedTo: string;
     /** Each assignee plus the completion percentage the employee reported. */
     assignees?: { fullName: string; completionPercentage: number }[];
+    teamName?: string;
     createdAt: string;
     updatedAt?: string;
     deleted?: boolean;
@@ -213,6 +215,7 @@ interface CreateTaskDTO {
     deadline: string | null;
     assignedUserIds?: string[];
     assignedDepartmentId?: string;
+    teamId?: string;
     isConfidential?: boolean;
 }
 
@@ -225,6 +228,7 @@ interface UpdateTaskDTO {
     deadline?: string;
     assignedUserIds?: string[];
     assignedDepartmentId?: string;
+    teamId?: string;
     isConfidential?: boolean;
 }
 
@@ -689,6 +693,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         assignedDepartmentId: '',
     });
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+    const [teamOptions, setTeamOptions] = useState<TeamDTO[]>([]);
+    const [selectedTeamId, setSelectedTeamId] = useState('');
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [supportingEvidenceFiles, setSupportingEvidenceFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -748,8 +754,37 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             } catch {
             }
         };
+        const fetchTeams = async () => {
+            try {
+                const res = await api.get('/api/teams', { params: { pageNumber: 1, pageSize: 200, includeInactive: false } });
+                const json = res.data;
+                const items: any[] = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
+                setTeamOptions(items.map((t: any) => ({
+                    id: t.id ?? '',
+                    name: t.name ?? '',
+                    departmentId: t.departmentId,
+                    departmentName: t.departmentName,
+                    description: t.description,
+                    isActive: t.isActive ?? true,
+                    memberCount: t.memberCount ?? 0,
+                    members: (t.members ?? []).map((m: any) => ({
+                        userId: m.userId ?? '',
+                        fullName: m.fullName ?? '',
+                        employeeNumber: m.employeeNumber ?? '',
+                        role: m.role,
+                        department: m.department,
+                        availabilityStatus: m.availabilityStatus,
+                        isAvailable: m.isAvailable,
+                        joinedAt: m.joinedAt,
+                    })),
+                    createdAt: t.createdAt ?? '',
+                })));
+            } catch {
+            }
+        };
         fetchRecommendations();
         fetchDepartments();
+        fetchTeams();
 
         // FR-065: Periodic refresh of availability status
         const interval = setInterval(fetchRecommendations, 30000);
@@ -894,6 +929,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
             assignedUserIds,
             assignedDepartmentId,
+            teamId: form.assignmentScope === 'Team' ? (selectedTeamId || undefined) : undefined,
             isConfidential: form.isConfidential,
         };
         if (supportingEvidenceFiles.length > 0) {
@@ -1293,6 +1329,32 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         {/* -- Team: pick multiple users -- */}
                         {form.assignmentScope === 'Team' && (
                             <div className="emp-picker-section">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Select Team</label>
+                                    <select
+                                        value={selectedTeamId}
+                                        onChange={e => {
+                                            const team = teamOptions.find(t => t.id === e.target.value);
+                                            setSelectedTeamId(e.target.value);
+                                            // Pre-fill the member list from the chosen team (editable below).
+                                            setSelectedTeamIds(team ? team.members.map(m => m.userId) : []);
+                                            setErrors(prev => ({ ...prev, assignedTo: '' }));
+                                        }}
+                                        style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none' }}
+                                    >
+                                        <option value="">Select a team…</option>
+                                        {teamOptions.map(t => (
+                                            <option key={t.id} value={t.id} disabled={!t.isActive}>
+                                                {t.name}{t.departmentName ? ` (${t.departmentName})` : ''} · {t.memberCount} member{t.memberCount === 1 ? '' : 's'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {selectedTeamId && (
+                                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                            Members auto-selected — you can adjust them below.
+                                        </span>
+                                    )}
+                                </div>
                                 {recommendation && (
                                     <div className="emp-picker-rec-banner">
                                         <Lightbulb size={13} />
@@ -2837,183 +2899,585 @@ const CATEGORY_LABELS: Record<number, string> = {
     3: 'Other',
 };
 
+interface TeamMemberDTO {
+    userId: string;
+    fullName: string;
+    employeeNumber: string;
+    role?: string;
+    department?: string;
+    availabilityStatus?: string;
+    isAvailable?: boolean;
+    joinedAt?: string;
+}
+
+interface TeamDTO {
+    id: string;
+    name: string;
+    departmentId?: string;
+    departmentName?: string;
+    description?: string;
+    isActive: boolean;
+    memberCount: number;
+    members: TeamMemberDTO[];
+    createdAt: string;
+}
+
+interface TeamTaskItem {
+    id: string;
+    title: string;
+    description: string;
+    priorityLevel: number;
+    status: number;
+    assignmentScope: number;
+    deadline: string | null;
+    isConfidential: boolean;
+    createdByName?: string;
+    createdAt: string;
+    assignees?: { userId: string; fullName: string; completionPercentage?: number }[];
+}
+
+interface TeamWorkload {
+    userId: string;
+    fullName: string;
+    totalTasks: number;
+    completedTasks: number;
+    inProgressTasks: number;
+    onHoldTasks: number;
+    pendingReviewTasks: number;
+    completionRate: number;
+    averageCompletionPercentage: number;
+}
+
+const TEAM_STATUS_LABELS: Record<number, string> = {
+    0: 'Not Started', 1: 'In Progress', 2: 'Pending Review', 3: 'Completed', 4: 'On Hold', 5: 'Cancelled',
+};
+
+const TEAM_PRIORITY_LABELS: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Urgent' };
+
+const teamStatusBadgeStyle = (status: number) => {
+    switch (status) {
+        case 3: return { bg: 'rgba(5,150,105,0.12)', fg: '#059669' };
+        case 1: return { bg: 'rgba(0,169,157,0.12)', fg: '#00A99D' };
+        case 2: return { bg: 'rgba(67,24,255,0.1)', fg: '#4318FF' };
+        case 4: return { bg: 'rgba(217,119,6,0.12)', fg: '#D97706' };
+        case 5: return { bg: 'rgba(238,93,80,0.1)', fg: '#DC2626' };
+        default: return { bg: 'rgba(148,163,184,0.15)', fg: '#64748B' };
+    }
+};
+
 const TeamTab: React.FC<{
-    tasks: Task[];
     teamMembers: TeamMember[];
     onView: (id: string) => void;
-}> = ({ tasks, teamMembers, onView }) => {
-    const [selectedMemberId, setSelectedMemberId] = useState(teamMembers[0]?.accountId ?? '');
-    const [showRecModal, setShowRecModal] = useState(false);
-    const [recEmployee, setRecEmployee] = useState('');
-    const [recEmployeeName, setRecEmployeeName] = useState('');
-    const [empRecommendations, setEmpRecommendations] = useState<EmpRecDTO[]>([]);
-    const [recLoading, setRecLoading] = useState(false);
-    const [recError, setRecError] = useState('');
-    const [recDateFrom, setRecDateFrom] = useState('');
-    const [recDateTo, setRecDateTo] = useState('');
-    const [recPage, setRecPage] = useState(1);
-    const [recTotalPages, setRecTotalPages] = useState(1);
-    const REC_PAGE_SIZE = 8;
+}> = ({ teamMembers, onView }) => {
+    const [teams, setTeams] = useState<TeamDTO[]>([]);
+    const [teamsLoading, setTeamsLoading] = useState(true);
+    const [selectedTeamId, setSelectedTeamId] = useState('');
+    const [workload, setWorkload] = useState<TeamWorkload[]>([]);
+    const [teamTasks, setTeamTasks] = useState<TeamTaskItem[]>([]);
+    const [taskPage, setTaskPage] = useState(1);
+    const [taskTotalPages, setTaskTotalPages] = useState(1);
+    const [taskTotalCount, setTaskTotalCount] = useState(0);
+    const [taskSearch, setTaskSearch] = useState('');
+    const [taskStatusFilter, setTaskStatusFilter] = useState('');
+    const [taskPriorityFilter, setTaskPriorityFilter] = useState('');
+    const [tasksLoading, setTasksLoading] = useState(false);
 
-    const fetchEmpRecommendations = async (empId: string, empName: string, dateFrom?: string, dateTo?: string, page: number = 1) => {
-        setRecLoading(true);
-        setRecError('');
-        setEmpRecommendations([]);
-        setRecEmployee(empId);
-        setRecEmployeeName(empName);
-        setRecPage(page);
-        setShowRecModal(true);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [createName, setCreateName] = useState('');
+    const [createDescription, setCreateDescription] = useState('');
+    const [createDepartmentId, setCreateDepartmentId] = useState('');
+    const [createMemberIds, setCreateMemberIds] = useState<string[]>([]);
+    const [createMemberSearch, setCreateMemberSearch] = useState('');
+    const [createError, setCreateError] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    const [showMembersModal, setShowMembersModal] = useState(false);
+    const [membersTeam, setMembersTeam] = useState<TeamDTO | null>(null);
+    const [addMemberIds, setAddMemberIds] = useState<string[]>([]);
+    const [addMemberSearch, setAddMemberSearch] = useState('');
+    const [membersError, setMembersError] = useState('');
+    const [savingMembers, setSavingMembers] = useState(false);
+
+    const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
+    const selectedTeam = teams.find(t => t.id === selectedTeamId) ?? null;
+
+    useEffect(() => {
+        fetchTeams();
+        api.get<any>('/api/departments').then(res => {
+            const json = res.data;
+            const items: any[] = json?.isSuccess && Array.isArray(json?.data) ? json.data : (Array.isArray(json?.data?.items) ? json.data.items : []);
+            setDepartments(items.map((d: any) => ({ id: d.id ?? d.Id, name: d.name ?? d.Name })));
+        }).catch(() => { });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const fetchTeams = async () => {
+        setTeamsLoading(true);
         try {
-            const params: any = { pageNumber: page, pageSize: REC_PAGE_SIZE };
-            if (dateFrom) params.dateFrom = new Date(dateFrom).toISOString();
-            if (dateTo) params.dateTo = new Date(`${dateTo}T23:59:59`).toISOString();
-            const res = await api.get<any>(`/api/users/${empId}/recommendations`, { params });
+            const res = await api.get<any>('/api/teams', { params: { pageNumber: 1, pageSize: 200, includeInactive: true } });
+            const json = res.data;
+            const items: any[] = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
+            setTeams(items.map((t: any) => ({
+                id: t.id ?? '',
+                name: t.name ?? '',
+                departmentId: t.departmentId,
+                departmentName: t.departmentName,
+                description: t.description,
+                isActive: t.isActive ?? true,
+                memberCount: t.memberCount ?? 0,
+                members: (t.members ?? []).map((m: any) => ({
+                    userId: m.userId ?? '',
+                    fullName: m.fullName ?? '',
+                    employeeNumber: m.employeeNumber ?? '',
+                    role: m.role,
+                    department: m.department,
+                    availabilityStatus: m.availabilityStatus,
+                    isAvailable: m.isAvailable,
+                    joinedAt: m.joinedAt,
+                })),
+                createdAt: t.createdAt ?? '',
+            })));
+            if (items.length > 0 && !selectedTeamId) {
+                const firstId = items[0].id ?? '';
+                setSelectedTeamId(firstId);
+                fetchTeamTasks(firstId, 1, '', '', '');
+                fetchTeamWorkload(firstId);
+            }
+        } catch { setTeams([]); } finally { setTeamsLoading(false); }
+    };
+
+    const selectTeam = (id: string) => {
+        setSelectedTeamId(id);
+        setTaskPage(1);
+        setTaskSearch('');
+        setTaskStatusFilter('');
+        setTaskPriorityFilter('');
+        fetchTeamTasks(id, 1, '', '', '');
+        fetchTeamWorkload(id);
+    };
+
+    const fetchTeamWorkload = async (teamId: string) => {
+        try {
+            const res = await api.get<any>(`/api/teams/${teamId}/workload`);
+            const json = res.data;
+            const list: any[] = json?.isSuccess && Array.isArray(json?.data) ? json.data : [];
+            setWorkload(list.map((w: any) => ({
+                userId: w.userId ?? '',
+                fullName: w.fullName ?? '',
+                totalTasks: w.totalTasks ?? 0,
+                completedTasks: w.completedTasks ?? 0,
+                inProgressTasks: w.inProgressTasks ?? 0,
+                onHoldTasks: w.onHoldTasks ?? 0,
+                pendingReviewTasks: w.pendingReviewTasks ?? 0,
+                completionRate: w.completionRate ?? 0,
+                averageCompletionPercentage: w.averageCompletionPercentage ?? 0,
+            })));
+        } catch { setWorkload([]); }
+    };
+
+    const fetchTeamTasks = async (teamId: string, page: number, search: string, status: string, priority: string) => {
+        setTasksLoading(true);
+        try {
+            const params: any = { pageNumber: page, pageSize: 10 };
+            if (search.trim()) params.search = search.trim();
+            if (status !== '') params.status = Number(status);
+            if (priority !== '') params.priority = Number(priority);
+            const res = await api.get<any>(`/api/teams/${teamId}/tasks`, { params });
             const json = res.data;
             const d = json?.data;
-            const list: any[] = json.isSuccess && Array.isArray(d?.items) ? d.items : (json.isSuccess && Array.isArray(d) ? d : []);
-            setEmpRecommendations(list.map((r: any) => ({
-                recommendationId: r.id ?? r.recommendationId,
-                category: CATEGORY_LABELS[r.category as number] ?? String(r.category),
-                notes: r.notes ?? '',
-                recommendedByName: r.coordinatorName ?? '',
-                taskTitle: r.taskTitle ?? '',
-                createdAt: r.createdAt ?? '',
+            const items: any[] = json?.isSuccess && Array.isArray(d?.items) ? d.items : [];
+            setTeamTasks(items.map((t: any) => ({
+                id: t.id ?? '',
+                title: t.title ?? '',
+                description: t.description ?? '',
+                priorityLevel: t.priorityLevel ?? 0,
+                status: t.status ?? 0,
+                assignmentScope: t.assignmentScope ?? 0,
+                deadline: t.deadline ?? null,
+                isConfidential: t.isConfidential ?? false,
+                createdByName: t.createdByName,
+                createdAt: t.createdAt ?? '',
+                assignees: (t.assignees ?? []).map((a: any) => ({
+                    userId: a.userId ?? '',
+                    fullName: a.fullName ?? '',
+                    completionPercentage: a.completionPercentage ?? 0,
+                })),
             })));
-            setRecTotalPages(d?.totalPages || 1);
-        } catch (err: any) {
-            setRecError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
-            setRecTotalPages(1);
-        } finally {
-            setRecLoading(false);
-        }
+            setTaskTotalPages(d?.totalPages || 1);
+            setTaskTotalCount(d?.totalCount ?? 0);
+            setTaskPage(page);
+        } catch { setTeamTasks([]); } finally { setTasksLoading(false); }
     };
+
+    useEffect(() => {
+        if (!selectedTeamId) return;
+        const t = setTimeout(() => fetchTeamTasks(selectedTeamId, 1, taskSearch, taskStatusFilter, taskPriorityFilter), 300);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [taskSearch, taskStatusFilter, taskPriorityFilter]);
+
+    const handleCreateTeam = async () => {
+        if (!createName.trim()) { setCreateError('Team name is required.'); return; }
+        setCreating(true);
+        setCreateError('');
+        try {
+            const res = await api.post('/api/teams', {
+                name: createName.trim(),
+                description: createDescription.trim() || null,
+                departmentId: createDepartmentId || null,
+                memberUserIds: createMemberIds,
+            });
+            const json = res.data;
+            if (!json?.isSuccess) {
+                setCreateError(json?.message ?? 'Failed to create team.');
+                return;
+            }
+            const created = json.data;
+            setShowCreateModal(false);
+            setCreateName(''); setCreateDescription(''); setCreateDepartmentId(''); setCreateMemberIds([]); setCreateMemberSearch('');
+            await fetchTeams();
+            if (created?.id) {
+                setSelectedTeamId(created.id);
+                fetchTeamTasks(created.id, 1, '', '', '');
+                fetchTeamWorkload(created.id);
+            }
+        } catch (err: any) {
+            setCreateError(err?.response?.data?.message || err?.response?.data?.Message || 'Failed to create team.');
+        } finally { setCreating(false); }
+    };
+
+    const handleRemoveMember = async (userId: string) => {
+        if (!selectedTeamId) return;
+        try {
+            await api.delete(`/api/teams/${selectedTeamId}/members/${userId}`);
+            setTeams(prev => prev.map(t => t.id === selectedTeamId
+                ? { ...t, members: t.members.filter(m => m.userId !== userId), memberCount: Math.max(0, t.memberCount - 1) }
+                : t));
+            fetchTeamWorkload(selectedTeamId);
+        } catch { }
+    };
+
+    const openMembersModal = (team: TeamDTO) => {
+        setMembersTeam(team);
+        setAddMemberIds([]);
+        setAddMemberSearch('');
+        setMembersError('');
+        setShowMembersModal(true);
+    };
+
+    const handleSaveMembers = async () => {
+        if (!membersTeam || addMemberIds.length === 0) { setMembersError('Select at least one employee.'); return; }
+        setSavingMembers(true);
+        setMembersError('');
+        try {
+            const res = await api.post(`/api/teams/${membersTeam.id}/members`, { memberUserIds: addMemberIds });
+            const json = res.data;
+            if (!json?.isSuccess) { setMembersError(json?.message ?? 'Failed to add members.'); return; }
+            setShowMembersModal(false);
+            await fetchTeams();
+            if (selectedTeamId === membersTeam.id) {
+                fetchTeamWorkload(membersTeam.id);
+                fetchTeamTasks(membersTeam.id, taskPage, taskSearch, taskStatusFilter, taskPriorityFilter);
+            }
+        } catch (err: any) {
+            setMembersError(err?.response?.data?.message || 'Failed to add members.');
+        } finally { setSavingMembers(false); }
+    };
+
+    const handleDeactivateTeam = async () => {
+        if (!selectedTeamId) return;
+        try {
+            await api.delete(`/api/teams/${selectedTeamId}`);
+            await fetchTeams();
+            setSelectedTeamId('');
+            setWorkload([]);
+            setTeamTasks([]);
+        } catch { }
+    };
+
+    const memberPickerOptions = (excluded: string[]) =>
+        (addMemberSearch
+            ? teamMembers.filter(m => m.employeeName.toLowerCase().includes(addMemberSearch.toLowerCase()))
+            : teamMembers
+        ).filter(m => !excluded.includes(m.accountId));
 
     return (
         <div className="dashboard-content">
-            <div className="dashboard-grid">
-                <div className="card">
-                    <div className="card-header-layout"><h3>Team Members</h3></div>
-                    {teamMembers.length === 0 ? (
-                        <EmptyState icon={<Users size={20} />} title="No team members found" />
-                    ) : teamMembers.map(m => {
-                        const mt = tasks.filter(t => t.assignedEmployee === m.employeeName);
-                        const mc = mt.filter(t => t.taskStatus === 'Completed').length;
-                        return (
-                            <div
-                                key={m.accountId}
-                                className={`member-row${selectedMemberId === m.accountId ? ' selected' : ''}`}
-                                onClick={() => setSelectedMemberId(m.accountId)}
-                            >
-                                <Avatar member={m} />
-                                <div style={{ flex: 1 }}>
-                                    <div className="member-name">{m.employeeName}</div>
-                                    <div className="member-role">{m.role}</div>
+            <div className="team-layout" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <div className="card" style={{ flex: '0 0 280px', alignSelf: 'stretch' }}>
+                    <div className="card-header-layout">
+                        <h3>Teams</h3>
+                        <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '4px 10px', fontSize: 11 }}>
+                            <Plus size={12} /> Create Team
+                        </button>
+                    </div>
+                    {teamsLoading ? (
+                        <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading teams...</div>
+                    ) : teams.length === 0 ? (
+                        <EmptyState icon={<Users size={20} />} title="No teams yet" sub="Create a team to group employees and assign tasks." />
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {teams.map(t => (
+                                <div key={t.id}
+                                    onClick={() => selectTeam(t.id)}
+                                    className={`member-row${selectedTeamId === t.id ? ' selected' : ''}`}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <div style={{ flex: 1 }}>
+                                        <div className="member-name">{t.name}</div>
+                                        <div className="member-role" style={{ fontSize: 10 }}>
+                                            {t.departmentName || 'No department'} Â· {t.memberCount} member{t.memberCount === 1 ? '' : 's'}
+                                        </div>
+                                    </div>
+                                    {!t.isActive && <span className="badge badge-red">Inactive</span>}
                                 </div>
-                                <span className="badge badge-blue">{mt.length} tasks</span>
-                                <span className="badge badge-green">{mc} done</span>
-                                <button className="btn btn-sm" onClick={e => { e.stopPropagation(); fetchEmpRecommendations(m.accountId, m.employeeName); }}
-                                    style={{ marginLeft: 4, padding: '4px 8px', fontSize: 10 }}>
-                                    <Lightbulb size={10} /> Recs
-                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {selectedTeam ? (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3>{selectedTeam.name}</h3>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="btn btn-sm" onClick={() => openMembersModal(selectedTeam)} style={{ padding: '4px 10px', fontSize: 11 }}>
+                                        <UserPlus size={12} /> Add Members
+                                    </button>
+                                    <button className="btn btn-sm" onClick={handleDeactivateTeam} style={{ padding: '4px 10px', fontSize: 11, color: 'var(--status-failed)' }}>
+                                        Deactivate
+                                    </button>
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                {selectedTeam.departmentName && <span>Department: <strong>{selectedTeam.departmentName}</strong></span>}
+                                <span>Members: <strong>{selectedTeam.memberCount}</strong></span>
+                                <span>Status: <strong>{selectedTeam.isActive ? 'Active' : 'Inactive'}</strong></span>
+                            </div>
+                            {selectedTeam.description && (
+                                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{selectedTeam.description}</p>
+                            )}
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header-layout"><h3>Team Members</h3></div>
+                            {selectedTeam.members.length === 0 ? (
+                                <EmptyState icon={<Users size={20} />} title="No members assigned" sub="Use Add Members to group employees into this team." />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {selectedTeam.members.map(m => (
+                                        <div key={m.userId} className="member-row">
+                                            <div className="avatar-circle-sm" style={{
+                                                width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#00A99D,#1B254B)',
+                                                color: '#fff', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                            }}>
+                                                {(m.fullName || '?').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div className="member-name">{m.fullName}</div>
+                                                <div className="member-role">{m.role || 'Employee'}{m.department ? ` Â· ${m.department}` : ''}</div>
+                                            </div>
+                                            <span className={`badge ${m.isAvailable === false ? 'badge-red' : 'badge-green'}`}>
+                                                {m.isAvailable === false ? (m.availabilityStatus || 'Unavailable') : 'Available'}
+                                            </span>
+                                            <button className="btn btn-sm" onClick={() => handleRemoveMember(m.userId)}
+                                                style={{ padding: '3px 8px', fontSize: 10, color: 'var(--status-failed)' }}>
+                                                <X size={11} /> Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header-layout"><h3>Workload Distribution</h3></div>
+                            {workload.length === 0 ? (
+                                <EmptyState icon={<BarChart3 size={20} />} title="No workload data" />
+                            ) : (
+                                <div className="perf-bars">
+                                    {workload.map(w => {
+                                        const pct = w.completionRate;
+                                        return (
+                                            <div key={w.userId} className="perf-item">
+                                                <span className="perf-label" title={w.fullName}>{w.fullName.split(' ')[0]}</span>
+                                                <div className="perf-track">
+                                                    <div className="perf-fill" style={{ width: `${Math.min(100, pct)}%`, background: pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)', borderRadius: 3, height: '100%', transition: 'width 0.4s ease' }} />
+                                                </div>
+                                                <span className="perf-pct">{w.completedTasks}/{w.totalTasks}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="card">
+                            <div className="card-header-layout">
+                                <h3>Team's Tasks <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>({taskTotalCount})</span></h3>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Search tasksâ€¦"
+                                    value={taskSearch}
+                                    onChange={e => setTaskSearch(e.target.value)}
+                                    style={{ flex: 1, minWidth: 160, height: 34, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none' }}
+                                />
+                                <select value={taskStatusFilter} onChange={e => setTaskStatusFilter(e.target.value)}
+                                    style={{ height: 34, borderRadius: 8, border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
+                                    <option value="">All Status</option>
+                                    {Object.entries(TEAM_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                </select>
+                                <select value={taskPriorityFilter} onChange={e => setTaskPriorityFilter(e.target.value)}
+                                    style={{ height: 34, borderRadius: 8, border: '1px solid var(--border)', padding: '0 8px', fontSize: 12, background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
+                                    <option value="">All Priority</option>
+                                    {Object.entries(TEAM_PRIORITY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                </select>
+                            </div>
+                            {tasksLoading ? (
+                                <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading tasks...</div>
+                            ) : teamTasks.length === 0 ? (
+                                <EmptyState icon={<Package size={20} />} title="No tasks for this team" />
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {teamTasks.map(t => {
+                                        const s = teamStatusBadgeStyle(t.status);
+                                        return (
+                                            <div key={t.id} className="member-row" onClick={() => onView(t.id)} style={{ cursor: 'pointer' }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div className="member-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {t.isConfidential && <Lock size={10} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />}
+                                                        {t.title}
+                                                    </div>
+                                                    <div className="member-role">
+                                                        {t.deadline ? `Due ${new Date(t.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'No deadline'}
+                                                        {t.assignees && t.assignees.length > 0 ? ` Â· ${t.assignees.map(a => a.fullName).join(', ')}` : ''}
+                                                    </div>
+                                                </div>
+                                                <span className="badge" style={{ background: s.bg, color: s.fg, fontWeight: 700 }}>{TEAM_STATUS_LABELS[t.status] ?? 'Unknown'}</span>
+                                                <span className="badge" style={{ background: t.priorityLevel === 3 ? 'rgba(220,38,38,0.1)' : t.priorityLevel === 2 ? 'rgba(217,119,6,0.12)' : 'rgba(148,163,184,0.15)', color: t.priorityLevel === 3 ? '#DC2626' : t.priorityLevel === 2 ? '#D97706' : '#64748B', fontWeight: 700 }}>
+                                                    {TEAM_PRIORITY_LABELS[t.priorityLevel] ?? 'Medium'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {taskTotalPages > 1 && (
+                                <div style={{ marginTop: 10 }}>
+                                    <Pagination currentPage={taskPage} totalPages={taskTotalPages}
+                                        onPageChange={p => fetchTeamTasks(selectedTeamId, p, taskSearch, taskStatusFilter, taskPriorityFilter)} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="card" style={{ flex: 1 }}>
+                        <EmptyState icon={<Users size={22} />} title="Select a team" sub="Choose a team on the left to view its members, workload, and tasks." />
+                    </div>
+                )}
+            </div>
+
+            <FormModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)}
+                title="Create Team"
+                subtitle="Group available employees into a team for Team-scope task assignments"
+                size="md"
+                footer={
+                    <>
+                        <button className="btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                        <button className="btn btn-primary" onClick={handleCreateTeam} disabled={creating}>
+                            {creating ? <Loader2 size={13} className="spin" /> : <Plus size={13} />} Create Team
+                        </button>
+                    </>
+                }
+            >
+                {createError && <div className="tr-error" style={{ marginBottom: 10 }}><AlertCircle size={13} /> {createError}</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Team Name *</label>
+                        <input type="text" value={createName} onChange={e => { setCreateName(e.target.value); setCreateError(''); }}
+                            placeholder="e.g. Courier Squad A"
+                            style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Department</label>
+                        <select value={createDepartmentId} onChange={e => setCreateDepartmentId(e.target.value)}
+                            style={{ height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13 }}>
+                            <option value="">No department</option>
+                            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Description</label>
+                        <textarea value={createDescription} onChange={e => setCreateDescription(e.target.value)} rows={2}
+                            style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '8px 10px', fontSize: 13, resize: 'vertical' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Members ({createMemberIds.length} selected)</label>
+                        <input type="text" placeholder="Search employeesâ€¦" value={createMemberSearch} onChange={e => setCreateMemberSearch(e.target.value)}
+                            style={{ height: 34, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 12 }} />
+                        <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                            {(createMemberSearch
+                                ? teamMembers.filter(m => m.employeeName.toLowerCase().includes(createMemberSearch.toLowerCase()))
+                                : teamMembers
+                            ).map(m => {
+                                const checked = createMemberIds.includes(m.accountId);
+                                return (
+                                    <div key={m.accountId} className={`emp-picker-row${checked ? ' selected' : ''}`}
+                                        onClick={() => setCreateMemberIds(prev => checked ? prev.filter(id => id !== m.accountId) : [...prev, m.accountId])}
+                                        style={{ padding: '7px 10px' }}>
+                                        <input type="checkbox" className="emp-picker-checkbox" checked={checked} onChange={() => { }} />
+                                        <div className="emp-picker-info">
+                                            <span className="emp-picker-name">{m.employeeName}</span>
+                                            <div className="emp-picker-meta"><span>{m.role}</span></div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {teamMembers.length === 0 && <div className="emp-picker-empty">No employees available.</div>}
+                        </div>
+                    </div>
+                </div>
+            </FormModal>
+
+            <FormModal isOpen={showMembersModal} onClose={() => setShowMembersModal(false)}
+                title={`Add Members to ${membersTeam?.name ?? ''}`}
+                subtitle="Select employees to add to this team"
+                size="md"
+                footer={
+                    <>
+                        <button className="btn" onClick={() => setShowMembersModal(false)}>Cancel</button>
+                        <button className="btn btn-primary" onClick={handleSaveMembers} disabled={savingMembers}>
+                            {savingMembers ? <Loader2 size={13} className="spin" /> : <UserPlus size={13} />} Add Members
+                        </button>
+                    </>
+                }
+            >
+                {membersError && <div className="tr-error" style={{ marginBottom: 10 }}><AlertCircle size={13} /> {membersError}</div>}
+                <input type="text" placeholder="Search employeesâ€¦" value={addMemberSearch} onChange={e => setAddMemberSearch(e.target.value)}
+                    style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 12, marginBottom: 8 }} />
+                <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    {memberPickerOptions(membersTeam?.members.map(m => m.userId) ?? []).map(m => {
+                        const checked = addMemberIds.includes(m.accountId);
+                        return (
+                            <div key={m.accountId} className={`emp-picker-row${checked ? ' selected' : ''}`}
+                                onClick={() => setAddMemberIds(prev => checked ? prev.filter(id => id !== m.accountId) : [...prev, m.accountId])}
+                                style={{ padding: '7px 10px' }}>
+                                <input type="checkbox" className="emp-picker-checkbox" checked={checked} onChange={() => { }} />
+                                <div className="emp-picker-info">
+                                    <span className="emp-picker-name">{m.employeeName}</span>
+                                    <div className="emp-picker-meta"><span>{m.role}</span></div>
+                                </div>
                             </div>
                         );
                     })}
+                    {memberPickerOptions(membersTeam?.members.map(m => m.userId) ?? []).length === 0 && (
+                        <div className="emp-picker-empty">No more employees to add.</div>
+                    )}
                 </div>
-                <div className="card">
-                    <div className="card-header-layout"><h3>Workload Distribution</h3></div>
-                    <div className="perf-bars">
-                        {teamMembers.map(m => {
-                            const mt = tasks.filter(t => t.assignedEmployee === m.employeeName);
-                            const mc = mt.filter(t => t.taskStatus === 'Completed').length;
-                            const pct = mt.length > 0 ? Math.round(mc / mt.length * 100) : 0;
-                            return (
-                                <div key={m.accountId} className="perf-item">
-                                    <span className="perf-label">{m.employeeName.split(' ')[0]}</span>
-                                    <div className="perf-track">
-                                        <div className="perf-fill" style={{ width: `${pct}%`, background: pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)', borderRadius: 3, height: '100%', transition: 'width 0.4s ease' }} />
-                                    </div>
-                                    <span className="perf-pct">{mc}/{mt.length}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-            <div className="card">
-                <div className="card-header-layout">
-                    <h3>{teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName}'s Tasks</h3>
-                </div>
-                {tasks.filter(t => t.assignedEmployee === teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName).length === 0
-                    ? <EmptyState icon={<Package size={20} />} title="No tasks assigned" />
-                    : tasks
-                        .filter(t => t.assignedEmployee === teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName)
-                        .map(t => <TaskRow key={t.taskId} task={t} onView={onView} />)
-                }
-            </div>
-
-            <FormModal isOpen={showRecModal} onClose={() => setShowRecModal(false)}
-                title="Recommendation History"
-                subtitle={`All recommendations for ${recEmployeeName}`}
-                size="md"
-                footer={<button className="btn" onClick={() => setShowRecModal(false)}>Close</button>}
-            >
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>From</label>
-                        <input type="date" value={recDateFrom} max={recDateTo || undefined}
-                            onChange={e => setRecDateFrom(e.target.value)}
-                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>To</label>
-                        <input type="date" value={recDateTo} min={recDateFrom || undefined}
-                            onChange={e => setRecDateTo(e.target.value)}
-                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
-                    </div>
-                    <button className="btn btn-sm" onClick={() => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo)}
-                        style={{ padding: '4px 8px', fontSize: 10 }}>
-                        Apply
-                    </button>
-                    <button className="btn btn-sm" onClick={() => { setRecDateFrom(''); setRecDateTo(''); fetchEmpRecommendations(recEmployee, recEmployeeName); }}
-                        style={{ padding: '4px 8px', fontSize: 10 }}>
-                        Clear
-                    </button>
-                </div>
-                {recLoading ? (
-                    <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading recommendations...</div>
-                ) : recError ? (
-                    <div className="tr-error" style={{ marginBottom: 12 }}><AlertCircle size={13} /> {recError}</div>
-                ) : empRecommendations.length === 0 ? (
-                    <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-                        No recommendations for this employee yet.
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
-                        {empRecommendations.map(r => (
-                            <div key={r.recommendationId} className="tr-item">
-                                <div className="tr-item-top">
-                                    <span className="tr-category">{r.category}</span>
-                                    <span className="tr-author"><User size={10} /> {r.recommendedByName}</span>
-                                </div>
-                                <div className="tr-notes">{r.notes}</div>
-                                <div style={{ fontSize: 10, color: '#94a3b8', display: 'flex', gap: 8 }}>
-                                    <span>Task: {r.taskTitle}</span>
-                                    <span>·</span>
-                                    <span>{new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {!recLoading && !recError && empRecommendations.length > 0 && (
-                    <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
-                        <Pagination
-                            currentPage={recPage}
-                            totalPages={recTotalPages}
-                            onPageChange={p => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo, p)}
-                        />
-                    </div>
-                )}
             </FormModal>
         </div>
     );
@@ -5737,6 +6201,7 @@ export default function OpsAdminDashboard() {
                     fullName: a.fullName ?? a.FullName ?? '',
                     completionPercentage: a.completionPercentage ?? a.CompletionPercentage ?? 0,
                 })),
+                teamName: t.teamName ?? t.TeamName ?? '',
                 createdAt: t.createdAt ?? '',
                 updatedAt: t.updatedAt ?? undefined,
                 deleted: deletedTaskIdsRef.current.has(t.id ?? t.taskId),
@@ -6036,6 +6501,7 @@ export default function OpsAdminDashboard() {
             assignedDepartmentName: dto.assignedDepartmentName ?? undefined,
             assignmentScope: dto.assignmentScope ?? dto.AssignmentScope ?? 0,
             taskReferenceNumber: dto.taskReferenceNumber ?? dto.referenceNumber ?? '',
+            teamName: dto.teamName ?? '',
         };
     };
 
@@ -6451,9 +6917,14 @@ export default function OpsAdminDashboard() {
                 )}
                 {activeTab === 'team' && (
                     <TeamTab
-                        tasks={tasks}
                         teamMembers={teamMembers}
-                        onView={id => setViewingTask(tasks.find(t => t.taskId === id) ?? null)}
+                        onView={async id => {
+                            try {
+                                const res = await api.get(`/api/Task/${id}`);
+                                const dto = res?.data?.data ?? res?.data;
+                                if (dto) setDetailTask(mapTaskDetailToTaskView(dto));
+                            } catch { /* task may have been deleted */ }
+                        }}
                     />
                 )}
                 {activeTab === 'templates' && <TemplateTab teamMembers={teamMembers} />}

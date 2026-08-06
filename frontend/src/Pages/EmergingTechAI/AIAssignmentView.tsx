@@ -78,12 +78,7 @@ const DEPARTMENTS_MOCK: DepartmentInfo[] = [
     { departmentId: 'dept-004', name: 'Inactive Dept', code: 'INA', isActive: false, employeeCount: 0, headEmployeeName: '' },
 ];
 
-const TEAMS_MOCK: TeamInfo[] = [
-    { teamId: 'team-001', teamName: 'AI Research Team', memberCount: 5, memberNames: ['Juan dela Cruz', 'Maria Santos', 'Pedro Reyes', 'Ana Lopez', 'Luis Tan'], isActive: true, departmentId: 'dept-001', departmentName: 'Operations' },
-    { teamId: 'team-002', teamName: 'ML Operations', memberCount: 3, memberNames: ['Carla Gomez', 'Ben Lim', 'Diana Wang'], isActive: true, departmentId: 'dept-002', departmentName: 'Logistics' },
-    { teamId: 'team-003', teamName: 'Data Engineering', memberCount: 4, memberNames: ['Erik Johansson', 'Fiona Chen', 'George Hall', 'Hana Kim'], isActive: true, departmentId: 'dept-003', departmentName: 'IT & Admin' },
-    { teamId: 'team-004', teamName: 'Legacy Team', memberCount: 0, memberNames: [], isActive: false, departmentId: 'dept-004', departmentName: 'Inactive Dept' },
-];
+const TEAMS_MOCK: TeamInfo[] = [];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -141,7 +136,8 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     // ── Data State ──
     const [employees, setEmployees] = useState<AvailableEmployee[]>([]);
     const [departments, setDepartments] = useState<DepartmentInfo[]>(DEPARTMENTS_MOCK);
-    const [teams] = useState<TeamInfo[]>(TEAMS_MOCK);
+    const [teams, setTeams] = useState<TeamInfo[]>([]);
+    const [loadingTeams, setLoadingTeams] = useState(true);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
     const [loadingDepartments, setLoadingDepartments] = useState(false);
     const [employeeSearch, setEmployeeSearch] = useState('');
@@ -214,6 +210,32 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
         const interval = setInterval(fetchEmployees, 20000);
         return () => clearInterval(interval);
     }, [fetchEmployees]);
+
+    // Real teams from the backend (replaces the old hardcoded placeholder list).
+    useEffect(() => {
+        const fetchTeams = async () => {
+            setLoadingTeams(true);
+            try {
+                const res = await api.get('/api/teams', { params: { pageNumber: 1, pageSize: 200, includeInactive: true } });
+                const json = res.data;
+                const items: any[] = json?.isSuccess && Array.isArray(json?.data?.items) ? json.data.items : [];
+                setTeams(items.map((t: any) => ({
+                    teamId: t.id ?? '',
+                    teamName: t.name ?? '',
+                    memberCount: t.memberCount ?? 0,
+                    memberNames: (t.members ?? []).map((m: any) => m.fullName ?? ''),
+                    isActive: t.isActive ?? true,
+                    departmentId: t.departmentId ?? '',
+                    departmentName: t.departmentName ?? '',
+                })));
+            } catch {
+                setTeams([]);
+            } finally {
+                setLoadingTeams(false);
+            }
+        };
+        fetchTeams();
+    }, []);
 
     useEffect(() => {
         const fetchDepartments = async () => {
@@ -646,8 +668,9 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
             classification: form.classification,
             assignmentScope: scopeNum,
             deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
-            assignedUserIds: scope === 'SingleEmployee' ? [selectedEmployeeId] : [],
+            assignedUserIds: scope === 'SingleEmployee' ? [selectedEmployeeId] : undefined,
             assignedDepartmentId: scope === 'Department' ? selectedDepartmentId : undefined,
+            teamId: scope === 'Team' ? selectedTeamId || undefined : undefined,
             isConfidential: form.isConfidential,
         };
 
@@ -1229,7 +1252,12 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                     {/* ── Team Picker (Step 5) ── */}
                     {scope === 'Team' && (
                         <div className="ai-team-picker">
-                            {teams.length > 0 ? (
+                            {loadingTeams ? (
+                                <div className="ai-empty-state">
+                                    <Loader2 size={24} className="ai-spin" />
+                                    <p>Loading teams…</p>
+                                </div>
+                            ) : teams.length > 0 ? (
                                 <div className="ai-team-grid">
                                     {teams.map(team => {
                                         const disabled = !team.isActive;
