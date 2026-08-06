@@ -14,7 +14,7 @@ public class RecommendationHistoryFilteringTests
         if (dateTo.HasValue)
             query = query.Where(r => r.CreatedAt <= dateTo.Value);
 
-        return query.OrderBy(r => r.CreatedAt).ToList();
+        return query.OrderByDescending(r => r.CreatedAt).ToList();
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class RecommendationHistoryFilteringTests
     }
 
     [Fact]
-    public void ResultsAreChronological()
+    public void ResultsAreNewestFirst()
     {
         var recs = new List<(DateTime, string, string)>
         {
@@ -98,9 +98,9 @@ public class RecommendationHistoryFilteringTests
 
         var result = FilterByDateRange(recs, null, null);
         Assert.Equal(3, result.Count);
-        Assert.Equal("Jan", result[0].Notes);
+        Assert.Equal("Mar", result[0].Notes);
         Assert.Equal("Feb", result[1].Notes);
-        Assert.Equal("Mar", result[2].Notes);
+        Assert.Equal("Jan", result[2].Notes);
     }
 
     [Fact]

@@ -121,7 +121,7 @@ public class RecommendationService : IRecommendationService
         var totalCount = await query.CountAsync();
 
         var recommendations = await query
-            .OrderBy(r => r.CreatedAt)
+            .OrderByDescending(r => r.CreatedAt)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
