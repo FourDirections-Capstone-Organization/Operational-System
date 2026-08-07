@@ -51,7 +51,11 @@ public class TaskTemplateService : ITaskTemplateService
                     "Default department is inactive or does not exist");
         }
 
-        var nextGenDate = CalculateNextGenerationDate(dto.RecurrenceStartDate, dto.RecurrenceRule);
+        // The frontend sends date-only strings (Kind=Unspecified); PostgreSQL timestamptz
+        // requires Utc, so normalize before storing or computing derived dates.
+        var recurrenceStart = DateTime.SpecifyKind(dto.RecurrenceStartDate, DateTimeKind.Utc);
+
+        var nextGenDate = CalculateNextGenerationDate(recurrenceStart, dto.RecurrenceRule);
 
         var template = new TaskTemplate
         {
@@ -64,7 +68,7 @@ public class TaskTemplateService : ITaskTemplateService
             DefaultAssigneeId = dto.DefaultAssigneeId,
             DefaultDepartmentId = dto.DefaultDepartmentId,
             RecurrenceRule = dto.RecurrenceRule,
-            RecurrenceStartDate = dto.RecurrenceStartDate,
+            RecurrenceStartDate = recurrenceStart,
             NextGenerationDate = nextGenDate,
             IsActive = dto.IsActive,
             CreatedById = creatorId,
@@ -189,9 +193,11 @@ public class TaskTemplateService : ITaskTemplateService
         {
             var rule = dto.RecurrenceRule ?? template.RecurrenceRule;
             var startDate = dto.RecurrenceStartDate ?? template.RecurrenceStartDate;
+            // Normalize to Utc (the frontend sends date-only strings) so PostgreSQL timestamptz accepts it.
+            var normalizedStart = DateTime.SpecifyKind(startDate, DateTimeKind.Utc);
             template.RecurrenceRule = rule;
-            template.RecurrenceStartDate = startDate;
-            template.NextGenerationDate = CalculateNextGenerationDate(startDate, rule);
+            template.RecurrenceStartDate = normalizedStart;
+            template.NextGenerationDate = CalculateNextGenerationDate(normalizedStart, rule);
         }
 
         if (dto.IsActive.HasValue)

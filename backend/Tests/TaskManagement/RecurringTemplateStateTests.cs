@@ -57,4 +57,28 @@ public class RecurringTemplateStateTests
         template.NextGenerationDate = next;
         Assert.Equal(next, template.NextGenerationDate);
     }
+
+    // Regression: the frontend sends RecurrenceStartDate as a date-only string (Kind=Unspecified).
+    // PostgreSQL timestamptz columns require Utc, so the stored dates must be normalized with
+    // DateTime.SpecifyKind(..., DateTimeKind.Utc) before persisting (see TaskTemplateService).
+    [Fact]
+    public void DateOnlyStartDate_IsNormalizedToUtc()
+    {
+        var start = new DateTime(2026, 8, 7, 0, 0, 0, DateTimeKind.Unspecified);
+        var normalized = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+
+        Assert.Equal(DateTimeKind.Utc, normalized.Kind);
+        Assert.Equal(new DateTime(2026, 8, 7, 0, 0, 0, DateTimeKind.Utc), normalized);
+    }
+
+    [Fact]
+    public void NormalizedStartDate_KeepsUtcKindAfterNextGenerationCalculation()
+    {
+        var start = DateTime.SpecifyKind(new DateTime(2026, 8, 7), DateTimeKind.Utc);
+        var next = Backend.Modules.TaskManagement.TaskTemplateService
+            .CalculateNextGenerationDate(start, RecurrenceRule.Weekly);
+
+        Assert.Equal(DateTimeKind.Utc, next.Kind);
+        Assert.Equal(start.AddDays(7), next);
+    }
 }
