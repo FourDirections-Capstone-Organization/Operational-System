@@ -62,22 +62,23 @@ public class TaskService : ITaskService
         }
 
         var assignmentValidation = await ValidateAssignmentAsync(
-            dto.AssignmentScope, dto.AssignedUserIds, dto.AssignedDepartmentId);
+            dto.AssignmentScope, dto.AssignedUserIds, dto.AssignedDepartmentId, dto.TeamId);
 
         if (!assignmentValidation.IsValid)
             return ApiResponseDTO<TaskResponseDTO>.Failure(assignmentValidation.ErrorMessage!);
 
+        // Resolve the actual assignee set (team members when a TeamId is given).
+        var resolvedAssignedUserIds = await ResolveAssignedUserIdsAsync(
+            dto.AssignmentScope, dto.AssignedUserIds, dto.AssignedDepartmentId, dto.TeamId);
+
         // FR-039: Re-validate assignee availability at submission time
         if (dto.AssignmentScope == AssignmentScope.SingleEmployee || dto.AssignmentScope == AssignmentScope.Team)
         {
-            if (dto.AssignedUserIds != null)
+            foreach (var assignedUserId in resolvedAssignedUserIds)
             {
-                foreach (var assignedUserId in dto.AssignedUserIds)
-                {
-                    var availabilityCheck = await _dashboardService.ValidateAssigneeAvailabilityAsync(assignedUserId);
-                    if (!availabilityCheck.IsSuccess)
-                        return ApiResponseDTO<TaskResponseDTO>.Failure(availabilityCheck.Message);
-                }
+                var availabilityCheck = await _dashboardService.ValidateAssigneeAvailabilityAsync(assignedUserId);
+                if (!availabilityCheck.IsSuccess)
+                    return ApiResponseDTO<TaskResponseDTO>.Failure(availabilityCheck.Message);
             }
         }
 
@@ -94,6 +95,7 @@ public class TaskService : ITaskService
             IsConfidential = dto.IsConfidential,
             CreatedById = creatorId,
             AssignedDepartmentId = dto.AssignedDepartmentId,
+            TeamId = dto.AssignmentScope == AssignmentScope.Team ? dto.TeamId : null,
             CreatedAt = now
         };
 
@@ -105,7 +107,7 @@ public class TaskService : ITaskService
         await _db.SaveChangesAsync();
 
         var assignedUserIds = await ResolveAssignedUserIdsAsync(
-            dto.AssignmentScope, dto.AssignedUserIds, dto.AssignedDepartmentId);
+            dto.AssignmentScope, dto.AssignedUserIds, dto.AssignedDepartmentId, dto.TeamId);
 
         foreach (var userId in assignedUserIds)
         {
@@ -369,16 +371,21 @@ public class TaskService : ITaskService
         if (dto.AssignedDepartmentId.HasValue)
             task.AssignedDepartmentId = dto.AssignedDepartmentId;
 
+        if (dto.TeamId.HasValue)
+            task.TeamId = dto.TeamId;
+
         if (dto.IsConfidential.HasValue)
             task.IsConfidential = dto.IsConfidential.Value;
 
         // FR-039: Re-validate assignee availability at submission time
-        if (dto.AssignedUserIds != null)
+        if (dto.AssignedUserIds != null || dto.TeamId.HasValue)
         {
             var scope = dto.AssignmentScope ?? task.AssignmentScope;
             if (scope == AssignmentScope.SingleEmployee || scope == AssignmentScope.Team)
             {
-                foreach (var assignedUserId in dto.AssignedUserIds)
+                var resolvedForCheck = dto.AssignedUserIds
+                    ?? await ResolveAssignedUserIdsAsync(scope, null, null, dto.TeamId ?? task.TeamId);
+                foreach (var assignedUserId in resolvedForCheck)
                 {
                     var availabilityCheck = await _dashboardService.ValidateAssigneeAvailabilityAsync(assignedUserId);
                     if (!availabilityCheck.IsSuccess)
@@ -388,7 +395,10 @@ public class TaskService : ITaskService
 
             _db.TaskAssignments.RemoveRange(task.Assignments);
 
-            foreach (var userId in dto.AssignedUserIds)
+            var resolvedAssignees = dto.AssignedUserIds
+                ?? await ResolveAssignedUserIdsAsync(scope, null, null, dto.TeamId ?? task.TeamId);
+
+            foreach (var userId in resolvedAssignees)
             {
                 _db.TaskAssignments.Add(new TaskAssignment
                 {
@@ -499,7 +509,7 @@ public class TaskService : ITaskService
 
 
     private async Task<(bool IsValid, string? ErrorMessage)> ValidateAssignmentAsync(
-        AssignmentScope scope, List<Guid>? userIds, Guid? departmentId)
+        AssignmentScope scope, List<Guid>? userIds, Guid? departmentId, Guid? teamId = null)
     {
         switch (scope)
         {
@@ -528,6 +538,25 @@ public class TaskService : ITaskService
                 return (true, null);
 
             case AssignmentScope.Team:
+                if (teamId.HasValue)
+                {
+                    var team = await _db.Teams
+                        .Include(t => t.Members)
+                        .FirstOrDefaultAsync(t => t.Id == teamId.Value && t.IsActive);
+
+                    if (team is null)
+                        return (false, "Selected team is inactive or does not exist");
+
+                    var activeMemberCount = await _db.TeamMembers
+                        .CountAsync(tm => tm.TeamId == teamId.Value
+                            && tm.User != null && tm.User.IsActive && !tm.User.IsDeactivated);
+
+                    if (activeMemberCount == 0)
+                        return (false, "Selected team has no active members");
+
+                    return (true, null);
+                }
+
                 if (userIds is null || userIds.Count == 0)
                     return (false, "At least one team member is required for Team scope");
 
@@ -568,12 +597,23 @@ public class TaskService : ITaskService
     }
     
     private async Task<List<Guid>> ResolveAssignedUserIdsAsync(
-        AssignmentScope scope, List<Guid>? userIds, Guid? departmentId)
+        AssignmentScope scope, List<Guid>? userIds, Guid? departmentId, Guid? teamId = null)
     {
         switch (scope)
         {
             case AssignmentScope.SingleEmployee:
+                return userIds ?? new List<Guid>();
+
             case AssignmentScope.Team:
+                if (teamId.HasValue)
+                {
+                    return await _db.TeamMembers
+                        .Where(tm => tm.TeamId == teamId.Value
+                            && tm.User != null && tm.User.IsActive && !tm.User.IsDeactivated)
+                        .Select(tm => tm.UserId)
+                        .ToListAsync();
+                }
+
                 return userIds ?? new List<Guid>();
 
             case AssignmentScope.Department:
@@ -597,6 +637,7 @@ public class TaskService : ITaskService
         // Explicit Loading to Task
         await _db.Entry(task).Reference(t => t.CreatedBy).LoadAsync();
         await _db.Entry(task).Reference(t => t.AssignedDepartment).LoadAsync();
+        await _db.Entry(task).Reference(t => t.Team).LoadAsync();
         await _db.Entry(task).Collection(t => t.Assignments).LoadAsync();
 
         foreach (var assignment in task.Assignments)
@@ -627,6 +668,8 @@ public class TaskService : ITaskService
                 : null,
             AssignedDepartmentId = task.AssignedDepartmentId,
             AssignedDepartmentName = task.AssignedDepartment?.Name,
+            TeamId = task.TeamId,
+            TeamName = task.Team?.Name,
             ProgressNotes = task.ProgressNotes,
             ReviewRemarks = task.ReviewRemarks,
             PushBackComment = task.PushBackComment,

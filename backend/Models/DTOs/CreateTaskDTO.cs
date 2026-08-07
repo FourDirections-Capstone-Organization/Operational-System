@@ -28,5 +28,8 @@ public class CreateTaskDTO
 
     public Guid? AssignedDepartmentId { get; set; }
 
+    /// <summary>Required for Team scope — the team the task is assigned to.</summary>
+    public Guid? TeamId { get; set; }
+
     public bool IsConfidential { get; set; } = false;
 }
