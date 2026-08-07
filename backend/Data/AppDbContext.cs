@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Models.Task> Tasks => Set<Models.Task>();
     public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
     public DbSet<TaskTemplate> TaskTemplates => Set<TaskTemplate>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -93,6 +95,48 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(t => t.AssignedDepartmentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.Team)
+                .WithMany()
+                .HasForeignKey(t => t.TeamId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Team Configuration
+        modelBuilder.Entity<Team>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.HasIndex(e => e.Name).IsUnique();
+
+            entity.HasOne(t => t.Department)
+                .WithMany()
+                .HasForeignKey(t => t.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.CreatedBy)
+                .WithMany()
+                .HasForeignKey(t => t.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // TeamMember Configuration
+        modelBuilder.Entity<TeamMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasOne(tm => tm.Team)
+                .WithMany(t => t.Members)
+                .HasForeignKey(tm => tm.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(tm => tm.User)
+                .WithMany()
+                .HasForeignKey(tm => tm.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // An employee can only belong to ONE team at a time.
+            entity.HasIndex(e => e.UserId).IsUnique();
         });
 
         // TaskAssignment Configuration

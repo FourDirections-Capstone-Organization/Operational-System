@@ -97,6 +97,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<ITeamService, TeamService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ITaskWorkflowService, TaskWorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
