@@ -1962,29 +1962,11 @@ export default function EmployeeDashboard() {
         [awaitingReviewNotifs, headerNotifications]
     );
 
-    const awaitingReviewRows = useMemo(() => {
-        const pendingReview = tasks.filter(t => t.status === 'pending-review' || t.status === 'done');
-        const nowIso = new Date().toISOString();
-        return pendingReview.map(t => ({
-            notificationId: `review-${t.id}`,
-            taskId: t.id,
-            notificationType: 'TaskAwaitingReview',
-            message: `Task '${t.name}' is awaiting review.`,
-            isRead: false,
-            createdAt: nowIso,
-        }));
-    }, [tasks]);
-
-    const mergedAllNotifications = useMemo(
-        // Derived rows (awaiting review) are only meaningful on page 1 — they are
-        // computed from live task state, not part of the paginated notification
-        // feed. Appending them to every page would duplicate rows across pages.
-        () => (notifPage === 1
-            ? [...awaitingReviewRows, ...allNotifications]
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            : allNotifications),
-        [notifPage, awaitingReviewRows, allNotifications]
-    );
+    // The notification page shows ONLY the server-paginated feed so every page has
+    // the same number of records. Derived rows (awaiting review) are computed from
+    // live task state and would inflate page 1 differently from later pages, so they
+    // stay in the header dropdown (mergedHeaderNotifications) only.
+    const mergedAllNotifications = useMemo(() => allNotifications, [allNotifications]);
 
     const fetchAllNotifications = useCallback(async (page: number) => {
         setNotifLoading(true);
@@ -2332,6 +2314,7 @@ export default function EmployeeDashboard() {
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
                                     totalRecords={notifTotalRecords}
+                                    pageSize={NOTIF_PAGE_SIZE}
                                 >
                                     {mergedAllNotifications.map(n => {
                                         const badge = (() => {

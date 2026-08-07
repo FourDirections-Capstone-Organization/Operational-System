@@ -2829,9 +2829,7 @@ export default function Dashboard() {
 
     // ── Awaiting Review + Overdue (derived from task status/deadlines) ──
     const [awaitingReviewNotifs, setAwaitingReviewNotifs] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
-    const [awaitingReviewRows, setAwaitingReviewRows] = useState<any[]>([]);
     const [overdueNotifs, setOverdueNotifs] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
-    const [overdueRows, setOverdueRows] = useState<any[]>([]);
 
     const fetchAwaitingReview = async () => {
         try {
@@ -2840,9 +2838,7 @@ export default function Dashboard() {
             const raw = Array.isArray(json) ? json : (Array.isArray(json?.data?.items) ? json.data.items : (Array.isArray(json?.data) ? json.data : []));
             const now = new Date();
             const reviewNotifs: import('../../components/GlobalHeader/GlobalHeader').NotificationItem[] = [];
-            const reviewRows: any[] = [];
             const overdueNotifsList: import('../../components/GlobalHeader/GlobalHeader').NotificationItem[] = [];
-            const overdueRowsList: any[] = [];
             raw.forEach((t: any) => {
                 const taskId = t.id ?? t.taskId;
                 const rawTitle = t.title ?? t.taskTitle ?? '';
@@ -2870,14 +2866,6 @@ export default function Dashboard() {
                         relatedEntityId: taskId,
                         relatedEntityType: 'task',
                     });
-                    reviewRows.push({
-                        notificationId: `review-${taskId}`,
-                        taskId,
-                        notificationType: 'TaskAwaitingReview',
-                        message: `Task '${title}' has been submitted for review.`,
-                        isRead: false,
-                        createdAt: t.updatedAt ?? t.createdAt ?? new Date().toISOString(),
-                    });
                 } else if (isOverdue) {
                     overdueNotifsList.push({
                         id: `overdue-${taskId}`,
@@ -2894,20 +2882,10 @@ export default function Dashboard() {
                         relatedEntityId: taskId,
                         relatedEntityType: 'task',
                     });
-                    overdueRowsList.push({
-                        notificationId: `overdue-${taskId}`,
-                        taskId,
-                        notificationType: 'TaskOverdue',
-                        message: `Task '${title}' is overdue.`,
-                        isRead: false,
-                        createdAt: deadlineStr,
-                    });
                 }
             });
             setAwaitingReviewNotifs(reviewNotifs);
-            setAwaitingReviewRows(reviewRows);
             setOverdueNotifs(overdueNotifsList);
-            setOverdueRows(overdueRowsList);
         } catch { /* silent */ }
     };
 
@@ -2936,20 +2914,11 @@ export default function Dashboard() {
         return [...awaitingReviewNotifs, ...overdueNotifs.filter(n => !realOverdueIds.has(n.relatedEntityId as string)), ...headerNotifications];
     }, [awaitingReviewNotifs, overdueNotifs, headerNotifications]);
 
-    const mergedAllNotifications = useMemo(() => {
-        const realOverdueIds = new Set(
-            allNotifications
-                .filter(n => n.notificationType === 'TaskOverdue' && n.taskId)
-                .map(n => n.taskId as string)
-        );
-        // Derived rows (awaiting review/overdue) are computed from live task state,
-        // not part of the paginated notification feed. Show them only on page 1 so
-        // rows do not duplicate across pages; pages 2+ show pure server rows.
-        if (notifPage !== 1) return allNotifications;
-        // Newest first so recent notifications appear at the top of the page
-        return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications]
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [awaitingReviewRows, overdueRows, allNotifications, notifPage]);
+    // The notification page shows ONLY the server-paginated feed so every page has
+    // the same number of records. Derived rows (awaiting review/overdue) are computed
+    // from live task state and would inflate page 1 differently from later pages, so
+    // they stay in the header dropdown (mergedHeaderNotifications) only.
+    const mergedAllNotifications = useMemo(() => allNotifications, [allNotifications]);
 
     const openManagerTaskById = (id: string) => {
         api.get(`/api/Task/${id}`)
@@ -3275,6 +3244,7 @@ export default function Dashboard() {
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
                                     totalRecords={notifTotalRecords}
+                                    pageSize={NOTIF_PAGE_SIZE}
                                 >
                                     {mergedAllNotifications.map(n => {
                                         const badge = (() => {
