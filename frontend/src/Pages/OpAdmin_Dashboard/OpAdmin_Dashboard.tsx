@@ -212,6 +212,7 @@ interface CreateTaskDTO {
     deadline: string | null;
     assignedUserIds?: string[];
     assignedDepartmentId?: string;
+    teamId?: string;
     isConfidential?: boolean;
 }
 
@@ -221,9 +222,10 @@ interface UpdateTaskDTO {
     priorityLevel?: number;
     classification?: number;
     assignmentScope?: number;
-    deadline?: string;
+    deadline?: string | null;
     assignedUserIds?: string[];
     assignedDepartmentId?: string;
+    teamId?: string;
     isConfidential?: boolean;
 }
 
@@ -669,7 +671,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         assignmentScope: 'SingleEmployee' as 'SingleEmployee' | 'Team' | 'Department',
         assignedDepartmentId: '',
     });
-    const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+    const [selectedTeamId, setSelectedTeamId] = useState('');
+    const [teamsForTask, setTeamsForTask] = useState<{ id: string; name: string; memberCount: number }[]>([]);
     const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
     const [supportingEvidenceFiles, setSupportingEvidenceFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -680,7 +683,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
     const [eligibleEmployees, setEligibleEmployees] = useState<WorkloadInfo[]>([]);
     const [recommendationAccepted, setRecommendationAccepted] = useState(true);
     const [singleSearch, setSingleSearch] = useState('');
-    const [teamSearch, setTeamSearch] = useState('');
 
     useEffect(() => {
         const fetchRecommendations = async () => {
@@ -729,8 +731,23 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             } catch {
             }
         };
+        const fetchTeams = async () => {
+            try {
+                const res = await api.get('/api/Team?pageNumber=1&pageSize=100');
+                const json = res.data;
+                if (json.isSuccess && json.data?.items) {
+                    setTeamsForTask(json.data.items.map((t: any) => ({
+                        id: t.id ?? t.teamId,
+                        name: t.name ?? t.teamName,
+                        memberCount: t.memberCount ?? t.members?.length ?? 0,
+                    })));
+                }
+            } catch {
+            }
+        };
         fetchRecommendations();
         fetchDepartments();
+        fetchTeams();
 
         // FR-065: Periodic refresh of availability status
         const interval = setInterval(fetchRecommendations, 30000);
@@ -798,8 +815,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         if (form.assignmentScope === 'SingleEmployee' && !form.assignedTo) {
             newErrors.assignedTo = 'Task must be assigned to at least one employee.';
         }
-        if (form.assignmentScope === 'Team' && selectedTeamIds.length === 0) {
-            newErrors.assignedTo = 'Select at least one team member.';
+        if (form.assignmentScope === 'Team' && !selectedTeamId) {
+            newErrors.assignedTo = 'Select a team to assign the task to.';
         }
         if (form.assignmentScope === 'Department' && !form.assignedDepartmentId) {
             newErrors.assignedDepartmentId = 'Select a department.';
@@ -843,14 +860,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                 return;
             }
         }
-        if (form.assignmentScope === 'Team' && selectedTeamIds.length > 0) {
-            const unavailable = selectedTeamIds
-                .map(id => eligibleEmployees.find(e => e.accountId === id))
-                .filter(e => e && !e.isAvailable);
-            if (unavailable.length > 0) {
-                setFormError(`Cannot assign: ${unavailable.map(e => e!.employeeName).join(', ')} ${unavailable.length === 1 ? 'is' : 'are'} currently unavailable.`);
-                return;
-            }
+        if (form.assignmentScope === 'Team' && selectedTeamId) {
+            // Assignees are resolved server-side from the team's members.
         }
 
         setSubmitting(true);
@@ -861,7 +872,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
         if (form.assignmentScope === 'SingleEmployee') {
             assignedUserIds = form.assignedTo ? [form.assignedTo] : undefined;
         } else if (form.assignmentScope === 'Team') {
-            assignedUserIds = selectedTeamIds.length > 0 ? selectedTeamIds : undefined;
+            // Assignees are resolved server-side from the team's members.
+            assignedUserIds = undefined;
         } else if (form.assignmentScope === 'Department') {
             assignedDepartmentId = form.assignedDepartmentId || undefined;
         }
@@ -875,6 +887,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
             deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
             assignedUserIds,
             assignedDepartmentId,
+            teamId: form.assignmentScope === 'Team' ? selectedTeamId || undefined : undefined,
             isConfidential: form.isConfidential,
         };
         if (supportingEvidenceFiles.length > 0) {
@@ -1196,22 +1209,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                         </div>
 
                         <div className="scope-selector">
-                            {/* Team scope hidden until the team management feature is planned and tested. */}
-                            {(['SingleEmployee', 'Department'] as const).map(scope => (
+                            {(['SingleEmployee', 'Team', 'Department'] as const).map(scope => (
                                 <label
                                     key={scope}
                                     className={`scope-option${form.assignmentScope === scope ? ' active' : ''}`}
                                     onClick={() => {
                                         setForm(prev => ({ ...prev, assignmentScope: scope, assignedDepartmentId: '' }));
                                         setErrors(prev => ({ ...prev, assignmentScope: '', assignedTo: '', assignedDepartmentId: '' }));
-                                        setSelectedTeamIds([]);
+                                        setSelectedTeamId('');
                                     }}
                                 >
                                     <input type="radio" name="scope" value={scope}
                                         checked={form.assignmentScope === scope}
                                         onChange={() => { }} />
-                                    {scope === 'SingleEmployee' ? <UserCircle2 className="scope-icon" /> : <Building className="scope-icon" />}
-                                    {scope === 'SingleEmployee' ? 'Single' : 'Department'}
+                                    {scope === 'SingleEmployee' ? <UserCircle2 className="scope-icon" /> : scope === 'Team' ? <Users className="scope-icon" /> : <Building className="scope-icon" />}
+                                    {scope === 'SingleEmployee' ? 'Single' : scope === 'Team' ? 'Team' : 'Department'}
                                 </label>
                             ))}
                         </div>
@@ -1272,61 +1284,28 @@ const TaskModal: React.FC<TaskModalProps> = ({ mode, initial = {}, teamMembers, 
                             </div>
                         )}
 
-                        {/* -- Team: pick multiple users -- */}
+                        {/* -- Team: pick a team from Team Management -- */}
                         {form.assignmentScope === 'Team' && (
-                            <div className="emp-picker-section">
-                                {recommendation && (
-                                    <div className="emp-picker-rec-banner">
-                                        <Lightbulb size={13} />
-                                        <span>Recommended: <strong>{recommendation.employeeName}</strong> — {recommendation.reason}</span>
+                            <div className="field" style={{ marginBottom: 0 }}>
+                                <label>Team <span style={{ color: 'var(--status-failed, #ee5d50)' }}>*</span></label>
+                                <select
+                                    value={selectedTeamId}
+                                    onChange={e => { setSelectedTeamId(e.target.value); setErrors(prev => ({ ...prev, assignedTo: '' })); }}
+                                    className={errors.assignedTo ? 'input-error' : ''}
+                                >
+                                    <option value="">Select team</option>
+                                    {teamsForTask.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name} ({t.memberCount} member{t.memberCount !== 1 ? 's' : ''})</option>
+                                    ))}
+                                </select>
+                                {teamsForTask.length === 0 && (
+                                    <div style={{ fontSize: 11, color: 'var(--status-warn, #d97706)', marginTop: 4 }}>
+                                        None — no teams have been created yet in Team Management.
                                     </div>
-                                )}
-                                <input
-                                    type="text"
-                                    className="emp-picker-search"
-                                    placeholder="Search employees…"
-                                    value={teamSearch}
-                                    onChange={e => setTeamSearch(e.target.value)}
-                                />
-                                {eligibleEmployees.length > 0 ? (
-                                    <div className="emp-picker-list">
-                                        {(teamSearch
-                                            ? eligibleEmployees.filter(e =>
-                                                e.employeeName.toLowerCase().includes(teamSearch.toLowerCase()))
-                                            : eligibleEmployees
-                                        ).map(e => {
-                                            const selected = selectedTeamIds.includes(e.accountId);
-                                            const disabled = !e.isAvailable;
-                                            return (
-                                                <div key={e.accountId}
-                                                    className={`emp-picker-row${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
-                                                    onClick={() => {
-                                                        if (disabled) return;
-                                                        setSelectedTeamIds(prev =>
-                                                            prev.includes(e.accountId) ? prev.filter(id => id !== e.accountId) : [...prev, e.accountId]
-                                                        );
-                                                        setErrors(prev => ({ ...prev, assignedTo: '' }));
-                                                    }}
-                                                >
-                                                    <input type="checkbox" className="emp-picker-checkbox" checked={selected} disabled={disabled} onChange={() => { }} />
-                                                    <div className="emp-picker-info">
-                                                        <span className="emp-picker-name">{e.employeeName}</span>
-                                                        <div className="emp-picker-meta">
-                                                            <span className={`emp-picker-dot ${e.isAvailable ? 'active' : e.availabilityStatus === 'Offline' ? 'offline' : 'leave'}`} />
-                                                            <span>{e.availabilityStatus}</span>
-                                                            <span>{e.workload} tasks</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="emp-picker-empty">No eligible employees found.</div>
                                 )}
                                 <FieldErr name="assignedTo" />
-                                {!errors.assignedTo && selectedTeamIds.length > 0 && (
-                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> {selectedTeamIds.length} team member(s) selected</span>
+                                {!errors.assignedTo && selectedTeamId && (
+                                    <span className="emp-picker-confirm"><CheckCircle2 size={12} /> Assigned to team: {teamsForTask.find(t => t.id === selectedTeamId)?.name ?? ''}</span>
                                 )}
                             </div>
                         )}

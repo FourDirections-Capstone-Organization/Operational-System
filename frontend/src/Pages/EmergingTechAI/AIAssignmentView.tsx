@@ -78,13 +78,6 @@ const DEPARTMENTS_MOCK: DepartmentInfo[] = [
     { departmentId: 'dept-004', name: 'Inactive Dept', code: 'INA', isActive: false, employeeCount: 0, headEmployeeName: '' },
 ];
 
-const TEAMS_MOCK: TeamInfo[] = [
-    { teamId: 'team-001', teamName: 'AI Research Team', memberCount: 5, memberNames: ['Juan dela Cruz', 'Maria Santos', 'Pedro Reyes', 'Ana Lopez', 'Luis Tan'], isActive: true, departmentId: 'dept-001', departmentName: 'Operations' },
-    { teamId: 'team-002', teamName: 'ML Operations', memberCount: 3, memberNames: ['Carla Gomez', 'Ben Lim', 'Diana Wang'], isActive: true, departmentId: 'dept-002', departmentName: 'Logistics' },
-    { teamId: 'team-003', teamName: 'Data Engineering', memberCount: 4, memberNames: ['Erik Johansson', 'Fiona Chen', 'George Hall', 'Hana Kim'], isActive: true, departmentId: 'dept-003', departmentName: 'IT & Admin' },
-    { teamId: 'team-004', teamName: 'Legacy Team', memberCount: 0, memberNames: [], isActive: false, departmentId: 'dept-004', departmentName: 'Inactive Dept' },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 const getInitials = (name: string): string => {
@@ -141,7 +134,8 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
     // ── Data State ──
     const [employees, setEmployees] = useState<AvailableEmployee[]>([]);
     const [departments, setDepartments] = useState<DepartmentInfo[]>(DEPARTMENTS_MOCK);
-    const [teams] = useState<TeamInfo[]>(TEAMS_MOCK);
+    const [teams, setTeams] = useState<TeamInfo[]>([]);
+    const [loadingTeams, setLoadingTeams] = useState(false);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
     const [loadingDepartments, setLoadingDepartments] = useState(false);
     const [employeeSearch, setEmployeeSearch] = useState('');
@@ -243,6 +237,38 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
         };
 
         fetchDepartments();
+    }, []);
+
+    // ── Fetch real teams (from Team Management) ──
+    useEffect(() => {
+        const fetchTeams = async () => {
+            setLoadingTeams(true);
+            try {
+                const res = await api.get('/api/Team?pageNumber=1&pageSize=100');
+                const json = res.data;
+                if (json.isSuccess && json.data?.items) {
+                    const mapped: TeamInfo[] = json.data.items.map((t: any) => ({
+                        teamId: t.id ?? t.teamId,
+                        teamName: t.name ?? t.teamName,
+                        memberCount: t.memberCount ?? t.members?.length ?? 0,
+                        memberNames: (t.members ?? []).map((m: any) => m.fullName ?? ''),
+                        isActive: t.isActive ?? true,
+                        departmentId: t.departmentId ?? '',
+                        departmentName: t.departmentName ?? '',
+                    }));
+                    setTeams(mapped.filter(t => t.isActive));
+                } else {
+                    setTeams([]);
+                }
+            } catch {
+                console.warn('[AIAssignment] Failed to fetch teams');
+                setTeams([]);
+            } finally {
+                setLoadingTeams(false);
+            }
+        };
+
+        fetchTeams();
     }, []);
 
     // ── Fetch AI suitability when enabled ──
@@ -648,6 +674,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
             deadline: form.dueAt ? new Date(form.dueAt).toISOString() : null,
             assignedUserIds: scope === 'SingleEmployee' ? [selectedEmployeeId] : [],
             assignedDepartmentId: scope === 'Department' ? selectedDepartmentId : undefined,
+            teamId: scope === 'Team' ? selectedTeamId : undefined,
             isConfidential: form.isConfidential,
         };
 
@@ -1000,8 +1027,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                 <p className="ai-card-desc">Select exactly one scope for this task assignment.</p>
 
                 <div className="ai-scope-selector">
-                    {/* Team scope hidden until the team management feature is planned and tested. */}
-                    {(['SingleEmployee', 'Department'] as const).map(s => (
+                    {(['SingleEmployee', 'Team', 'Department'] as const).map(s => (
                         <label
                             key={s}
                             className={`ai-scope-option${scope === s ? ' active' : ''}`}
@@ -1009,10 +1035,10 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                         >
                             <input type="radio" name="scope" value={s}
                                 checked={scope === s} onChange={() => { }} />
-                            {s === 'SingleEmployee' ? <UserCircle2 size={20} /> : <Building size={20} />}
-                            <span className="ai-scope-label">{s === 'SingleEmployee' ? 'Single Employee' : 'Department'}</span>
+                            {s === 'SingleEmployee' ? <UserCircle2 size={20} /> : s === 'Team' ? <Users size={20} /> : <Building size={20} />}
+                            <span className="ai-scope-label">{s === 'SingleEmployee' ? 'Single Employee' : s === 'Team' ? 'Team' : 'Department'}</span>
                             <span className="ai-scope-desc">
-                                {s === 'SingleEmployee' ? 'Assign to one specific employee' : 'Assign to an entire department'}
+                                {s === 'SingleEmployee' ? 'Assign to one specific employee' : s === 'Team' ? 'Assign to a team from Team Management' : 'Assign to an entire department'}
                             </span>
                         </label>
                     ))}
@@ -1230,7 +1256,11 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                     {/* ── Team Picker (Step 5) ── */}
                     {scope === 'Team' && (
                         <div className="ai-team-picker">
-                            {teams.length > 0 ? (
+                            {loadingTeams ? (
+                                <div className="ai-emp-loading">
+                                    {[1, 2, 3].map(i => <div key={i} className="ai-skeleton-row" />)}
+                                </div>
+                            ) : teams.length > 0 ? (
                                 <div className="ai-team-grid">
                                     {teams.map(team => {
                                         const disabled = !team.isActive;
@@ -1273,7 +1303,7 @@ const AIAssignmentView: React.FC<AIAssignmentViewProps> = ({ onBack, onTaskCreat
                             ) : (
                                 <div className="ai-empty-state">
                                     <Users size={24} />
-                                    <p>No teams available for assignment.</p>
+                                    <p>None — no teams have been created yet in Team Management.</p>
                                 </div>
                             )}
                             <FieldErr name="destination" />
