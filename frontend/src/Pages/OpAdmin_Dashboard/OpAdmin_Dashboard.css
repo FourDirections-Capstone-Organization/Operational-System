@@ -896,6 +896,40 @@
     color: #5e35b1;
 }
 
+/* ─── Filter Pills (used by Recommendation History period presets) ────────── */
+.filter-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-pill {
+    padding: 6px 14px;
+    border-radius: var(--r-full, 9999px);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+    .filter-pill:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .filter-pill.active {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+
 /* ─── Performance Bars ───────────────────────────────────────────────────── */
 .perf-bars {
     display: flex;

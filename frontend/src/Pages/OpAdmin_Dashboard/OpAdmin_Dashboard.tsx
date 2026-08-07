@@ -2813,7 +2813,7 @@ const TeamTab: React.FC<{
     const [teams, setTeams] = useState<TeamDTO[]>([]);
     const [teamsLoading, setTeamsLoading] = useState(false);
     const [teamsError, setTeamsError] = useState('');
-    const [selectedMemberId, setSelectedMemberId] = useState(teamMembers[0]?.accountId ?? '');
+    const [selectedMemberId, setSelectedMemberId] = useState('');
 
     // Create / edit modal state
     const [showTeamModal, setShowTeamModal] = useState(false);
@@ -2974,16 +2974,6 @@ const TeamTab: React.FC<{
         }
     };
 
-    const handleTransferMember = async (memberUserId: string, newTeamId: string) => {
-        try {
-            await api.put(`/api/Team/members/${memberUserId}/team/${newTeamId}`);
-            success('Employee transferred to team.');
-            await fetchTeams();
-        } catch (err: any) {
-            error(err?.response?.data?.message || err?.message || 'Failed to transfer member.');
-        }
-    };
-
     const fetchEmpRecommendations = async (empId: string, empName: string, months: number | null, page: number = 1) => {
         setRecLoading(true);
         setRecError('');
@@ -3101,17 +3091,6 @@ const TeamTab: React.FC<{
                                         >
                                             <Lightbulb size={11} /> Recs
                                         </button>
-                                        <select
-                                            value=""
-                                            onChange={e => { if (e.target.value) handleTransferMember(m.userId, e.target.value); }}
-                                            title="Transfer to another team"
-                                            style={{ height: 28, borderRadius: 6, border: '1px solid var(--border)', padding: '0 4px', fontSize: 10, maxWidth: 130, outline: 'none', background: '#fff' }}
-                                        >
-                                            <option value="">Transfer…</option>
-                                            {teams.filter(x => x.id !== t.id).map(x => (
-                                                <option key={x.id} value={x.id}>{x.name}</option>
-                                            ))}
-                                        </select>
                                         <button className="btn btn-sm" onClick={() => handleRemoveMember(t.id, m.userId)} title="Remove from team" style={{ padding: '4px 6px', color: '#dc2626' }}>
                                             <X size={12} />
                                         </button>
@@ -3278,9 +3257,18 @@ const TeamTab: React.FC<{
             >
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Period:</span>
-                    <button className={`btn btn-sm${recPreset === null ? ' btn-primary' : ''}`} onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, null, 1)} style={{ padding: '4px 8px', fontSize: 10 }}>All</button>
+                    <button
+                        type="button"
+                        className={`filter-pill${recPreset === null ? ' active' : ''}`}
+                        onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, null, 1)}
+                    >All</button>
                     {REC_MONTH_PRESETS.map(p => (
-                        <button key={p.label} className={`btn btn-sm${recPreset === p.months ? ' btn-primary' : ''}`} onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, p.months, 1)} style={{ padding: '4px 8px', fontSize: 10 }}>{p.label}</button>
+                        <button
+                            key={p.label}
+                            type="button"
+                            className={`filter-pill${recPreset === p.months ? ' active' : ''}`}
+                            onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, p.months, 1)}
+                        >{p.label}</button>
                     ))}
                 </div>
                 {recLoading ? (
