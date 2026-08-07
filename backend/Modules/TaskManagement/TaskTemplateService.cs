@@ -244,32 +244,6 @@ public class TaskTemplateService : ITaskTemplateService
             "Task template updated successfully");
     }
 
-    public async Task<ApiResponseDTO<bool>> DeactivateAsync(Guid id)
-    {
-        var template = await _db.TaskTemplates.FindAsync(id);
-
-        if (template is null)
-            return ApiResponseDTO<bool>.Failure("Template not found");
-
-        if (!template.IsActive)
-            return ApiResponseDTO<bool>.Failure("Template is already inactive");
-
-        template.IsActive = false;
-        template.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
-        await _auditLogService.LogAsync(
-            template.CreatedById,
-            AuditActionType.Delete,
-            "TaskTemplate",
-            template.Id,
-            null,
-            $"Task template '{template.TemplateName}' deactivated",
-            "TaskManagement");
-
-        return ApiResponseDTO<bool>.Success(true, "Template deactivated successfully");
-    }
-
     public async Task<ApiResponseDTO<TaskResponseDTO>> DeployManuallyAsync(Guid id, Guid coordinatorId)
     {
         var template = await _db.TaskTemplates

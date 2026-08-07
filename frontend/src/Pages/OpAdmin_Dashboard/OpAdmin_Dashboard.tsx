@@ -2476,19 +2476,6 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
 
     useEffect(() => { fetchTemplates(); }, []);
 
-    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-    const handleDeleteTemplate = async (templateId: string) => {
-        try {
-            await api.delete(`/api/TaskTemplate/${templateId}`);
-            success('Task template deactivated successfully.');
-            setDeleteConfirm(null);
-            await fetchTemplates();
-        } catch (err: any) {
-            error(err.message ?? 'Failed to deactivate template.');
-        }
-    };
-
     const handleToggle = async (templateId: string, currentStatus: string) => {
         try {
             await api.put(`/api/TaskTemplate/${templateId}`, { isActive: currentStatus !== 'Active' });
@@ -2586,29 +2573,12 @@ const TemplateTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMembers }) =
                                         onClick: () => handleToggle(t.templateId, t.templateStatus),
                                         variant: 'default' as const,
                                     },
-                                    {
-                                        label: 'Delete',
-                                        icon: <Trash2 size={12} />,
-                                        onClick: () => setDeleteConfirm(t.templateId),
-                                        variant: 'danger' as const,
-                                    },
                                 ]}
                             />
                         </td>
                     </tr>
                 ))}
             </DataTable>
-
-            <ConfirmationModal
-                isOpen={deleteConfirm !== null}
-                variant="danger"
-                title="Delete Task Template"
-                description="Are you sure you want to delete this task template? This action cannot be undone."
-                confirmLabel="Delete"
-                cancelLabel="Cancel"
-                onConfirm={() => deleteConfirm && handleDeleteTemplate(deleteConfirm)}
-                onCancel={() => setDeleteConfirm(null)}
-            />
 
             {showModal && (
                 <TemplateModal

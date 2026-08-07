@@ -71,18 +71,13 @@ public class TaskTemplateController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
-    public async Task<IActionResult> Deactivate(Guid id)
+    public IActionResult Deactivate(Guid id)
     {
-        var result = await _templateService.DeactivateAsync(id);
-        if (!result.IsSuccess)
-        {
-            if (result.Message.Contains("not found"))
-                return NotFound(result);
-
-            return BadRequest(result);
-        }
-
-        return Ok(result);
+        // Task templates cannot be deleted. Deactivation is performed via the
+        // Update endpoint (IsActive=false), which also keeps the template's
+        // history intact for audit and recurring-generation purposes.
+        return BadRequest(ApiResponseDTO<object>.Failure(
+            "Task templates cannot be deleted. Use Activate/Deactivate to control the template."));
     }
 
     [HttpPost("{id:guid}/deploy")]
