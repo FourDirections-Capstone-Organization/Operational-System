@@ -244,6 +244,28 @@ public class TaskTemplateService : ITaskTemplateService
             "Task template updated successfully");
     }
 
+    public async Task<ApiResponseDTO<bool>> DeleteAsync(Guid id, Guid requestUserId)
+    {
+        var template = await _db.TaskTemplates.FindAsync(id);
+
+        if (template is null)
+            return ApiResponseDTO<bool>.Failure("Template not found");
+
+        _db.TaskTemplates.Remove(template);
+        await _db.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Delete,
+            "TaskTemplate",
+            template.Id,
+            null,
+            $"Task template '{template.TemplateName}' deleted",
+            "TaskManagement");
+
+        return ApiResponseDTO<bool>.Success(true, "Template deleted successfully");
+    }
+
     public async Task<ApiResponseDTO<TaskResponseDTO>> DeployManuallyAsync(Guid id, Guid coordinatorId)
     {
         var template = await _db.TaskTemplates
