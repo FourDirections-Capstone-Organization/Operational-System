@@ -5171,6 +5171,7 @@ export default function OpsAdminDashboard() {
                     subItems: [
                         { label: 'Dashboard', onClick: () => handleNavChange('dashboard'), active: activeTab === 'dashboard' },
                         { label: 'Tasks', onClick: () => handleNavChange('tasks'), active: activeTab === 'tasks' },
+                        { label: 'Team', onClick: () => handleNavChange('team'), active: activeTab === 'team' },
                         { label: 'Task Templates', onClick: () => handleNavChange('templates'), active: activeTab === 'templates' },
                         { label: 'Reports', onClick: () => handleNavChange('reports'), active: activeTab === 'reports' },
                         { label: 'Activity Logs', onClick: () => handleNavChange('activity_logs'), active: activeTab === 'activity_logs' },
