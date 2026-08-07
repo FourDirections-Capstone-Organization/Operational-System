@@ -531,21 +531,6 @@ const statusToProgress = (s: string): number => ({
 
 // --- Sub-components -----------------------------------------------------------
 
-const Avatar: React.FC<{ member: TeamMember; size?: 'sm' | 'md' }> = ({ member, size = 'sm' }) => (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-        <div className={`avatar-chip av-blue ${size === 'md' ? 'avatar-md' : ''}`}>
-            {member.employeeName.charAt(0).toUpperCase()}
-        </div>
-        <span style={{
-            position: 'absolute', bottom: 1, right: 1,
-            width: 9, height: 9, borderRadius: '50%',
-            background: member.presenceStatus === 'Online' ? 'var(--status-active)' : 'var(--text-secondary)',
-            border: '2px solid var(--bg-primary, #fff)',
-            display: 'block'
-        }} title={member.presenceStatus ?? 'Offline'} />
-    </div>
-);
-
 const PRIO_META: Record<string, { label: string; color: string; bg: string; border: string; icon: string }> = {
     Urgent: { label: 'Urgent', color: '#7c1d1d', bg: '#fef2f2', border: '#fecaca', icon: '🔴' },
     High: { label: 'High', color: '#b91c1c', bg: '#fff7ed', border: '#fed7aa', icon: '🟠' },
@@ -2792,36 +2777,229 @@ const CATEGORY_LABELS: Record<number, string> = {
     3: 'Other',
 };
 
+interface TeamDTO {
+    id: string;
+    name: string;
+    departmentId: string | null;
+    departmentName: string | null;
+    description: string | null;
+    isActive: boolean;
+    memberCount: number;
+    members: {
+        userId: string;
+        fullName: string;
+        employeeNumber: string;
+        role: string | null;
+        department: string | null;
+        availabilityStatus: string | null;
+        isAvailable: boolean;
+        joinedAt: string;
+    }[];
+    createdAt: string;
+}
+
+const REC_MONTH_PRESETS = [
+    { label: '1m', months: 1 },
+    { label: '3m', months: 3 },
+    { label: '6m', months: 6 },
+    { label: '12m', months: 12 },
+] as const;
+
 const TeamTab: React.FC<{
     tasks: Task[];
     teamMembers: TeamMember[];
     onView: (id: string) => void;
 }> = ({ tasks, teamMembers, onView }) => {
+    const [teams, setTeams] = useState<TeamDTO[]>([]);
+    const [teamsLoading, setTeamsLoading] = useState(false);
+    const [teamsError, setTeamsError] = useState('');
     const [selectedMemberId, setSelectedMemberId] = useState(teamMembers[0]?.accountId ?? '');
+
+    // Create / edit modal state
+    const [showTeamModal, setShowTeamModal] = useState(false);
+    const [editingTeam, setEditingTeam] = useState<TeamDTO | null>(null);
+    const [teamForm, setTeamForm] = useState({ name: '', description: '', memberUserIds: [] as string[] });
+    const [teamSaving, setTeamSaving] = useState(false);
+    const [teamError, setTeamError] = useState('');
+
+    // Delete confirmation
+    const [deleteTeamId, setDeleteTeamId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    // Add-member state (per team card)
+    const [addMembersTeamId, setAddMembersTeamId] = useState<string | null>(null);
+    const [addMemberIds, setAddMemberIds] = useState<string[]>([]);
+    const [addingMembers, setAddingMembers] = useState(false);
+
+    // Recommendation history modal
     const [showRecModal, setShowRecModal] = useState(false);
-    const [recEmployee, setRecEmployee] = useState('');
+    const [recEmployeeId, setRecEmployeeId] = useState('');
     const [recEmployeeName, setRecEmployeeName] = useState('');
+    const [recPreset, setRecPreset] = useState<number | null>(null);
     const [empRecommendations, setEmpRecommendations] = useState<EmpRecDTO[]>([]);
     const [recLoading, setRecLoading] = useState(false);
     const [recError, setRecError] = useState('');
-    const [recDateFrom, setRecDateFrom] = useState('');
-    const [recDateTo, setRecDateTo] = useState('');
     const [recPage, setRecPage] = useState(1);
     const [recTotalPages, setRecTotalPages] = useState(1);
+    const [recTotalRecords, setRecTotalRecords] = useState(0);
     const REC_PAGE_SIZE = 8;
 
-    const fetchEmpRecommendations = async (empId: string, empName: string, dateFrom?: string, dateTo?: string, page: number = 1) => {
+    const { success, error } = useToast();
+
+    // Employees who are already in a team (from the fetched team memberships)
+    const assignedUserIds = useMemo(() => {
+        const set = new Set<string>();
+        teams.forEach(t => t.members.forEach(m => set.add(m.userId)));
+        return set;
+    }, [teams]);
+
+    const fetchTeams = useCallback(async () => {
+        setTeamsLoading(true);
+        setTeamsError('');
+        try {
+            const res = await api.get('/api/Team?pageNumber=1&pageSize=100');
+            const json = res.data;
+            const d = json?.data;
+            if (json?.isSuccess && d?.items) {
+                setTeams(d.items);
+            } else {
+                setTeams([]);
+            }
+        } catch {
+            setTeamsError('Failed to load teams.');
+            setTeams([]);
+        } finally {
+            setTeamsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchTeams(); }, [fetchTeams]);
+
+    const openCreate = () => {
+        setEditingTeam(null);
+        setTeamForm({ name: '', description: '', memberUserIds: [] });
+        setTeamError('');
+        setShowTeamModal(true);
+    };
+
+    const openEdit = (t: TeamDTO) => {
+        setEditingTeam(t);
+        setTeamForm({
+            name: t.name,
+            description: t.description ?? '',
+            memberUserIds: t.members.map(m => m.userId),
+        });
+        setTeamError('');
+        setShowTeamModal(true);
+    };
+
+    const handleSaveTeam = async () => {
+        if (!teamForm.name.trim()) { setTeamError('Team name is required.'); return; }
+        setTeamSaving(true);
+        setTeamError('');
+        try {
+            if (editingTeam) {
+                await api.put(`/api/Team/${editingTeam.id}`, {
+                    name: teamForm.name.trim(),
+                    description: teamForm.description.trim() || null,
+                    isActive: true,
+                });
+                // Replace members: remove all then re-add the selected ones.
+                const current = teams.find(t => t.id === editingTeam.id);
+                const toRemove = (current?.members ?? []).map(m => m.userId).filter(uid => !teamForm.memberUserIds.includes(uid));
+                const toAdd = teamForm.memberUserIds.filter(uid => !(current?.members ?? []).some(m => m.userId === uid));
+                if (toRemove.length > 0) {
+                    await Promise.all(toRemove.map(uid => api.delete(`/api/Team/${editingTeam.id}/members/${uid}`)));
+                }
+                if (toAdd.length > 0) {
+                    await api.post(`/api/Team/${editingTeam.id}/members`, { memberUserIds: toAdd });
+                }
+                success('Team updated successfully.');
+            } else {
+                const body: any = {
+                    name: teamForm.name.trim(),
+                    description: teamForm.description.trim() || null,
+                };
+                if (teamForm.memberUserIds.length > 0) body.memberUserIds = teamForm.memberUserIds;
+                await api.post('/api/Team', body);
+                success('Team created successfully.');
+            }
+            setShowTeamModal(false);
+            await fetchTeams();
+        } catch (err: any) {
+            setTeamError(err?.response?.data?.message || err?.message || 'Failed to save team.');
+        } finally {
+            setTeamSaving(false);
+        }
+    };
+
+    const handleDeleteTeam = async () => {
+        if (!deleteTeamId) return;
+        setDeleting(true);
+        try {
+            await api.delete(`/api/Team/${deleteTeamId}`);
+            success('Team deleted; members unassigned.');
+            setDeleteTeamId(null);
+            await fetchTeams();
+        } catch (err: any) {
+            error(err?.response?.data?.message || err?.message || 'Failed to delete team.');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleAddMembers = async () => {
+        if (!addMembersTeamId || addMemberIds.length === 0) return;
+        setAddingMembers(true);
+        try {
+            await api.post(`/api/Team/${addMembersTeamId}/members`, { memberUserIds: addMemberIds });
+            success('Member(s) added to team.');
+            setAddMembersTeamId(null);
+            setAddMemberIds([]);
+            await fetchTeams();
+        } catch (err: any) {
+            error(err?.response?.data?.message || err?.message || 'Failed to add members.');
+        } finally {
+            setAddingMembers(false);
+        }
+    };
+
+    const handleRemoveMember = async (teamId: string, memberUserId: string) => {
+        try {
+            await api.delete(`/api/Team/${teamId}/members/${memberUserId}`);
+            success('Member removed from team.');
+            await fetchTeams();
+        } catch (err: any) {
+            error(err?.response?.data?.message || err?.message || 'Failed to remove member.');
+        }
+    };
+
+    const handleTransferMember = async (memberUserId: string, newTeamId: string) => {
+        try {
+            await api.put(`/api/Team/members/${memberUserId}/team/${newTeamId}`);
+            success('Employee transferred to team.');
+            await fetchTeams();
+        } catch (err: any) {
+            error(err?.response?.data?.message || err?.message || 'Failed to transfer member.');
+        }
+    };
+
+    const fetchEmpRecommendations = async (empId: string, empName: string, months: number | null, page: number = 1) => {
         setRecLoading(true);
         setRecError('');
         setEmpRecommendations([]);
-        setRecEmployee(empId);
+        setRecEmployeeId(empId);
         setRecEmployeeName(empName);
+        setRecPreset(months);
         setRecPage(page);
-        setShowRecModal(true);
         try {
             const params: any = { pageNumber: page, pageSize: REC_PAGE_SIZE };
-            if (dateFrom) params.dateFrom = new Date(dateFrom).toISOString();
-            if (dateTo) params.dateTo = new Date(`${dateTo}T23:59:59`).toISOString();
+            if (months) {
+                const from = new Date();
+                from.setMonth(from.getMonth() - months);
+                from.setHours(0, 0, 0, 0);
+                params.dateFrom = from.toISOString();
+            }
             const res = await api.get<any>(`/api/users/${empId}/recommendations`, { params });
             const json = res.data;
             const d = json?.data;
@@ -2835,55 +3013,155 @@ const TeamTab: React.FC<{
                 createdAt: r.createdAt ?? '',
             })));
             setRecTotalPages(d?.totalPages || 1);
+            setRecTotalRecords(d?.totalCount ?? list.length);
         } catch (err: any) {
-            setRecError(err.response?.data?.message || err.message || 'Failed to load recommendations.');
+            setRecError(err?.response?.data?.message || err?.message || 'Failed to load recommendations.');
             setRecTotalPages(1);
+            setRecTotalRecords(0);
         } finally {
             setRecLoading(false);
         }
     };
 
+    const openRecommendations = (empId: string, empName: string) => {
+        setShowRecModal(true);
+        fetchEmpRecommendations(empId, empName, null, 1);
+    };
+
+    const unassignedEmployees = teamMembers.filter(m => !assignedUserIds.has(m.accountId));
+
+    // Selected member's tasks (used when a member is picked from a team dropdown)
+    const selectedEmployeeName = teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName;
+
     return (
         <div className="dashboard-content">
-            <div className="dashboard-grid">
-                <div className="card">
-                    <div className="card-header-layout"><h3>Team Members</h3></div>
-                    {teamMembers.length === 0 ? (
-                        <EmptyState icon={<Users size={20} />} title="No team members found" />
-                    ) : teamMembers.map(m => {
-                        const mt = tasks.filter(t => t.assignedEmployee === m.employeeName);
-                        const mc = mt.filter(t => t.taskStatus === 'Completed').length;
-                        return (
-                            <div
-                                key={m.accountId}
-                                className={`member-row${selectedMemberId === m.accountId ? ' selected' : ''}`}
-                                onClick={() => setSelectedMemberId(m.accountId)}
-                            >
-                                <Avatar member={m} />
-                                <div style={{ flex: 1 }}>
-                                    <div className="member-name">{m.employeeName}</div>
-                                    <div className="member-role">{m.role}</div>
-                                </div>
-                                <span className="badge badge-blue">{mt.length} tasks</span>
-                                <span className="badge badge-green">{mc} done</span>
-                                <button className="btn btn-sm" onClick={e => { e.stopPropagation(); fetchEmpRecommendations(m.accountId, m.employeeName); }}
-                                    style={{ marginLeft: 4, padding: '4px 8px', fontSize: 10 }}>
-                                    <Lightbulb size={10} /> Recs
-                                </button>
-                            </div>
-                        );
-                    })}
+            <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-header-layout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+                    <h3 style={{ margin: 0, fontSize: 16 }}>Team Management</h3>
+                    <button className="btn btn-primary btn-sm" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Plus size={14} /> Create Team
+                    </button>
                 </div>
-                <div className="card">
-                    <div className="card-header-layout"><h3>Workload Distribution</h3></div>
+                {teamsLoading ? (
+                    <div className="empty-state"><Loader2 size={22} className="spin" /><p>Loading teams...</p></div>
+                ) : teamsError ? (
+                    <div className="empty-state"><AlertCircle size={22} /><p>{teamsError}</p></div>
+                ) : teams.length === 0 ? (
+                    <div className="empty-state"><Users size={22} /><p>No teams yet. Create a team to get started.</p></div>
+                ) : (
+                    <div style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+                        {teams.map(t => (
+                            <div key={t.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+                                        <span className="badge badge-blue">{t.memberCount} member{t.memberCount !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        <button className="btn btn-sm" onClick={() => openEdit(t)} title="Edit team" style={{ padding: '4px 6px' }}>
+                                            <Pencil size={12} />
+                                        </button>
+                                        <button className="btn btn-sm" onClick={() => setDeleteTeamId(t.id)} title="Delete team" style={{ padding: '4px 6px', color: '#dc2626' }}>
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                                {t.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t.description}</div>}
+                                {t.departmentName && <div style={{ fontSize: 11, color: '#94a3b8' }}>Department: {t.departmentName}</div>}
+
+                                {/* Member dropdown */}
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>MEMBERS</div>
+                                {t.members.length === 0 ? (
+                                    <div style={{ fontSize: 12, color: '#94a3b8' }}>No members assigned.</div>
+                                ) : (
+                                    <select
+                                        value={selectedMemberId && t.members.some(m => m.userId === selectedMemberId) ? selectedMemberId : ''}
+                                        onChange={e => setSelectedMemberId(e.target.value)}
+                                        style={{ height: 34, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 8px', fontSize: 12, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff' }}
+                                    >
+                                        <option value="">Select a member…</option>
+                                        {t.members.map(m => (
+                                            <option key={m.userId} value={m.userId}>{m.fullName}{m.role ? ` — ${m.role}` : ''}</option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {/* Member rows with transfer + remove */}
+                                {t.members.map(m => (
+                                    <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px' }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.fullName}</div>
+                                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{m.employeeNumber}{m.department ? ` · ${m.department}` : ''}</div>
+                                        </div>
+                                        <button
+                                            className="btn btn-sm"
+                                            onClick={() => openRecommendations(m.userId, m.fullName)}
+                                            title="Recommendation history"
+                                            style={{ padding: '4px 6px', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                        >
+                                            <Lightbulb size={11} /> Recs
+                                        </button>
+                                        <select
+                                            value=""
+                                            onChange={e => { if (e.target.value) handleTransferMember(m.userId, e.target.value); }}
+                                            title="Transfer to another team"
+                                            style={{ height: 28, borderRadius: 6, border: '1px solid var(--border)', padding: '0 4px', fontSize: 10, maxWidth: 130, outline: 'none', background: '#fff' }}
+                                        >
+                                            <option value="">Transfer…</option>
+                                            {teams.filter(x => x.id !== t.id).map(x => (
+                                                <option key={x.id} value={x.id}>{x.name}</option>
+                                            ))}
+                                        </select>
+                                        <button className="btn btn-sm" onClick={() => handleRemoveMember(t.id, m.userId)} title="Remove from team" style={{ padding: '4px 6px', color: '#dc2626' }}>
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {/* Add members */}
+                                {unassignedEmployees.length > 0 && (
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                                        <select
+                                            value={addMembersTeamId === t.id ? addMemberIds[0] ?? '' : ''}
+                                            onChange={e => { setAddMembersTeamId(t.id); setAddMemberIds(e.target.value ? [e.target.value] : []); }}
+                                            style={{ flex: 1, height: 32, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 8px', fontSize: 12, outline: 'none', background: '#fff' }}
+                                        >
+                                            <option value="">Add member…</option>
+                                            {unassignedEmployees.map(m => (
+                                                <option key={m.accountId} value={m.accountId}>{m.employeeName}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            disabled={addMembersTeamId !== t.id || addMemberIds.length === 0 || addingMembers}
+                                            onClick={handleAddMembers}
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                        >
+                                            {addingMembers && addMembersTeamId === t.id ? <Loader2 size={12} className="spin" /> : <Plus size={12} />} Add
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Workload Distribution (all employees) */}
+            <div className="card">
+                <div className="card-header-layout"><h3>Workload Distribution</h3></div>
+                {teamMembers.length === 0 ? (
+                    <EmptyState icon={<Users size={20} />} title="No employees found" />
+                ) : (
                     <div className="perf-bars">
                         {teamMembers.map(m => {
                             const mt = tasks.filter(t => t.assignedEmployee === m.employeeName);
                             const mc = mt.filter(t => t.taskStatus === 'Completed').length;
                             const pct = mt.length > 0 ? Math.round(mc / mt.length * 100) : 0;
+                            const memberTeam = teams.find(t => t.members.some(x => x.userId === m.accountId));
                             return (
                                 <div key={m.accountId} className="perf-item">
-                                    <span className="perf-label">{m.employeeName.split(' ')[0]}</span>
+                                    <span className="perf-label">{m.employeeName.split(' ')[0]}{memberTeam ? ` (${memberTeam.name})` : ''}</span>
                                     <div className="perf-track">
                                         <div className="perf-fill" style={{ width: `${pct}%`, background: pct >= 80 ? 'var(--status-active)' : pct >= 50 ? 'var(--status-pending)' : 'var(--status-failed)', borderRadius: 3, height: '100%', transition: 'width 0.4s ease' }} />
                                     </div>
@@ -2892,47 +3170,118 @@ const TeamTab: React.FC<{
                             );
                         })}
                     </div>
-                </div>
-            </div>
-            <div className="card">
-                <div className="card-header-layout">
-                    <h3>{teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName}'s Tasks</h3>
-                </div>
-                {tasks.filter(t => t.assignedEmployee === teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName).length === 0
-                    ? <EmptyState icon={<Package size={20} />} title="No tasks assigned" />
-                    : tasks
-                        .filter(t => t.assignedEmployee === teamMembers.find(m => m.accountId === selectedMemberId)?.employeeName)
-                        .map(t => <TaskRow key={t.taskId} task={t} onView={onView} />)
-                }
+                )}
             </div>
 
-            <FormModal isOpen={showRecModal} onClose={() => setShowRecModal(false)}
+            {/* Selected member's tasks */}
+            {selectedEmployeeName && (
+                <div className="card">
+                    <div className="card-header-layout"><h3>{selectedEmployeeName}'s Tasks</h3></div>
+                    {tasks.filter(t => t.assignedEmployee === selectedEmployeeName).length === 0
+                        ? <EmptyState icon={<Package size={20} />} title="No tasks assigned" />
+                        : tasks
+                            .filter(t => t.assignedEmployee === selectedEmployeeName)
+                            .map(t => <TaskRow key={t.taskId} task={t} onView={onView} />)
+                    }
+                </div>
+            )}
+
+            <FormModal
+                isOpen={showTeamModal}
+                onClose={() => setShowTeamModal(false)}
+                title={editingTeam ? 'Edit Team' : 'Create Team'}
+                subtitle={editingTeam ? `Editing ${editingTeam.name}` : 'Create a team and assign employees to it.'}
+                size="md"
+                footer={
+                    <>
+                        <button className="fm-btn fm-btn-cancel" onClick={() => setShowTeamModal(false)} disabled={teamSaving}>Cancel</button>
+                        <button className="fm-btn fm-btn-primary" onClick={handleSaveTeam} disabled={teamSaving || !teamForm.name.trim()}>
+                            {teamSaving ? <><Loader2 size={13} className="fm-spin" /> Saving…</> : 'Save Team'}
+                        </button>
+                    </>
+                }
+            >
+                {teamError && <div className="fm-api-error"><AlertCircle size={14} /><span>{teamError}</span></div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Team Name *</label>
+                        <input
+                            type="text"
+                            value={teamForm.name}
+                            onChange={e => setTeamForm(p => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Last Mile Squad"
+                            maxLength={100}
+                            style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Description</label>
+                        <input
+                            type="text"
+                            value={teamForm.description}
+                            onChange={e => setTeamForm(p => ({ ...p, description: e.target.value }))}
+                            placeholder="Optional description"
+                            maxLength={500}
+                            style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, outline: 'none' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                            Assign Employees {editingTeam && '(employees already in another team are skipped)'}
+                        </label>
+                        <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {teamMembers.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8' }}>No employees available.</div>}
+                            {teamMembers.map(m => {
+                                const isCurrent = editingTeam?.members.some(x => x.userId === m.accountId);
+                                const takenByOther = assignedUserIds.has(m.accountId) && !isCurrent;
+                                return (
+                                    <label key={m.accountId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: takenByOther ? 'not-allowed' : 'pointer', opacity: takenByOther ? 0.5 : 1 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={teamForm.memberUserIds.includes(m.accountId)}
+                                            disabled={takenByOther}
+                                            onChange={e => setTeamForm(p => ({
+                                                ...p,
+                                                memberUserIds: e.target.checked
+                                                    ? [...p.memberUserIds, m.accountId]
+                                                    : p.memberUserIds.filter(id => id !== m.accountId),
+                                            }))}
+                                        />
+                                        <span>{m.employeeName}</span>
+                                        {takenByOther && <span style={{ fontSize: 10, color: '#d97706' }}>(already in a team)</span>}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </FormModal>
+
+            <ConfirmationModal
+                isOpen={deleteTeamId !== null}
+                variant="danger"
+                title="Delete Team"
+                description="Deleting this team will unassign all of its employees from the team. This action cannot be undone."
+                confirmLabel={deleting ? 'Deleting…' : 'Delete Team'}
+                cancelLabel="Cancel"
+                onConfirm={handleDeleteTeam}
+                onCancel={() => setDeleteTeamId(null)}
+            />
+
+            <FormModal
+                isOpen={showRecModal}
+                onClose={() => setShowRecModal(false)}
                 title="Recommendation History"
                 subtitle={`All recommendations for ${recEmployeeName}`}
                 size="md"
                 footer={<button className="btn" onClick={() => setShowRecModal(false)}>Close</button>}
             >
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 12, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>From</label>
-                        <input type="date" value={recDateFrom} max={recDateTo || undefined}
-                            onChange={e => setRecDateFrom(e.target.value)}
-                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <label style={{ fontSize: 10, color: 'var(--text-secondary)' }}>To</label>
-                        <input type="date" value={recDateTo} min={recDateFrom || undefined}
-                            onChange={e => setRecDateTo(e.target.value)}
-                            style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-color)' }} />
-                    </div>
-                    <button className="btn btn-sm" onClick={() => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo)}
-                        style={{ padding: '4px 8px', fontSize: 10 }}>
-                        Apply
-                    </button>
-                    <button className="btn btn-sm" onClick={() => { setRecDateFrom(''); setRecDateTo(''); fetchEmpRecommendations(recEmployee, recEmployeeName); }}
-                        style={{ padding: '4px 8px', fontSize: 10 }}>
-                        Clear
-                    </button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Period:</span>
+                    <button className={`btn btn-sm${recPreset === null ? ' btn-primary' : ''}`} onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, null, 1)} style={{ padding: '4px 8px', fontSize: 10 }}>All</button>
+                    {REC_MONTH_PRESETS.map(p => (
+                        <button key={p.label} className={`btn btn-sm${recPreset === p.months ? ' btn-primary' : ''}`} onClick={() => fetchEmpRecommendations(recEmployeeId, recEmployeeName, p.months, 1)} style={{ padding: '4px 8px', fontSize: 10 }}>{p.label}</button>
+                    ))}
                 </div>
                 {recLoading ? (
                     <div className="tr-loading"><Loader2 size={14} className="tr-spin" /> Loading recommendations...</div>
@@ -2960,12 +3309,12 @@ const TeamTab: React.FC<{
                         ))}
                     </div>
                 )}
-                {!recLoading && !recError && empRecommendations.length > 0 && (
+                {!recLoading && !recError && recTotalRecords > 0 && (
                     <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
                         <Pagination
                             currentPage={recPage}
                             totalPages={recTotalPages}
-                            onPageChange={p => fetchEmpRecommendations(recEmployee, recEmployeeName, recDateFrom, recDateTo, p)}
+                            onPageChange={p => fetchEmpRecommendations(recEmployeeId, recEmployeeName, recPreset, p)}
                         />
                     </div>
                 )}
