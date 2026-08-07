@@ -596,4 +596,563 @@ public class ReportService : IReportService
 
         return ApiResponseDTO<DepartmentKpiDTO>.Success(result);
     }
+
+    public async Task<ApiResponseDTO<ReportFilterOptionsDTO>> GetReportFilterOptionsAsync(
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId)
+    {
+        var departments = await _db.Departments
+            .Where(d => d.IsActive)
+            .Where(d => requestUserRole != UserRole.Coordinator || requestUserDepartmentId == null || d.Id == requestUserDepartmentId.Value)
+            .OrderBy(d => d.Name)
+            .Select(d => new ReportFilterOptionDTO { Id = d.Id, Name = d.Name })
+            .ToListAsync();
+
+        var employees = await _db.Users
+            .Where(u => u.IsActive && !u.IsDeactivated)
+            .Where(u => requestUserRole != UserRole.Coordinator || requestUserDepartmentId == null || u.DepartmentId == requestUserDepartmentId.Value)
+            .OrderBy(u => u.LastName)
+            .ThenBy(u => u.FirstName)
+            .Select(u => new ReportFilterOptionDTO
+            {
+                Id = u.Id,
+                Name = $"{u.FirstName} {u.LastName}".Trim()
+            })
+            .ToListAsync();
+
+        return ApiResponseDTO<ReportFilterOptionsDTO>.Success(new ReportFilterOptionsDTO
+        {
+            Departments = departments,
+            Employees = employees
+        });
+    }
+
+    public async Task<ApiResponseDTO<TaskCompletionReportDTO>> GetTaskCompletionReportAsync(
+        DateTime? dateRangeStart,
+        DateTime? dateRangeEnd,
+        Guid? employeeId,
+        string? taskPriorityLevel,
+        string? taskStatus,
+        string? taskCategory,
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId)
+    {
+        var dateStart = dateRangeStart.HasValue
+            ? DateTime.SpecifyKind(dateRangeStart.Value, DateTimeKind.Utc)
+            : DateTime.UtcNow.AddMonths(-1);
+        var dateEnd = dateRangeEnd.HasValue
+            ? DateTime.SpecifyKind(dateRangeEnd.Value, DateTimeKind.Utc)
+            : DateTime.UtcNow;
+
+        var query = _db.Tasks
+            .Include(t => t.Assignments)
+                .ThenInclude(a => a.AssignedUser)
+            .Where(t => t.CreatedAt >= dateStart && t.CreatedAt <= dateEnd);
+
+        if (requestUserRole == UserRole.Coordinator && requestUserDepartmentId.HasValue)
+            query = query.Where(t => t.AssignedDepartmentId == requestUserDepartmentId.Value);
+
+        if (employeeId.HasValue)
+            query = query.Where(t => t.Assignments.Any(a => a.AssignedUserId == employeeId.Value));
+
+        if (!string.IsNullOrWhiteSpace(taskPriorityLevel))
+        {
+            var priority = ParsePriorityLevel(taskPriorityLevel);
+            if (priority.HasValue)
+                query = query.Where(t => t.PriorityLevel == priority.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(taskStatus))
+        {
+            if (string.Equals(taskStatus.Trim(), "overdue", StringComparison.OrdinalIgnoreCase))
+            {
+                var nowUtc = DateTime.UtcNow;
+                query = query.Where(t =>
+                    (t.RevisedDeadline ?? t.Deadline) < nowUtc
+                    && t.Status != Models.Enums.TaskStatus.Completed
+                    && t.Status != Models.Enums.TaskStatus.Cancelled);
+            }
+            else
+            {
+                var status = ParseTaskStatus(taskStatus);
+                if (status.HasValue)
+                    query = query.Where(t => t.Status == status.Value);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(taskCategory))
+        {
+            var classification = ParseTaskClassification(taskCategory);
+            if (classification.HasValue)
+                query = query.Where(t => t.Classification == classification.Value);
+        }
+
+        var tasks = await query.ToListAsync();
+
+        if (tasks.Count == 0)
+            return ApiResponseDTO<TaskCompletionReportDTO>.Failure("No tasks found for the selected criteria.");
+
+        var now = DateTime.UtcNow;
+        var totalAssigned = tasks.Count;
+        var totalCompleted = tasks.Count(t => t.Status == Models.Enums.TaskStatus.Completed);
+        var totalInProgress = tasks.Count(t => t.Status == Models.Enums.TaskStatus.InProgress);
+        var totalPendingReview = tasks.Count(t => t.Status == Models.Enums.TaskStatus.DonePendingReview);
+        var totalOverdue = tasks.Count(t =>
+            (t.RevisedDeadline ?? t.Deadline) < now
+            && t.Status != Models.Enums.TaskStatus.Completed
+            && t.Status != Models.Enums.TaskStatus.Cancelled);
+
+        var completedTasks = tasks.Where(t => t.Status == Models.Enums.TaskStatus.Completed).ToList();
+        var avgHours = completedTasks.Count > 0
+            ? Math.Round(completedTasks.Average(t => ((t.UpdatedAt ?? t.CreatedAt) - t.CreatedAt).TotalHours), 1)
+            : 0;
+
+        var employeeSummary = tasks
+            .SelectMany(t => t.Assignments.Select(a => new
+            {
+                a.AssignedUser,
+                Task = t,
+                IsCompleted = t.Status == Models.Enums.TaskStatus.Completed
+            }))
+            .Where(x => x.AssignedUser != null)
+            .GroupBy(x => x.AssignedUser!.Id)
+            .Select(g =>
+            {
+                var total = g.Count();
+                var completed = g.Count(x => x.IsCompleted);
+                var completedAvg = completed > 0
+                    ? Math.Round(g.Where(x => x.IsCompleted)
+                        .Average(x => ((x.Task.UpdatedAt ?? x.Task.CreatedAt) - x.Task.CreatedAt).TotalHours), 1)
+                    : 0;
+                return new TaskCompletionEmployeeSummaryDTO
+                {
+                    EmployeeName = $"{g.First().AssignedUser!.FirstName} {g.First().AssignedUser!.LastName}".Trim(),
+                    TotalAssigned = total,
+                    TotalCompleted = completed,
+                    CompletionRate = total > 0 ? Math.Round((double)completed / total * 100, 1) : 0,
+                    AverageCompletionTimeHours = completedAvg
+                };
+            })
+            .OrderByDescending(e => e.CompletionRate)
+            .ToList();
+
+        var report = new TaskCompletionReportDTO
+        {
+            TotalTasksAssigned = totalAssigned,
+            TotalTasksCompleted = totalCompleted,
+            TotalTasksInProgress = totalInProgress,
+            TotalTasksPendingReview = totalPendingReview,
+            TotalOverdueTasks = totalOverdue,
+            TaskCompletionRate = totalAssigned > 0 ? Math.Round((double)totalCompleted / totalAssigned * 100, 1) : 0,
+            AverageTaskCompletionTimeHours = avgHours,
+            EmployeePerformanceSummary = employeeSummary
+        };
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Read,
+            "TaskCompletionReport",
+            null,
+            null,
+            $"Task completion report accessed. Period: {dateStart:yyyy-MM-dd} to {dateEnd:yyyy-MM-dd}, Tasks: {totalAssigned}",
+            "Reports");
+
+        return ApiResponseDTO<TaskCompletionReportDTO>.Success(report);
+    }
+
+    public async Task<ApiResponseDTO<OperationalSummaryReportDTO>> GetOperationalSummaryAsync(
+        DateTime? dateRangeStart,
+        DateTime? dateRangeEnd,
+        Guid? departmentId,
+        Guid? employeeId,
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId)
+    {
+        var dateStart = dateRangeStart.HasValue
+            ? DateTime.SpecifyKind(dateRangeStart.Value, DateTimeKind.Utc)
+            : DateTime.UtcNow.AddMonths(-1);
+        var dateEnd = dateRangeEnd.HasValue
+            ? DateTime.SpecifyKind(dateRangeEnd.Value, DateTimeKind.Utc)
+            : DateTime.UtcNow;
+
+        var query = _db.Tasks
+            .Include(t => t.Assignments)
+                .ThenInclude(a => a.AssignedUser)
+            .Include(t => t.AssignedDepartment)
+            .Where(t => t.CreatedAt >= dateStart && t.CreatedAt <= dateEnd);
+
+        if (requestUserRole == UserRole.Coordinator && requestUserDepartmentId.HasValue)
+            query = query.Where(t => t.AssignedDepartmentId == requestUserDepartmentId.Value);
+
+        if (departmentId.HasValue)
+            query = query.Where(t => t.AssignedDepartmentId == departmentId.Value);
+
+        if (employeeId.HasValue)
+            query = query.Where(t => t.Assignments.Any(a => a.AssignedUserId == employeeId.Value));
+
+        var tasks = await query.ToListAsync();
+
+        if (tasks.Count == 0)
+            return ApiResponseDTO<OperationalSummaryReportDTO>.Failure("No tasks found for the selected criteria.");
+
+        var now = DateTime.UtcNow;
+        var completedCount = tasks.Count(t => t.Status == Models.Enums.TaskStatus.Completed);
+        var pendingCount = tasks.Count(t =>
+            t.Status != Models.Enums.TaskStatus.Completed
+            && t.Status != Models.Enums.TaskStatus.Cancelled);
+        var overdueCount = tasks.Count(t =>
+            (t.RevisedDeadline ?? t.Deadline) < now
+            && t.Status != Models.Enums.TaskStatus.Completed
+            && t.Status != Models.Enums.TaskStatus.Cancelled);
+
+        var employeeSummary = tasks
+            .SelectMany(t => t.Assignments.Select(a => new
+            {
+                a.AssignedUser,
+                Task = t,
+                IsCompleted = t.Status == Models.Enums.TaskStatus.Completed,
+                IsOverdue = (t.RevisedDeadline ?? t.Deadline) < now
+                    && t.Status != Models.Enums.TaskStatus.Completed
+                    && t.Status != Models.Enums.TaskStatus.Cancelled
+            }))
+            .Where(x => x.AssignedUser != null)
+            .GroupBy(x => x.AssignedUser!.Id)
+            .Select(g =>
+            {
+                var total = g.Count();
+                var completed = g.Count(x => x.IsCompleted);
+                var overdue = g.Count(x => x.IsOverdue);
+                return new OperationalEmployeePerformanceDTO
+                {
+                    EmployeeName = $"{g.First().AssignedUser!.FirstName} {g.First().AssignedUser!.LastName}".Trim(),
+                    Assigned = total,
+                    Completed = completed,
+                    Overdue = overdue,
+                    CompletionRate = total > 0 ? Math.Round((double)completed / total * 100, 1) : 0
+                };
+            })
+            .OrderByDescending(e => e.CompletionRate)
+            .ToList();
+
+        var workloadByCategory = tasks
+            .GroupBy(t => t.Classification.ToString())
+            .Select(g => new ReportWorkloadItemDTO
+            {
+                CategoryName = g.Key,
+                TaskCount = g.Count(),
+                Percentage = tasks.Count > 0 ? Math.Round((double)g.Count() / tasks.Count * 100, 1) : 0
+            })
+            .OrderByDescending(w => w.TaskCount)
+            .ToList();
+
+        var workloadByDepartment = tasks
+            .GroupBy(t => t.AssignedDepartment?.Name ?? "Unassigned")
+            .Select(g => new ReportWorkloadItemDTO
+            {
+                CategoryName = g.Key,
+                TaskCount = g.Count(),
+                Percentage = tasks.Count > 0 ? Math.Round((double)g.Count() / tasks.Count * 100, 1) : 0
+            })
+            .OrderByDescending(w => w.TaskCount)
+            .ToList();
+
+        var workloadByPriority = tasks
+            .GroupBy(t => t.PriorityLevel.ToString())
+            .Select(g => new ReportWorkloadItemDTO
+            {
+                CategoryName = g.Key,
+                TaskCount = g.Count(),
+                Percentage = tasks.Count > 0 ? Math.Round((double)g.Count() / tasks.Count * 100, 1) : 0
+            })
+            .OrderByDescending(w => w.TaskCount)
+            .ToList();
+
+        var report = new OperationalSummaryReportDTO
+        {
+            TotalTasks = tasks.Count,
+            CompletedTasks = completedCount,
+            PendingTasks = pendingCount,
+            OverdueTasks = overdueCount,
+            TaskCompletionRate = tasks.Count > 0 ? Math.Round((double)completedCount / tasks.Count * 100, 1) : 0,
+            EmployeePerformanceSummary = employeeSummary,
+            WorkloadByCategory = workloadByCategory,
+            WorkloadByDepartment = workloadByDepartment,
+            WorkloadByPriority = workloadByPriority
+        };
+
+        await _auditLogService.LogAsync(
+            requestUserId,
+            AuditActionType.Read,
+            "OperationalSummaryReport",
+            null,
+            null,
+            $"Operational summary report accessed. Period: {dateStart:yyyy-MM-dd} to {dateEnd:yyyy-MM-dd}, Tasks: {tasks.Count}",
+            "Reports");
+
+        return ApiResponseDTO<OperationalSummaryReportDTO>.Success(report);
+    }
+
+    public async Task<ApiResponseDTO<byte[]>> ExportOperationalSummaryAsync(
+        OperationalSummaryReportDTO reportData,
+        string reportFormat)
+    {
+        byte[] fileBytes;
+        string contentType;
+        string fileName;
+
+        switch (reportFormat.ToUpperInvariant())
+        {
+            case "EXCEL":
+                fileBytes = GenerateOperationalSummaryExcel(reportData);
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                fileName = $"OperationalSummaryReport_{DateTime.UtcNow:yyyyMMdd}.xlsx";
+                break;
+
+            case "PDF":
+                fileBytes = GenerateOperationalSummaryPdf(reportData);
+                contentType = "application/pdf";
+                fileName = $"OperationalSummaryReport_{DateTime.UtcNow:yyyyMMdd}.pdf";
+                break;
+
+            default:
+                return ApiResponseDTO<byte[]>.Failure("Unsupported export format.");
+        }
+
+        await _auditLogService.LogAsync(
+            null,
+            AuditActionType.Export,
+            "OperationalSummaryReport",
+            null,
+            null,
+            $"Operational summary report exported as {reportFormat.ToUpperInvariant()}.",
+            "Reports");
+
+        return ApiResponseDTO<byte[]>.Success(fileBytes, $"Operational summary exported successfully|{fileName}|{contentType}");
+    }
+
+    private static PriorityLevel? ParsePriorityLevel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim();
+        if (Enum.TryParse<PriorityLevel>(normalized, true, out var parsed)) return parsed;
+        return normalized.ToLowerInvariant() switch
+        {
+            "urgent" => PriorityLevel.Urgent,
+            "high" => PriorityLevel.High,
+            "medium" => PriorityLevel.Medium,
+            "low" => PriorityLevel.Low,
+            _ => null
+        };
+    }
+
+    private static Models.Enums.TaskStatus? ParseTaskStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim();
+        if (Enum.TryParse<Models.Enums.TaskStatus>(normalized, true, out var parsed)) return parsed;
+        return normalized.ToLowerInvariant() switch
+        {
+            "pending" => Models.Enums.TaskStatus.NotStarted,
+            "in progress" => Models.Enums.TaskStatus.InProgress,
+            "pending admin review" => Models.Enums.TaskStatus.DonePendingReview,
+            "done" => Models.Enums.TaskStatus.Completed,
+            "overdue" => null, // Overdue is not a persisted status; handled as a date comparison
+            _ => null
+        };
+    }
+
+    private static TaskClassification? ParseTaskClassification(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim();
+        if (Enum.TryParse<TaskClassification>(normalized, true, out var parsed)) return parsed;
+        return normalized.ToLowerInvariant() switch
+        {
+            "routine daily task" => TaskClassification.RoutineDailyTask,
+            "routine" => TaskClassification.RoutineDailyTask,
+            "special task" => TaskClassification.SpecialTask,
+            "special" => TaskClassification.SpecialTask,
+            _ => null
+        };
+    }
+
+    private byte[] GenerateOperationalSummaryExcel(OperationalSummaryReportDTO report)
+    {
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Operational Summary");
+
+        worksheet.Cell(1, 1).Value = "STARS Operational Summary Report";
+        worksheet.Cell(1, 1).Style.Font.Bold = true;
+        worksheet.Cell(1, 1).Style.Font.FontSize = 16;
+        worksheet.Range(1, 1, 1, 8).Merge();
+
+        worksheet.Cell(3, 1).Value = "Total Tasks:";
+        worksheet.Cell(3, 2).Value = report.TotalTasks;
+        worksheet.Cell(4, 1).Value = "Completed Tasks:";
+        worksheet.Cell(4, 2).Value = report.CompletedTasks;
+        worksheet.Cell(5, 1).Value = "Pending Tasks:";
+        worksheet.Cell(5, 2).Value = report.PendingTasks;
+        worksheet.Cell(6, 1).Value = "Overdue Tasks:";
+        worksheet.Cell(6, 2).Value = report.OverdueTasks;
+        worksheet.Cell(7, 1).Value = "Completion Rate:";
+        worksheet.Cell(7, 2).Value = $"{report.TaskCompletionRate}%";
+
+        var headerRow = 9;
+        var headers = new[] { "Employee", "Assigned", "Completed", "Overdue", "Completion Rate" };
+        for (int i = 0; i < headers.Length; i++)
+        {
+            var cell = worksheet.Cell(headerRow, i + 1);
+            cell.Value = headers[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.LightBlue;
+        }
+
+        var dataRow = headerRow + 1;
+        foreach (var emp in report.EmployeePerformanceSummary)
+        {
+            worksheet.Cell(dataRow, 1).Value = emp.EmployeeName;
+            worksheet.Cell(dataRow, 2).Value = emp.Assigned;
+            worksheet.Cell(dataRow, 3).Value = emp.Completed;
+            worksheet.Cell(dataRow, 4).Value = emp.Overdue;
+            worksheet.Cell(dataRow, 5).Value = $"{emp.CompletionRate}%";
+            dataRow++;
+        }
+
+        worksheet.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private byte[] GenerateOperationalSummaryPdf(OperationalSummaryReportDTO report)
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(30);
+                page.DefaultTextStyle(x => x.FontSize(10));
+
+                page.Header().Column(column =>
+                {
+                    column.Item().Text("STARS Operational Summary Report")
+                        .FontSize(20).Bold();
+                    column.Item().PaddingTop(5).LineHorizontal(1);
+                });
+
+                page.Content().PaddingVertical(10).Column(column =>
+                {
+                    column.Item().PaddingBottom(10).Text("Summary").FontSize(14).Bold();
+
+                    column.Item().Row(row =>
+                    {
+                        row.RelativeItem().Text($"Total Tasks: {report.TotalTasks}");
+                        row.RelativeItem().Text($"Completed: {report.CompletedTasks}");
+                        row.RelativeItem().Text($"Pending: {report.PendingTasks}");
+                        row.RelativeItem().Text($"Overdue: {report.OverdueTasks}");
+                        row.RelativeItem().Text($"Rate: {report.TaskCompletionRate}%");
+                    });
+
+                    column.Item().PaddingTop(15).Text("Employee Performance").FontSize(14).Bold();
+
+                    column.Item().PaddingTop(5).Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                        });
+
+                        table.Header(header =>
+                        {
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Employee").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Assigned").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Completed").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Overdue").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Rate").Bold();
+                        });
+
+                        foreach (var emp in report.EmployeePerformanceSummary)
+                        {
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(emp.EmployeeName);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(emp.Assigned.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(emp.Completed.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(emp.Overdue.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text($"{emp.CompletionRate}%");
+                        }
+                    });
+
+                    column.Item().PaddingTop(15).Text("Workload by Category").FontSize(14).Bold();
+                    column.Item().PaddingTop(5).Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Category").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Tasks").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("%").Bold();
+                        });
+                        foreach (var w in report.WorkloadByCategory)
+                        {
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(w.CategoryName);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(w.TaskCount.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text($"{w.Percentage}%");
+                        }
+                    });
+
+                    column.Item().PaddingTop(15).Text("Workload by Department").FontSize(14).Bold();
+                    column.Item().PaddingTop(5).Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Department").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("Tasks").Bold();
+                            header.Cell().Background(Colors.Grey.Lighten3).Padding(5).Text("%").Bold();
+                        });
+                        foreach (var w in report.WorkloadByDepartment)
+                        {
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(w.CategoryName);
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text(w.TaskCount.ToString());
+                            table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).Padding(5).Text($"{w.Percentage}%");
+                        }
+                    });
+                });
+
+                page.Footer().AlignCenter().Text(x =>
+                {
+                    x.Span("Generated: ");
+                    x.Span(DateTime.UtcNow.ToString("MMM dd, yyyy HH:mm UTC"));
+                    x.Span(" | Page ");
+                    x.CurrentPageNumber();
+                    x.Span(" of ");
+                    x.TotalPages();
+                });
+            });
+        });
+
+        using var stream = new MemoryStream();
+        document.GeneratePdf(stream);
+        return stream.ToArray();
+    }
 }

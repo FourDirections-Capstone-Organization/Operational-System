@@ -33,4 +33,33 @@ public interface IReportService
         Guid departmentId,
         DateTime? from = null,
         DateTime? to = null);
+
+    Task<ApiResponseDTO<ReportFilterOptionsDTO>> GetReportFilterOptionsAsync(
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId);
+
+    Task<ApiResponseDTO<TaskCompletionReportDTO>> GetTaskCompletionReportAsync(
+        DateTime? dateRangeStart,
+        DateTime? dateRangeEnd,
+        Guid? employeeId,
+        string? taskPriorityLevel,
+        string? taskStatus,
+        string? taskCategory,
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId);
+
+    Task<ApiResponseDTO<OperationalSummaryReportDTO>> GetOperationalSummaryAsync(
+        DateTime? dateRangeStart,
+        DateTime? dateRangeEnd,
+        Guid? departmentId,
+        Guid? employeeId,
+        Guid requestUserId,
+        UserRole requestUserRole,
+        Guid? requestUserDepartmentId);
+
+    Task<ApiResponseDTO<byte[]>> ExportOperationalSummaryAsync(
+        OperationalSummaryReportDTO reportData,
+        string reportFormat);
 }

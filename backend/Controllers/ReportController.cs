@@ -211,4 +211,145 @@ public class ReportController : ControllerBase
         var result = await _chartService.GetCompletionRateTrendAsync(weeks);
         return Ok(result);
     }
+
+    [HttpGet("filter-options")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetFilterOptions()
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        Guid? requestUserDepartmentId = null;
+        if (requestUserRole == UserRole.Coordinator)
+        {
+            var user = await _db.Users.FindAsync(requestUserId);
+            requestUserDepartmentId = user?.DepartmentId;
+        }
+
+        var result = await _reportService.GetReportFilterOptionsAsync(
+            requestUserId, requestUserRole, requestUserDepartmentId);
+
+        return Ok(result);
+    }
+
+    [HttpGet("task-completion")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetTaskCompletionReport(
+        [FromQuery] DateTime? DateRangeStart = null,
+        [FromQuery] DateTime? DateRangeEnd = null,
+        [FromQuery] Guid? EmployeeId = null,
+        [FromQuery] string? TaskPriorityLevel = null,
+        [FromQuery] string? TaskStatus = null,
+        [FromQuery] string? TaskCategory = null)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        Guid? requestUserDepartmentId = null;
+        if (requestUserRole == UserRole.Coordinator)
+        {
+            var user = await _db.Users.FindAsync(requestUserId);
+            requestUserDepartmentId = user?.DepartmentId;
+        }
+
+        var result = await _reportService.GetTaskCompletionReportAsync(
+            DateRangeStart, DateRangeEnd, EmployeeId, TaskPriorityLevel, TaskStatus, TaskCategory,
+            requestUserId, requestUserRole, requestUserDepartmentId);
+
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    [HttpGet("operational-summary")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> GetOperationalSummary(
+        [FromQuery] DateTime? DateRangeStart = null,
+        [FromQuery] DateTime? DateRangeEnd = null,
+        [FromQuery] Guid? DepartmentId = null,
+        [FromQuery] Guid? EmployeeId = null)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        Guid? requestUserDepartmentId = null;
+        if (requestUserRole == UserRole.Coordinator)
+        {
+            var user = await _db.Users.FindAsync(requestUserId);
+            requestUserDepartmentId = user?.DepartmentId;
+        }
+
+        var result = await _reportService.GetOperationalSummaryAsync(
+            DateRangeStart, DateRangeEnd, DepartmentId, EmployeeId,
+            requestUserId, requestUserRole, requestUserDepartmentId);
+
+        if (!result.IsSuccess)
+            return NotFound(result);
+
+        return Ok(result);
+    }
+
+    [HttpGet("operational-summary/download")]
+    [Authorize(Policy = AuthorizationPolicies.CoordinatorAndAbove)]
+    public async Task<IActionResult> DownloadOperationalSummary(
+        [FromQuery] DateTime? DateRangeStart = null,
+        [FromQuery] DateTime? DateRangeEnd = null,
+        [FromQuery] Guid? DepartmentId = null,
+        [FromQuery] Guid? EmployeeId = null,
+        [FromQuery] string? ReportFormat = "PDF")
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userRoleStr = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var requestUserId))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid user token"));
+
+        if (!Enum.TryParse<UserRole>(userRoleStr, true, out var requestUserRole))
+            return Unauthorized(ApiResponseDTO<object>.Failure("Invalid role"));
+
+        Guid? requestUserDepartmentId = null;
+        if (requestUserRole == UserRole.Coordinator)
+        {
+            var user = await _db.Users.FindAsync(requestUserId);
+            requestUserDepartmentId = user?.DepartmentId;
+        }
+
+        var reportResult = await _reportService.GetOperationalSummaryAsync(
+            DateRangeStart, DateRangeEnd, DepartmentId, EmployeeId,
+            requestUserId, requestUserRole, requestUserDepartmentId);
+
+        if (!reportResult.IsSuccess)
+            return NotFound(reportResult);
+
+        var exportResult = await _reportService.ExportOperationalSummaryAsync(
+            reportResult.Data!, ReportFormat ?? "PDF");
+
+        if (!exportResult.IsSuccess)
+            return BadRequest(exportResult);
+
+        var parts = exportResult.Message.Split('|');
+        var fileName = parts.Length > 1 ? parts[1] : "OperationalSummaryReport.pdf";
+        var contentType = parts.Length > 2 ? parts[2] : "application/octet-stream";
+
+        return File(exportResult.Data!, contentType, fileName);
+    }
 }

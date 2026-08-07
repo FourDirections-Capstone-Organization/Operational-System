@@ -334,11 +334,8 @@ interface ReportFilterOption {
 }
 
 const TASK_CATEGORIES = [
-    'Delivery',
-    'Warehouse',
-    'Maintenance',
-    'Administrative',
-    'Logistics',
+    'RoutineDailyTask',
+    'SpecialTask',
 ];
 
 const TASK_STATUSES_FILTER = [
@@ -3693,6 +3690,9 @@ export const ReportsTab: React.FC<{ teamMembers: TeamMember[] }> = ({ teamMember
                                 <label>Department</label>
                                 <select value={prFilter.departmentId} onChange={e => setPrFilter(prev => ({ ...prev, departmentId: e.target.value }))}>
                                     <option value="">All Departments</option>
+                                    {departments.map(d => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="field" style={{ alignSelf: 'flex-end' }}>
@@ -5771,7 +5771,7 @@ export default function OpsAdminDashboard() {
         try {
             const res = await api.get('/api/Task/assignable-users?pageNumber=1&pageSize=100');
             const body = res.data;
-            const rawList: any[] = Array.isArray(body) ? body : (Array.isArray(body?.data?.data) ? body.data.data : (Array.isArray(body?.data) ? body.data : []));
+            const rawList: any[] = Array.isArray(body) ? body : (Array.isArray(body?.data?.items) ? body.data.items : (Array.isArray(body?.data?.data) ? body.data.data : (Array.isArray(body?.data) ? body.data : [])));
 
             setTeamMembers(rawList.map(e => ({
                 accountId: e.userId ?? e.UserId ?? e.id,
