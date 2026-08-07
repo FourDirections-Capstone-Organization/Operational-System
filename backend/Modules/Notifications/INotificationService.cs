@@ -16,7 +16,13 @@ public interface INotificationService
     Task SendBulkNotificationAsync(
         List<Guid> recipientIds, NotificationType type, string title, string message, Guid? taskId = null);
 
-    Task<ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>> GetByRecipientAsync(Guid recipientId, int pageNumber = 1, int pageSize = 10);
+    Task<ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>> GetByRecipientAsync(
+        Guid recipientId,
+        int pageNumber = 1,
+        int pageSize = 10,
+        NotificationType? type = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null);
     Task<ApiResponseDTO<int>> GetUnreadCountAsync(Guid recipientId);
     Task<ApiResponseDTO<bool>> MarkAsReadAsync(Guid notificationId, Guid recipientId);
     Task<ApiResponseDTO<bool>> MarkAllAsReadAsync(Guid recipientId);

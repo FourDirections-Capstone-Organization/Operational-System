@@ -84,13 +84,30 @@ public class NotificationService : INotificationService
         }
     }
 
-    public async Task<ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>> GetByRecipientAsync(Guid recipientId, int pageNumber = 1, int pageSize = 10)
+    public async Task<ApiResponseDTO<PaginatedResponseDTO<NotificationResponseDTO>>> GetByRecipientAsync(
+        Guid recipientId, int pageNumber = 1, int pageSize = 10,
+        NotificationType? type = null, DateTime? dateFrom = null, DateTime? dateTo = null)
     {
         pageNumber = Math.Max(1, pageNumber);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var query = _db.Notifications
             .Where(n => n.RecipientId == recipientId);
+
+        if (type.HasValue)
+            query = query.Where(n => n.Type == type.Value);
+
+        if (dateFrom.HasValue)
+        {
+            var startUtc = DateTime.SpecifyKind(dateFrom.Value.Date, DateTimeKind.Utc);
+            query = query.Where(n => n.CreatedAt >= startUtc);
+        }
+
+        if (dateTo.HasValue)
+        {
+            var endUtc = DateTime.SpecifyKind(dateTo.Value.Date.AddDays(1), DateTimeKind.Utc);
+            query = query.Where(n => n.CreatedAt < endUtc);
+        }
 
         var totalCount = await query.CountAsync();
 

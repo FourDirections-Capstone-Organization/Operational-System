@@ -2744,6 +2744,10 @@ export default function Dashboard() {
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifPage, setNotifPage] = useState(1);
     const [notifTotalPages, setNotifTotalPages] = useState(1);
+    const [notifTotalRecords, setNotifTotalRecords] = useState(0);
+    const [notifTypeFilter, setNotifTypeFilter] = useState('');
+    const [notifDateFrom, setNotifDateFrom] = useState('');
+    const [notifDateTo, setNotifDateTo] = useState('');
     const NOTIF_PAGE_SIZE = 20;
     const [headerNotifications, setHeaderNotifications] = useState<import('../../components/GlobalHeader/GlobalHeader').NotificationItem[]>([]);
 
@@ -2792,7 +2796,11 @@ export default function Dashboard() {
     const fetchAllNotifications = async (page: number) => {
         setNotifLoading(true);
         try {
-            const res = await api.get('/api/Notification', { pageNumber: page, pageSize: NOTIF_PAGE_SIZE });
+            const params: Record<string, any> = { pageNumber: page, pageSize: NOTIF_PAGE_SIZE };
+            if (notifTypeFilter) params.type = notifTypeFilter;
+            if (notifDateFrom) params.dateFrom = notifDateFrom;
+            if (notifDateTo) params.dateTo = notifDateTo;
+            const res = await api.get('/api/Notification', params);
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -2806,11 +2814,14 @@ export default function Dashboard() {
                 })));
                 setNotifPage(d.pageNumber || page);
                 setNotifTotalPages(d.totalPages || 1);
+                setNotifTotalRecords(d.totalCount ?? d.items.length);
             } else {
                 setAllNotifications([]);
+                setNotifTotalRecords(0);
             }
         } catch {
             setAllNotifications([]);
+            setNotifTotalRecords(0);
         } finally {
             setNotifLoading(false);
         }
@@ -2938,10 +2949,15 @@ export default function Dashboard() {
                 .filter(n => n.notificationType === 'TaskOverdue' && n.taskId)
                 .map(n => n.taskId as string)
         );
+        // Derived rows (awaiting review/overdue) are computed from live task state,
+        // not part of the paginated notification feed. Show them only on page 1 with
+        // no filter active so rows do not duplicate across pages; otherwise pages
+        // show pure server rows.
+        if (notifPage !== 1 || notifTypeFilter || notifDateFrom || notifDateTo) return allNotifications;
         // Newest first so recent notifications appear at the top of the page
         return [...awaitingReviewRows, ...overdueRows.filter(r => !realOverdueIds.has(r.taskId)), ...allNotifications]
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [awaitingReviewRows, overdueRows, allNotifications]);
+    }, [awaitingReviewRows, overdueRows, allNotifications, notifPage, notifTypeFilter, notifDateFrom, notifDateTo]);
 
     const openManagerTaskById = (id: string) => {
         api.get(`/api/Task/${id}`)
@@ -3266,7 +3282,35 @@ export default function Dashboard() {
                                     currentPage={notifPage}
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
-                                    totalRecords={mergedAllNotifications.length}
+                                    totalRecords={notifTotalRecords}
+                                    filterElements={
+                                        <>
+                                            <select
+                                                value={notifTypeFilter}
+                                                onChange={e => setNotifTypeFilter(e.target.value)}
+                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 150, boxSizing: 'border-box', outline: 'none', cursor: 'pointer', background: '#fff' }}
+                                            >
+                                                <option value="">All Types</option>
+                                                {Object.entries(NOTIF_TYPE_MAP).map(([val, label]) => (
+                                                    <option key={val} value={val}>{label}</option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="date"
+                                                value={notifDateFrom}
+                                                onChange={e => setNotifDateFrom(e.target.value)}
+                                                title="From date"
+                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, boxSizing: 'border-box', outline: 'none', background: '#fff' }}
+                                            />
+                                            <input
+                                                type="date"
+                                                value={notifDateTo}
+                                                onChange={e => setNotifDateTo(e.target.value)}
+                                                title="To date"
+                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, boxSizing: 'border-box', outline: 'none', background: '#fff' }}
+                                            />
+                                        </>
+                                    }
                                 >
                                     {mergedAllNotifications.map(n => {
                                         const badge = (() => {
