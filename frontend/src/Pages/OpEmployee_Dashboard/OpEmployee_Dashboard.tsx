@@ -1925,15 +1925,12 @@ export default function EmployeeDashboard() {
     useEffect(() => { fetchHeaderNotifications(); }, [fetchHeaderNotifications]);
 
     // ── Full Notifications Tab ──
-    const NOTIF_PAGE_SIZE = 20;
+    const NOTIF_PAGE_SIZE = 10;
     const [allNotifications, setAllNotifications] = useState<any[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifPage, setNotifPage] = useState(1);
     const [notifTotalPages, setNotifTotalPages] = useState(1);
     const [notifTotalRecords, setNotifTotalRecords] = useState(0);
-    const [notifTypeFilter, setNotifTypeFilter] = useState('');
-    const [notifDateFrom, setNotifDateFrom] = useState('');
-    const [notifDateTo, setNotifDateTo] = useState('');
 
     // ── Awaiting Review (derived from tasks in pending review) ──
     const awaitingReviewNotifs = useMemo<NotificationItem[]>(() => {
@@ -1979,25 +1976,20 @@ export default function EmployeeDashboard() {
     }, [tasks]);
 
     const mergedAllNotifications = useMemo(
-        // Derived rows (awaiting review) are only meaningful on page 1 and when no
-        // server-side filter is applied — they are computed from live task state,
-        // not part of the paginated notification feed. Appending them to every page
-        // would duplicate rows across pages.
-        () => (notifPage === 1 && !notifTypeFilter && !notifDateFrom && !notifDateTo
+        // Derived rows (awaiting review) are only meaningful on page 1 — they are
+        // computed from live task state, not part of the paginated notification
+        // feed. Appending them to every page would duplicate rows across pages.
+        () => (notifPage === 1
             ? [...awaitingReviewRows, ...allNotifications]
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             : allNotifications),
-        [notifPage, awaitingReviewRows, allNotifications, notifTypeFilter, notifDateFrom, notifDateTo]
+        [notifPage, awaitingReviewRows, allNotifications]
     );
 
     const fetchAllNotifications = useCallback(async (page: number) => {
         setNotifLoading(true);
         try {
-            const params: Record<string, any> = { pageNumber: page, pageSize: NOTIF_PAGE_SIZE };
-            if (notifTypeFilter) params.type = notifTypeFilter;
-            if (notifDateFrom) params.dateFrom = notifDateFrom;
-            if (notifDateTo) params.dateTo = notifDateTo;
-            const res = await api.get('/api/Notification', params);
+            const res = await api.get('/api/Notification', { pageNumber: page, pageSize: NOTIF_PAGE_SIZE });
             const json = res.data;
             const d = json?.data;
             if (json?.isSuccess && d?.items) {
@@ -2022,7 +2014,7 @@ export default function EmployeeDashboard() {
         } finally {
             setNotifLoading(false);
         }
-    }, [notifTypeFilter, notifDateFrom, notifDateTo]);
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'notifications') {
@@ -2340,34 +2332,6 @@ export default function EmployeeDashboard() {
                                     totalPages={notifTotalPages}
                                     onPageChange={p => fetchAllNotifications(p)}
                                     totalRecords={notifTotalRecords}
-                                    filterElements={
-                                        <>
-                                            <select
-                                                value={notifTypeFilter}
-                                                onChange={e => setNotifTypeFilter(e.target.value)}
-                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, minWidth: 150, boxSizing: 'border-box', outline: 'none', cursor: 'pointer', background: '#fff' }}
-                                            >
-                                                <option value="">All Types</option>
-                                                {Object.entries(NOTIF_TYPE_MAP).map(([val, label]) => (
-                                                    <option key={val} value={val}>{label}</option>
-                                                ))}
-                                            </select>
-                                            <input
-                                                type="date"
-                                                value={notifDateFrom}
-                                                onChange={e => setNotifDateFrom(e.target.value)}
-                                                title="From date"
-                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, boxSizing: 'border-box', outline: 'none', background: '#fff' }}
-                                            />
-                                            <input
-                                                type="date"
-                                                value={notifDateTo}
-                                                onChange={e => setNotifDateTo(e.target.value)}
-                                                title="To date"
-                                                style={{ height: 36, borderRadius: 8, border: '1.5px solid var(--border)', padding: '0 10px', fontSize: 13, boxSizing: 'border-box', outline: 'none', background: '#fff' }}
-                                            />
-                                        </>
-                                    }
                                 >
                                     {mergedAllNotifications.map(n => {
                                         const badge = (() => {
